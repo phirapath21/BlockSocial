@@ -53,6 +53,7 @@ import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.BtcWidgetProvider
 import com.example.btcwidget.DataSources
 import com.example.btcwidget.MetricCategory
+import com.example.btcwidget.PricePoint
 import com.example.btcwidget.PriceSource
 import com.example.btcwidget.Stack
 import com.example.btcwidget.StackStore
@@ -74,6 +75,7 @@ fun MainScreen(
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val history by viewModel.history.collectAsStateWithLifecycle()
     val prefs = remember { context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE) }
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.DASHBOARD) }
     var collapsedCategories by remember {
@@ -209,6 +211,7 @@ fun MainScreen(
         onStackChange = onStackChange,
         dataSources = dataSources,
         onDataSourcesChange = onDataSourcesChange,
+        history = history,
         onModeToggle = onModeToggle,
         onRefresh = { viewModel.refreshData(context) },
         isRefreshing = isRefreshing,
@@ -254,7 +257,8 @@ fun MainScreenContent(
     stackUnit: StackUnit = StackUnit.BTC,
     onStackChange: (Long, StackUnit) -> Unit = { _, _ -> },
     dataSources: DataSources = DataSources(PriceSource.COINBASE, ThbSource.CONVERTED),
-    onDataSourcesChange: (DataSources) -> Unit = {}
+    onDataSourcesChange: (DataSources) -> Unit = {},
+    history: List<PricePoint> = emptyList()
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
     val stackValue = data?.takeIf { stackSats > 0 }?.let {
@@ -304,7 +308,8 @@ fun MainScreenContent(
                                 collapsedCategories = collapsedCategories,
                                 onToggleCategory = onToggleCategory,
                                 stackSats = stackSats,
-                                onSetUpStack = { onTabSelected(MainTab.SETTINGS) }
+                                onSetUpStack = { onTabSelected(MainTab.SETTINGS) },
+                                history = history
                             )
                             else -> Column(
                                 modifier = Modifier

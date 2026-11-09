@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.MetricCategory
 import com.example.btcwidget.PriceData
+import com.example.btcwidget.PricePoint
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -109,6 +110,7 @@ fun DashboardContent(
     onToggleCategory: (MetricCategory) -> Unit = {},
     stackSats: Long = 0,
     onSetUpStack: () -> Unit = {},
+    history: List<PricePoint> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val hasStack = stackSats > 0
@@ -190,6 +192,15 @@ fun DashboardContent(
                     )
                 }
             }
+        }
+
+        fullWidth("price_chart") {
+            PriceChartPanel(
+                history = history,
+                currency = currencySetting,
+                usdToCurrency = if (currencySetting == "THB" && data.btcUsd > 0) data.btcThb / data.btcUsd else 1.0,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
         }
 
         fullWidth("reorder_hint") {
