@@ -50,6 +50,7 @@ Four tabs along the bottom:
 
 ### 3b. Price Alerts
 - **BTC rises above / falls below** a price (USD or THB) and **fees at or below** a sat/vB level, set in Settings.
+- **Network events:** a day before the next halving and before each difficulty adjustment (with the estimated change).
 - Notifies once per crossing, then re-arms when the condition turns false again; stale data never triggers an alert.
 - Checked with each background refresh (15/30/60 min), even with no widget on the home screen. Android 13+ asks for notification permission when you switch an alert on.
 

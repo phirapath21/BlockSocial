@@ -1,5 +1,6 @@
 package com.example.btcwidget.alerts
 
+import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.PriceData
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -65,4 +66,42 @@ class PriceAlertsTest {
         assertEquals("Now ฿3,100,000", PriceAlerts.body(above.copy(currency = "THB"), data(95_000.0, thb = 3_100_000.0)))
         assertEquals("Fees down to 5 sat/vB", PriceAlerts.title(fees))
     }
+
+    // ---- network events ----
+
+    private fun atHeight(h: Int, ok: Boolean = true) = data(70_000.0, ok = ok).copy(blockHeight = h, difficultyChange = 2.5)
+
+    @Test
+    fun halvingSoon_firesOnceADayAheadAndRearmsNextEpoch() {
+        val rule = AlertRule(AlertKind.HALVING_SOON, AlertKind.HALVING_SOON.defaultThreshold, enabled = true)
+        var met = emptySet<AlertKind>()
+        fun step(h: Int): Boolean {
+            val r = PriceAlerts.check(listOf(rule), atHeight(h), met)
+            met = r.nowMet
+            return r.toNotify.isNotEmpty()
+        }
+        assertEquals(false, step(1_049_800)) // 200 blocks to go
+        assertEquals(true, step(1_049_860))  // 140 to go: notify
+        assertEquals(false, step(1_049_950)) // still close: quiet
+        assertEquals(false, step(1_050_010)) // halving passed: re-armed, far away
+        assertEquals(true, step(1_259_900))  // next epoch, 100 to go
+    }
+
+    @Test
+    fun retargetSoon_usesTheAdjustmentPeriod() {
+        val rule = AlertRule(AlertKind.RETARGET_SOON, AlertKind.RETARGET_SOON.defaultThreshold, enabled = true)
+        assertEquals(144, BlockclockMetrics.blocksToRetarget(2016 * 500 - 144))
+        assertTrue(PriceAlerts.isMet(rule, atHeight(2016 * 500 - 144)))
+        assertTrue(!PriceAlerts.isMet(rule, atHeight(2016 * 500 - 145)))
+        assertTrue(!PriceAlerts.isMet(rule, atHeight(2016 * 500))) // just adjusted: 2016 to go
+        assertEquals("100 blocks to go. Estimated change +2.5%.", PriceAlerts.body(rule, atHeight(2016 * 500 - 100)))
+    }
+
+    @Test
+    fun networkEvents_ignoreMissingHeightAndStaleData() {
+        val rule = AlertRule(AlertKind.HALVING_SOON, 144.0, enabled = true)
+        assertTrue(!PriceAlerts.isMet(rule, atHeight(0)))
+        assertEquals(emptyList<AlertRule>(), PriceAlerts.check(listOf(rule), atHeight(1_049_900, ok = false), emptySet()).toNotify)
+    }
 }
+

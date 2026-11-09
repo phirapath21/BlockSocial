@@ -1,9 +1,29 @@
 package com.example.btcwidget.alerts
 
+import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.PriceData
 import java.util.Locale
 
-enum class AlertKind { PRICE_ABOVE, PRICE_BELOW, FEE_AT_OR_BELOW }
+enum class AlertKind {
+    PRICE_ABOVE,
+    PRICE_BELOW,
+    FEE_AT_OR_BELOW,
+
+    /** The next halving is at most `threshold` blocks away (144 ≈ one day). */
+    HALVING_SOON,
+
+    /** The next difficulty adjustment is at most `threshold` blocks away. */
+    RETARGET_SOON;
+
+    val isNetworkEvent: Boolean get() = this == HALVING_SOON || this == RETARGET_SOON
+
+    /** Threshold used before the user sets one: network events warn a day ahead. */
+    val defaultThreshold: Double get() = if (isNetworkEvent) BLOCKS_PER_DAY.toDouble() else 0.0
+
+    companion object {
+        const val BLOCKS_PER_DAY = 144
+    }
+}
 
 /**
  * One user alert. Price thresholds are in [currency] (USD or THB); fee thresholds are
@@ -32,6 +52,11 @@ object PriceAlerts {
         AlertKind.PRICE_ABOVE -> price(data, rule.currency) > rule.threshold
         AlertKind.PRICE_BELOW -> price(data, rule.currency) < rule.threshold
         AlertKind.FEE_AT_OR_BELOW -> data.feeFastest <= rule.threshold
+        // Each fires once per epoch: the count jumps back up after the event, re-arming it.
+        AlertKind.HALVING_SOON ->
+            data.blockHeight > 0 && BlockclockMetrics.blocksToHalving(data.blockHeight) <= rule.threshold
+        AlertKind.RETARGET_SOON ->
+            data.blockHeight > 0 && BlockclockMetrics.blocksToRetarget(data.blockHeight) <= rule.threshold
     }
 
     /**
@@ -60,6 +85,8 @@ object PriceAlerts {
         AlertKind.PRICE_ABOVE -> "BTC above ${formatPrice(rule.threshold, rule.currency)}"
         AlertKind.PRICE_BELOW -> "BTC below ${formatPrice(rule.threshold, rule.currency)}"
         AlertKind.FEE_AT_OR_BELOW -> "Fees down to ${rule.threshold.toInt()} sat/vB"
+        AlertKind.HALVING_SOON -> "The halving is about a day away"
+        AlertKind.RETARGET_SOON -> "Difficulty adjusts in about a day"
     }
 
     fun body(rule: AlertRule, data: PriceData): String = when (rule.kind) {
@@ -67,5 +94,14 @@ object PriceAlerts {
             "Now ${formatPrice(price(data, rule.currency), rule.currency)}"
         AlertKind.FEE_AT_OR_BELOW ->
             "Fastest ${data.feeFastest} · Mid ${data.feeHalfHour} · Low ${data.feeHour} sat/vB. A good time to move coins."
+        AlertKind.HALVING_SOON -> {
+            val left = BlockclockMetrics.blocksToHalving(data.blockHeight)
+            String.format(Locale.US, "%,d blocks to go, at block %,d.", left, data.blockHeight + left)
+        }
+        AlertKind.RETARGET_SOON -> {
+            val left = BlockclockMetrics.blocksToRetarget(data.blockHeight)
+            val change = BlockclockMetrics.formatChange(data.difficultyChange)
+            String.format(Locale.US, "%,d blocks to go.", left) + (change?.let { " Estimated change $it." } ?: "")
+        }
     }
 }
