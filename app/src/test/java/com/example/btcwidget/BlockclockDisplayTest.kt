@@ -159,4 +159,15 @@ class BlockclockDisplayTest {
         assertEquals(order + order.first(), sequence)
         assertEquals("FEES", order[3]) // Network section starts with the user's FEES
     }
+
+    @Test
+    fun captionsShowTheChangeWhenKnown() {
+        val withChange = data.copy(change24hUsd = 2.41, change24hThb = -0.55)
+        assertEquals("Market price · +2.4% 24h", BlockclockMetrics.forMode(0, withChange, "USD").caption)
+        assertEquals("Market price · -0.6% 24h", BlockclockMetrics.forMode(0, withChange, "THB").caption)
+        assertEquals("Sats per 1 dollar · -2.4% 24h", BlockclockMetrics.forMode(1, withChange, "USD").caption)
+        // Unknown change: plain caption.
+        assertEquals("Market price of bitcoin", BlockclockMetrics.forMode(0, data, "USD").caption)
+    }
 }
+

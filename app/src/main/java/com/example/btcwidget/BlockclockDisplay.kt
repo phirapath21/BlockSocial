@@ -173,11 +173,17 @@ object BlockclockMetrics {
             1 -> BlockclockDisplay(
                 "SATS", if (isThb) "1THB" else "1USD",
                 "%d".f(satsPerUnit),
-                caption = if (isThb) "Sats per 1 baht" else "Sats per 1 dollar"
+                caption = withChange(
+                    if (isThb) "Sats per 1 baht" else "Sats per 1 dollar",
+                    PriceMath.satsChangePct(change(data, currency))
+                )
             )
             2 -> BlockclockDisplay("BLOCK", "HGHT", "%d".f(data.blockHeight), caption = "Bitcoin block height")
             // Always sats per US dollar; hidden in THB (see isAvailable).
-            3 -> BlockclockDisplay("MSCW", "TIME", "%d".f(data.moscowTime), caption = "Moscow time")
+            3 -> BlockclockDisplay(
+                "MSCW", "TIME", "%d".f(data.moscowTime),
+                caption = withChange("Moscow time", PriceMath.satsChangePct(data.change24hUsd))
+            )
             4 -> BlockclockDisplay("MSTR", "BTC", "%.0f".f(data.mstrBtcHeld), caption = "Strategy BTC holdings")
             5 -> BlockclockDisplay("MSTR", "BTC", "%.5f".f(data.mstrBtc), caption = "Strategy BTC per share")
             6 -> BlockclockDisplay("MSTR", "USD", "$%.0f".f(data.mstrUsd), caption = "Strategy share price")
@@ -200,9 +206,15 @@ object BlockclockMetrics {
             )
             12 -> BlockclockDisplay("LN", "CAP", "%.0f".f(data.lightningCapacity), "BTC", caption = "Lightning capacity")
             else -> if (isThb) {
-                BlockclockDisplay("BTC", "THB", "%.2f".f(data.btcThb / 1_000_000.0), "MIL", caption = "Market price of bitcoin")
+                BlockclockDisplay(
+                    "BTC", "THB", "%.2f".f(data.btcThb / 1_000_000.0), "MIL",
+                    caption = withChange("Market price of bitcoin", data.change24hThb)
+                )
             } else {
-                BlockclockDisplay("BTC", "USD", "$%.0f".f(data.btcUsd), caption = "Market price of bitcoin")
+                BlockclockDisplay(
+                    "BTC", "USD", "$%.0f".f(data.btcUsd),
+                    caption = withChange("Market price of bitcoin", data.change24hUsd)
+                )
             }
         }
     }
@@ -223,6 +235,23 @@ object BlockclockMetrics {
 
     fun halvingProgress(blockHeight: Int): Double =
         (blockHeight % HALVING_INTERVAL).toDouble() / HALVING_INTERVAL
+
+    /** The 24h price change for [currency], NaN when unknown. */
+    fun change(data: PriceData, currency: String): Double =
+        if (currency == "THB") data.change24hThb else data.change24hUsd
+
+    /** "+2.4%" (one decimal), or null when unknown. */
+    fun formatChange(pct: Double): String? = if (pct.isNaN()) null else "%+.1f%%".f(pct)
+
+    /**
+     * Appends the 24h change to a caption. The long caption is shortened so the change
+     * survives on small widgets: "Market price of bitcoin" -> "Market price · +2.4% 24h".
+     */
+    private fun withChange(caption: String, pct: Double): String {
+        val change = formatChange(pct) ?: return caption
+        val short = caption.removeSuffix(" of bitcoin")
+        return "$short · $change 24h"
+    }
 
     private fun String.f(vararg args: Any): String = String.format(Locale.US, this, *args)
 }
