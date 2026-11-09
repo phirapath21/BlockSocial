@@ -30,7 +30,6 @@ fun MainScreenPreview() {
     BTCWidgetTheme {
         MainScreenContent(
             state = MainScreenUiState.Success(sampleData),
-            currentTheme = 0,
             showSettings = false,
             heroMetric = "BLOCK",
             modeStates = List(13) { true },
@@ -41,7 +40,6 @@ fun MainScreenPreview() {
             hapticEnabled = true,
             onHapticToggle = {},
             onHeroMetricSelected = {},
-            onThemeSelected = {},
             onShowSettingsChange = {},
             onModeToggle = { _, _ -> },
             onRefresh = {},
@@ -71,7 +69,6 @@ fun MainScreenSettingsPreview() {
     BTCWidgetTheme {
         MainScreenContent(
             state = MainScreenUiState.Success(sampleData),
-            currentTheme = 0,
             showSettings = true,
             heroMetric = "BLOCK",
             modeStates = List(13) { true },
@@ -82,7 +79,6 @@ fun MainScreenSettingsPreview() {
             hapticEnabled = true,
             onHapticToggle = {},
             onHeroMetricSelected = {},
-            onThemeSelected = {},
             onShowSettingsChange = {},
             onModeToggle = { _, _ -> },
             onRefresh = {},

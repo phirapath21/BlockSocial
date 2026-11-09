@@ -1,133 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Blockclock device: a row of e-ink tiles on a black body, caption below.
+     Used by both the metrics widget and the halving widget. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_background_dynamic"
-    android:padding="12dp">
+    android:background="@drawable/eink_frame"
+    android:clickable="true"
+    android:focusable="true"
+    android:orientation="vertical"
+    android:paddingStart="7dp"
+    android:paddingTop="7dp"
+    android:paddingEnd="7dp"
+    android:paddingBottom="4dp">
 
-    <!-- Center Display Layout (Horizontally aligning label, value, and suffix) -->
     <LinearLayout
-        android:id="@+id/center_layout"
+        android:id="@+id/tile_row"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_above="@+id/footer"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:clickable="true"
-        android:focusable="true">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal" />
 
-        <!-- Stacked Label Container (Left side of value) -->
-        <LinearLayout
-            android:id="@+id/lbl_stacked_container"
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        style="@android:style/Widget.ProgressBar.Horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_marginStart="1.5dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginEnd="1.5dp"
+        android:max="1000"
+        android:progressDrawable="@drawable/widget_progress_drawable"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/txt_warning"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:layout_marginRight="8dp"
-            android:layout_marginEnd="8dp">
+            android:layout_marginEnd="4dp"
+            android:fontFamily="monospace"
+            android:text="@string/widget_stale_badge"
+            android:textColor="@color/eink_alert"
+            android:textSize="8sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
 
-            <!-- Top text label (e.g. BTC, MSCW, MSTR) -->
-            <TextView
-                android:id="@+id/txt_blockclock_label_top"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/widget_text_secondary"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif-medium"
-                android:includeFontPadding="false" />
-
-            <!-- Separator line -->
-            <FrameLayout
-                android:id="@+id/lbl_divider"
-                android:layout_width="16dp"
-                android:layout_height="1dp"
-                android:background="@color/widget_stroke_color"
-                android:layout_marginVertical="2.5dp" />
-
-            <!-- Bottom text label (e.g. USD, TIME, BTC) -->
-            <TextView
-                android:id="@+id/txt_blockclock_label_bottom"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/widget_text_secondary"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif-medium"
-                android:includeFontPadding="false" />
-        </LinearLayout>
-
-        <!-- Large Display Value -->
         <TextView
-            android:id="@+id/txt_blockclock_value"
+            android:id="@+id/txt_caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:ellipsize="end"
-            android:fontFamily="sans-serif-medium"
-            android:letterSpacing="-0.01"
-            android:maxLines="1"
-            android:textColor="@color/widget_text_primary"
-            android:textSize="28sp"
-            android:textStyle="bold" />
-
-        <!-- Suffix Container (Right side of value for MIL suffix) -->
-        <LinearLayout
-            android:id="@+id/lbl_suffix_container"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:layout_marginLeft="6dp"
-            android:layout_marginStart="6dp">
-
-            <TextView
-                android:id="@+id/txt_blockclock_suffix"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/widget_text_secondary"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif-medium"
-                android:includeFontPadding="false" />
-        </LinearLayout>
+            android:fontFamily="monospace"
+            android:letterSpacing="0.08"
+            android:singleLine="true"
+            android:textAllCaps="true"
+            android:textColor="@color/eink_caption"
+            android:textSize="8sp" />
     </LinearLayout>
-
-    <!-- Footer with Dynamic Subtitle -->
-    <RelativeLayout
-        android:id="@+id/footer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="6dp"
-        android:layout_alignParentBottom="true">
-
-        <LinearLayout
-            android:id="@+id/linear_layout"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerInParent="true"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/txt_warning"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="4dp"
-                android:text="⚠️ "
-                android:textSize="10sp"
-                android:visibility="gone" />
-
-            <!-- Subtitle displays dynamic description in lowercase -->
-            <TextView
-                android:id="@+id/txt_blockclock_sub"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:fontFamily="sans-serif"
-                android:singleLine="true"
-                android:textColor="@color/widget_text_secondary"
-                android:textSize="10sp" />
-        </LinearLayout>
-    </RelativeLayout>
-</RelativeLayout>
+</LinearLayout>

@@ -44,15 +44,8 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
             val layoutId = R.layout.btc_widget_quote
             val views = RemoteViews(context.packageName, layoutId)
 
-            val style = WidgetStyle.current(context)
-
-            // Apply theme styles to views
-            views.setInt(R.id.widget_root, "setBackgroundResource", style.background)
-            views.setTextColor(R.id.txt_quote_text, style.valueColor)
-            views.setTextColor(R.id.txt_quote_author, style.labelColor)
-
             // Format quotation with typography quotes
-            views.setTextViewText(R.id.txt_quote_text, "\"${quote.text}\"")
+            views.setTextViewText(R.id.txt_quote_text, "“${quote.text}”")
             views.setTextViewText(R.id.txt_quote_author, "— ${quote.author.uppercase()}")
 
             // Tap layout to cycle to next quote

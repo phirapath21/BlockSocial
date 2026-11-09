@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One e-ink screen: paper with a slight shade toward the bottom edge -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="270"
+        android:startColor="@color/eink_paper"
+        android:endColor="@color/eink_paper_shade" />
+    <corners android:radius="3dp" />
+</shape>

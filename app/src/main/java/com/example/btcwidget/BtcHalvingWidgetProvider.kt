@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
-import java.util.Locale
 
 class BtcHalvingWidgetProvider : AppWidgetProvider() {
 
@@ -23,71 +22,20 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
             appWidgetId: Int,
             data: PriceData
         ) {
-            val mode = getWidgetMode(context, appWidgetId)
-            val layoutId = R.layout.btc_widget_halving
-            val views = RemoteViews(context.packageName, layoutId)
+            val display = BlockclockMetrics.halving(getWidgetMode(context, appWidgetId), data.blockHeight)
 
-            val style = WidgetStyle.current(context)
+            val views = RemoteViews(context.packageName, R.layout.btc_widget_blockclock)
+            TileRenderer.render(context, views, display, stale = !data.lastFetchSuccessful)
 
-            // Apply theme styles to views
-            views.setInt(R.id.widget_root, "setBackgroundResource", style.background)
-            views.setTextColor(R.id.txt_halving_label_top, style.labelColor)
-            views.setTextColor(R.id.txt_halving_label_bottom, style.labelColor)
-            views.setTextColor(R.id.txt_halving_value, style.valueColor)
-            views.setTextColor(R.id.txt_halving_progress_bar, style.valueColor)
-            views.setTextColor(R.id.txt_halving_sub, style.subTextColor)
-            views.setInt(R.id.lbl_divider, "setBackgroundColor", style.dividerColor)
+            // E-ink progress bar for the current halving epoch.
+            views.setViewVisibility(R.id.progress_bar, View.VISIBLE)
+            views.setProgressBar(
+                R.id.progress_bar, 1000,
+                (BlockclockMetrics.halvingProgress(data.blockHeight) * 1000).toInt(), false
+            )
 
-            // Computations
-            val epochBlocksCompleted = data.blockHeight % 210000
-            val fraction = epochBlocksCompleted.toDouble() / 210000.0
-            val epochProgressPercent = fraction * 100.0
-            val blocksRemaining = 210000 - epochBlocksCompleted
-            val remainingDays = blocksRemaining / 144.0 // 144 blocks per day (10 min avg)
-
-            // Generate progress bar [██████░░░░░] (width = 15)
-            val barWidth = 15
-            val filledCount = (fraction * barWidth).toInt().coerceIn(0, barWidth)
-            val emptyCount = barWidth - filledCount
-            val barText = "[" + "█".repeat(filledCount) + "░".repeat(emptyCount) + "]"
-
-            val labelTop: String
-            val labelBottom: String
-            val valueText: String
-            val footerText: String
-
-            when (mode) {
-                1 -> { // Estimated days remaining
-                    labelTop = "HALV"
-                    labelBottom = "ETA"
-                    valueText = String.format(Locale.US, "%,.0fd", remainingDays)
-                    footerText = String.format(Locale.US, "%.1f%% progress • %,d blks remaining", epochProgressPercent, blocksRemaining)
-                }
-                2 -> { // Blocks remaining
-                    labelTop = "HALV"
-                    labelBottom = "BLKS"
-                    valueText = String.format(Locale.US, "%,d", blocksRemaining)
-                    footerText = String.format(Locale.US, "%.1f%% progress • %,.0f days remaining", epochProgressPercent, remainingDays)
-                }
-                else -> { // Mode 0: Epoch progress percentage
-                    labelTop = "HALV"
-                    labelBottom = "PCT"
-                    valueText = String.format(Locale.US, "%.2f%%", epochProgressPercent)
-                    footerText = String.format(Locale.US, "%,d blks • %,.0f days remaining", blocksRemaining, remainingDays)
-                }
-            }
-
-            views.setTextViewText(R.id.txt_halving_label_top, labelTop)
-            views.setTextViewText(R.id.txt_halving_label_bottom, labelBottom)
-            views.setTextViewText(R.id.txt_halving_value, valueText)
-            
-            views.setViewVisibility(R.id.txt_halving_progress_bar, View.GONE)
-            views.setViewVisibility(R.id.progress_bar_visual, View.VISIBLE)
-            views.setInt(R.id.progress_bar_visual, "setProgress", (fraction * 100).toInt())
-            views.setTextViewText(R.id.txt_halving_sub, footerText.lowercase(Locale.US))
-
-            // Tap layout to cycle display mode
-            views.setOnClickPendingIntent(R.id.center_layout, getPendingSelfIntent(context, appWidgetId, ACTION_NEXT_MODE))
+            // Tap to cycle display mode
+            views.setOnClickPendingIntent(R.id.widget_root, getPendingSelfIntent(context, appWidgetId, ACTION_NEXT_MODE))
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
