@@ -16,6 +16,7 @@ data class BlockclockDisplay(
 
 /** Dashboard sections, in display order. */
 enum class MetricCategory(val title: String) {
+    PORTFOLIO("Your stack"),
     MARKET("Market"),
     NETWORK("Network"),
     SUPPLY("Supply & Lightning"),
@@ -26,7 +27,9 @@ object BlockclockMetrics {
     /** Stable keys for the 13 modes, in widget mode order. */
     val MODE_KEYS = listOf(
         "PRICE", "SATS", "BLOCK", "MSCW", "MSTR_HELD", "MSTR_RATIO", "MSTR_PRICE",
-        "CIRCULATION", "HALVING", "FEES", "HASHRATE", "DIFF_ADJ", "LN_CAP"
+        "CIRCULATION", "HALVING", "FEES", "HASHRATE", "DIFF_ADJ", "LN_CAP",
+        // Appended so saved widget mode indices stay valid.
+        "STACK"
     )
 
     val MODE_NAMES = listOf(
@@ -42,7 +45,8 @@ object BlockclockMetrics {
         "Mempool Priority Fees",
         "Network Hash Rate",
         "Difficulty Adjustment",
-        "Lightning Network Capacity"
+        "Lightning Network Capacity",
+        "Your Stack Value"
     )
 
     val MODE_COUNT = MODE_KEYS.size
@@ -60,7 +64,8 @@ object BlockclockMetrics {
         "LN_CAP" to MetricCategory.SUPPLY,
         "MSTR_HELD" to MetricCategory.STRATEGY,
         "MSTR_RATIO" to MetricCategory.STRATEGY,
-        "MSTR_PRICE" to MetricCategory.STRATEGY
+        "MSTR_PRICE" to MetricCategory.STRATEGY,
+        "STACK" to MetricCategory.PORTFOLIO
     )
 
     fun categoryOf(key: String): MetricCategory = CATEGORY[key] ?: MetricCategory.MARKET
@@ -69,18 +74,23 @@ object BlockclockMetrics {
 
     const val MODE_PRICE = 0
     const val MODE_MOSCOW_TIME = 3
+    const val MODE_STACK = 13
 
     /**
      * Moscow Time is by definition sats per US dollar, so it has no meaning in THB.
      * It is hidden while THB is selected; the user's own on/off choice is kept and
      * applies again after switching back to USD.
      */
-    fun isAvailable(mode: Int, currency: String): Boolean =
-        !(mode == MODE_MOSCOW_TIME && currency == "THB")
+    fun isAvailable(mode: Int, currency: String, hasStack: Boolean = false): Boolean = when (mode) {
+        MODE_MOSCOW_TIME -> currency != "THB"
+        // Your stack only exists once the user has entered their holdings.
+        MODE_STACK -> hasStack
+        else -> true
+    }
 
-    /** Whether a mode is shown: enabled by the user and meaningful for [currency]. */
-    fun isActive(mode: Int, enabled: Boolean, currency: String): Boolean =
-        enabled && isAvailable(mode, currency)
+    /** Whether a mode is shown: enabled by the user and meaningful right now. */
+    fun isActive(mode: Int, enabled: Boolean, currency: String, hasStack: Boolean = false): Boolean =
+        enabled && isAvailable(mode, currency, hasStack)
 
     /**
      * The next active mode after [current] in the user's [order] (mode keys), or
@@ -91,13 +101,14 @@ object BlockclockMetrics {
         current: Int,
         currency: String,
         order: List<String> = MODE_KEYS,
+        hasStack: Boolean = false,
         isEnabled: (Int) -> Boolean
     ): Int {
         val modes = orderedModes(order)
         val start = modes.indexOf(current).coerceAtLeast(0)
         for (i in 1..modes.size) {
             val candidate = modes[(start + i) % modes.size]
-            if (isActive(candidate, isEnabled(candidate), currency)) return candidate
+            if (isActive(candidate, isEnabled(candidate), currency, hasStack)) return candidate
         }
         return MODE_PRICE
     }
@@ -159,10 +170,10 @@ object BlockclockMetrics {
     private const val HALVING_INTERVAL = 210_000
     private const val BLOCKS_PER_DAY = 144.0
 
-    fun forKey(key: String, data: PriceData, currency: String): BlockclockDisplay =
-        forMode(MODE_KEYS.indexOf(key).coerceAtLeast(0), data, currency)
+    fun forKey(key: String, data: PriceData, currency: String, stackSats: Long = 0): BlockclockDisplay =
+        forMode(MODE_KEYS.indexOf(key).coerceAtLeast(0), data, currency, stackSats)
 
-    fun forMode(mode: Int, data: PriceData, currency: String): BlockclockDisplay {
+    fun forMode(mode: Int, data: PriceData, currency: String, stackSats: Long = 0): BlockclockDisplay {
         val isThb = currency == "THB"
         val satsPerUnit = if (isThb) {
             if (data.btcThb > 0) (100_000_000.0 / data.btcThb).toInt() else 0
@@ -173,11 +184,17 @@ object BlockclockMetrics {
             1 -> BlockclockDisplay(
                 "SATS", if (isThb) "1THB" else "1USD",
                 "%d".f(satsPerUnit),
-                caption = if (isThb) "Sats per 1 baht" else "Sats per 1 dollar"
+                caption = withChange(
+                    if (isThb) "Sats per 1 baht" else "Sats per 1 dollar",
+                    PriceMath.satsChangePct(change(data, currency))
+                )
             )
             2 -> BlockclockDisplay("BLOCK", "HGHT", "%d".f(data.blockHeight), caption = "Bitcoin block height")
             // Always sats per US dollar; hidden in THB (see isAvailable).
-            3 -> BlockclockDisplay("MSCW", "TIME", "%d".f(data.moscowTime), caption = "Moscow time")
+            3 -> BlockclockDisplay(
+                "MSCW", "TIME", "%d".f(data.moscowTime),
+                caption = withChange("Moscow time", PriceMath.satsChangePct(data.change24hUsd))
+            )
             4 -> BlockclockDisplay("MSTR", "BTC", "%.0f".f(data.mstrBtcHeld), caption = "Strategy BTC holdings")
             5 -> BlockclockDisplay("MSTR", "BTC", "%.5f".f(data.mstrBtc), caption = "Strategy BTC per share")
             6 -> BlockclockDisplay("MSTR", "USD", "$%.0f".f(data.mstrUsd), caption = "Strategy share price")
@@ -199,10 +216,17 @@ object BlockclockMetrics {
                 caption = "Epoch progress %.1f%%".f(data.difficultyProgress)
             )
             12 -> BlockclockDisplay("LN", "CAP", "%.0f".f(data.lightningCapacity), "BTC", caption = "Lightning capacity")
+            MODE_STACK -> stackDisplay(stackSats, data, currency)
             else -> if (isThb) {
-                BlockclockDisplay("BTC", "THB", "%.2f".f(data.btcThb / 1_000_000.0), "MIL", caption = "Market price of bitcoin")
+                BlockclockDisplay(
+                    "BTC", "THB", "%.2f".f(data.btcThb / 1_000_000.0), "MIL",
+                    caption = withChange("Market price of bitcoin", data.change24hThb)
+                )
             } else {
-                BlockclockDisplay("BTC", "USD", "$%.0f".f(data.btcUsd), caption = "Market price of bitcoin")
+                BlockclockDisplay(
+                    "BTC", "USD", "$%.0f".f(data.btcUsd),
+                    caption = withChange("Market price of bitcoin", data.change24hUsd)
+                )
             }
         }
     }
@@ -223,6 +247,36 @@ object BlockclockMetrics {
 
     fun halvingProgress(blockHeight: Int): Double =
         (blockHeight % HALVING_INTERVAL).toDouble() / HALVING_INTERVAL
+
+    /** What the user's holdings are worth, with the amount and 24h change as caption. */
+    private fun stackDisplay(sats: Long, data: PriceData, currency: String): BlockclockDisplay {
+        val btc = sats / 100_000_000.0
+        val caption = withChange("${Stack.formatBtc(sats)} BTC", change(data, currency))
+        return if (currency == "THB") {
+            val thb = btc * data.btcThb
+            if (thb >= 1_000_000) BlockclockDisplay("STACK", "THB", "%.2f".f(thb / 1_000_000.0), "MIL", caption = caption)
+            else BlockclockDisplay("STACK", "THB", "%.0f".f(thb), caption = caption)
+        } else {
+            BlockclockDisplay("STACK", "USD", "$%.0f".f(btc * data.btcUsd), caption = caption)
+        }
+    }
+
+    /** The 24h price change for [currency], NaN when unknown. */
+    fun change(data: PriceData, currency: String): Double =
+        if (currency == "THB") data.change24hThb else data.change24hUsd
+
+    /** "+2.4%" (one decimal), or null when unknown. */
+    fun formatChange(pct: Double): String? = if (pct.isNaN()) null else "%+.1f%%".f(pct)
+
+    /**
+     * Appends the 24h change to a caption. The long caption is shortened so the change
+     * survives on small widgets: "Market price of bitcoin" -> "Market price · +2.4% 24h".
+     */
+    private fun withChange(caption: String, pct: Double): String {
+        val change = formatChange(pct) ?: return caption
+        val short = caption.removeSuffix(" of bitcoin")
+        return "$short · $change 24h"
+    }
 
     private fun String.f(vararg args: Any): String = String.format(Locale.US, this, *args)
 }

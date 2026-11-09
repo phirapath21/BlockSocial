@@ -27,15 +27,17 @@ class BtcWidgetProvider : AppWidgetProvider() {
             val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
             val currency = prefs.getString("currency", "USD") ?: "USD"
             val savedMode = getWidgetMode(context, appWidgetId)
+            val stackSats = StackStore.sats(context)
+            val hasStack = stackSats > 0
             val isEnabled = { m: Int -> prefs.getBoolean("mode_enabled_$m", true) }
             // A widget left on a mode that is now off or unavailable (e.g. Moscow Time
             // after switching to THB) shows the next active mode instead.
-            val mode = if (BlockclockMetrics.isActive(savedMode, isEnabled(savedMode), currency)) {
+            val mode = if (BlockclockMetrics.isActive(savedMode, isEnabled(savedMode), currency, hasStack)) {
                 savedMode
             } else {
-                BlockclockMetrics.nextActiveMode(savedMode, currency, modeOrder(prefs), isEnabled)
+                BlockclockMetrics.nextActiveMode(savedMode, currency, modeOrder(prefs), hasStack, isEnabled)
             }
-            val display = BlockclockMetrics.forMode(mode, data, currency)
+            val display = BlockclockMetrics.forMode(mode, data, currency, stackSats)
             val scene = BlockclockScene(
                 display = display,
                 stale = !data.lastFetchSuccessful,
@@ -90,7 +92,8 @@ class BtcWidgetProvider : AppWidgetProvider() {
         private fun getNextActiveMode(context: Context, currentMode: Int): Int {
             val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
             val currency = prefs.getString("currency", "USD") ?: "USD"
-            return BlockclockMetrics.nextActiveMode(currentMode, currency, modeOrder(prefs)) {
+            val hasStack = StackStore.sats(context) > 0
+            return BlockclockMetrics.nextActiveMode(currentMode, currency, modeOrder(prefs), hasStack) {
                 prefs.getBoolean("mode_enabled_$it", true)
             }
         }

@@ -40,10 +40,14 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 
 ### 3. App Layout
 Four tabs along the bottom:
-- **Dashboard** — a hero panel (BLOCK / PRICE / SATS / FEES) above four sections: **Market**, **Network**, **Supply & Lightning** and **Strategy (MSTR)**. Tap a section title to collapse it; hold and drag a panel to reorder it within its section. Pull down to refresh.
+- **Dashboard** — a BTC price chart (24H / 7D, drag to read any hour), a hero panel (BLOCK / PRICE / SATS / FEES) above four sections: **Market**, **Network**, **Supply & Lightning** and **Strategy (MSTR)**. Tap a section title to collapse it; hold and drag a panel to reorder it within its section. Pull down to refresh.
 - **Alerts** — current price and fee for reference, plus price and fee alerts.
 - **Widgets** — how to add widgets, a live preview, and which modes the metrics widget cycles through (grouped like the dashboard, in the same order).
-- **Settings** — display currency, refresh interval, haptics and about.
+- **Settings** — your stack, display currency, refresh interval, **data sources** (BTC price from Coinbase or Kraken; THB converted or from Bitkub), haptics and about.
+
+### 3a. Your Stack
+- Enter how much bitcoin you hold (in BTC or sats) under **Settings > Your stack**; it is stored only on the device.
+- A **STACK** panel and widget mode show what it is worth in USD or THB, with the amount and 24h change as the caption. It can also be the dashboard's hero.
 
 ### 3b. Price Alerts
 - **BTC rises above / falls below** a price (USD or THB) and **fees at or below** a sat/vB level, set in Settings.
@@ -67,7 +71,8 @@ The widgets and the app share one look: a **dark grained panel** with **tall con
 - **Concurrency & Network**: Kotlin Coroutines; all API sources are fetched in parallel and merged per-field with the cache.
 - **Storage**: `SharedPreferences` for caching widget modes, selected themes, and API data.
 - **API Integrations**:
-  - **Coinbase Spot API** (BTC Price & THB Rate)
+  - **Coinbase** (BTC price, USD/THB rate, 24h stats, price history) or **Kraken** (BTC price)
+  - **Bitkub** (optional BTC/THB market price and 24h change)
   - **Yahoo Finance v8 API** (MSTR Price)
   - **Mempool.space API** (Block Height, Fees, Adjustment, Hashrate, Lightning Capacity)
   - **Blockchain.info API** (Circulating Supply Fallback)

@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -51,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.MetricCategory
 import com.example.btcwidget.PriceData
+import com.example.btcwidget.PricePoint
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -105,8 +108,14 @@ fun DashboardContent(
     onOrderChange: (List<String>) -> Unit = {},
     collapsedCategories: Set<MetricCategory> = emptySet(),
     onToggleCategory: (MetricCategory) -> Unit = {},
+    stackSats: Long = 0,
+    onSetUpStack: () -> Unit = {},
+    history: List<PricePoint> = emptyList(),
     modifier: Modifier = Modifier
 ) {
+    val hasStack = stackSats > 0
+    // A cleared stack can't stay the hero.
+    val hero = if (heroMetric == "STACK" && !hasStack) "PRICE" else heroMetric
     val haptics = LocalHapticFeedback.current
 
     // Working copy so the grid reflows instantly while dragging; saved on drop.
@@ -115,8 +124,8 @@ fun DashboardContent(
 
     val visibleKeys = BlockclockMetrics.orderedModes(workingOrder)
         .filter { index ->
-            BlockclockMetrics.isActive(index, enabledModes.getOrElse(index) { true }, currencySetting) &&
-                BlockclockMetrics.MODE_KEYS[index] != heroMetric
+            BlockclockMetrics.isActive(index, enabledModes.getOrElse(index) { true }, currencySetting, hasStack) &&
+                BlockclockMetrics.MODE_KEYS[index] != hero
         }
         .map { BlockclockMetrics.MODE_KEYS[it] }
 
@@ -160,27 +169,38 @@ fun DashboardContent(
         // Hero panel, same proportions as a 2x1 widget.
         fullWidth("hero") {
             EInkDevice(
-                display = BlockclockMetrics.forKey(heroMetric, data, currencySetting),
+                display = BlockclockMetrics.forKey(hero, data, currencySetting, stackSats),
                 aspectRatio = 2f,
                 stale = !data.lastFetchSuccessful
             )
         }
 
         fullWidth("hero_choices") {
+            val choices = if (hasStack) listOf("STACK") + HERO_CHOICES else HERO_CHOICES
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
                     .padding(top = 4.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
             ) {
-                HERO_CHOICES.forEach { key ->
+                choices.forEach { key ->
                     EInkChip(
                         text = key,
-                        selected = heroMetric == key,
+                        selected = hero == key,
                         onClick = { onHeroMetricSelected(key) }
                     )
                 }
             }
+        }
+
+        fullWidth("price_chart") {
+            PriceChartPanel(
+                history = history,
+                currency = currencySetting,
+                usdToCurrency = if (currencySetting == "THB" && data.btcUsd > 0) data.btcThb / data.btcUsd else 1.0,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
         }
 
         fullWidth("reorder_hint") {
@@ -210,6 +230,12 @@ fun DashboardContent(
             }
         }
 
+        if (!hasStack) {
+            fullWidth("stack_setup") {
+                StackSetupCard(onSetUp = onSetUpStack)
+            }
+        }
+
         MetricCategory.entries.forEach { category ->
             val keys = visibleKeys.filter { BlockclockMetrics.categoryOf(it) == category }
             if (keys.isEmpty()) return@forEach
@@ -232,7 +258,7 @@ fun DashboardContent(
                     val index = BlockclockMetrics.MODE_KEYS.indexOf(key)
 
                     EInkDevice(
-                        display = BlockclockMetrics.forMode(index, data, currencySetting),
+                        display = BlockclockMetrics.forMode(index, data, currencySetting, stackSats),
                         aspectRatio = 1.7f,
                         progress = if (key == "HALVING") {
                             BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
@@ -284,6 +310,31 @@ fun DashboardContent(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+/** Invitation to enter holdings; replaces the empty "Your stack" section. */
+@Composable
+private fun StackSetupCard(onSetUp: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .border(1.dp, EInk.BodyStroke, CardShape)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+            SectionLabel("Your stack")
+            Text(
+                text = "See what your bitcoin is worth here and on the widget.",
+                color = EInk.Label,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        EInkChip(text = "SET UP", selected = true, onClick = onSetUp)
     }
 }
 

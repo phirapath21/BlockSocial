@@ -39,6 +39,7 @@ class WidgetConfigActivity : ComponentActivity() {
         val prefs = getSharedPreferences(WIDGET_PREFS, MODE_PRIVATE)
         val currency = prefs.getString("currency", "USD") ?: "USD"
         val data = PriceRepository.getFromPrefs(this)
+        val stackSats = StackStore.sats(this)
 
         val choices = if (isHalving) {
             listOf("Epoch progress", "Days to halving", "Blocks to halving").mapIndexed { mode, name ->
@@ -47,9 +48,9 @@ class WidgetConfigActivity : ComponentActivity() {
         } else {
             // Listed in the user's dashboard order.
             BlockclockMetrics.orderedModes(BtcWidgetProvider.modeOrder(prefs))
-                .filter { BlockclockMetrics.isAvailable(it, currency) }
+                .filter { BlockclockMetrics.isAvailable(it, currency, hasStack = stackSats > 0) }
                 .map { mode ->
-                    ModeChoice(mode, BlockclockMetrics.MODE_NAMES[mode], data?.let { BlockclockMetrics.forMode(mode, it, currency) })
+                    ModeChoice(mode, BlockclockMetrics.MODE_NAMES[mode], data?.let { BlockclockMetrics.forMode(mode, it, currency, stackSats) })
                 }
         }
         val current = if (isHalving) {

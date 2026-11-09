@@ -109,4 +109,52 @@ class PriceMergeTest {
         assertEquals(2_000L, result.timestamp)
         assertFalse(result.lastFetchSuccessful)
     }
+
+    // ---- data sources & 24h change ----
+
+    @Test
+    fun krakenPriceWinsAndThbIsConvertedFromIt() {
+        val fresh = allFresh.copy(krakenUsd = 110_000.0) // Coinbase rates: 100k USD / 3.5M THB
+        val result = PriceRepository.mergeWithCache(fresh, cached, now = 2_000L)!!
+        assertEquals(110_000.0, result.btcUsd, 0.0)
+        assertEquals(3_850_000.0, result.btcThb, 1e-6) // 110k * 35
+        assertTrue(result.lastFetchSuccessful)
+    }
+
+    @Test
+    fun bitkubPriceAndChangeUsedForThb() {
+        val fresh = allFresh.copy(bitkub = BitkubTicker(last = 3_600_000.0, percentChange = 1.25),
+            dayStats = DayStats(open = 100_000.0, last = 102_000.0))
+        val result = PriceRepository.mergeWithCache(fresh, cached, now = 2_000L)!!
+        assertEquals(3_600_000.0, result.btcThb, 0.0)
+        assertEquals(1.25, result.change24hThb, 1e-9)
+        assertEquals(2.0, result.change24hUsd, 1e-9)
+    }
+
+    @Test
+    fun convertedThbFollowsUsdChange() {
+        val fresh = allFresh.copy(dayStats = DayStats(open = 100_000.0, last = 97_000.0))
+        val result = PriceRepository.mergeWithCache(fresh, cached, now = 2_000L)!!
+        assertEquals(-3.0, result.change24hUsd, 1e-9)
+        assertEquals(-3.0, result.change24hThb, 1e-9)
+    }
+
+    @Test
+    fun changeKeepsCachedValueWhenStatsFail() {
+        val withChange = cached.copy(change24hUsd = 1.5, change24hThb = 1.4)
+        val result = PriceRepository.mergeWithCache(allFresh, withChange, now = 2_000L)!!
+        assertEquals(1.5, result.change24hUsd, 1e-9)
+        assertEquals(1.4, result.change24hThb, 1e-9)
+        assertTrue(PriceRepository.mergeWithCache(allFresh, cached, 2_000L)!!.change24hUsd.isNaN())
+    }
+
+    @Test
+    fun krakenAloneCountsAsFreshPrice() {
+        val fresh = allFresh.copy(rates = null, krakenUsd = 105_000.0)
+        val result = PriceRepository.mergeWithCache(fresh, cached, now = 2_000L)!!
+        assertEquals(105_000.0, result.btcUsd, 0.0)
+        assertEquals(3_000_000.0, result.btcThb, 0.0) // no fx: keeps cached THB
+        assertTrue(result.lastFetchSuccessful)
+    }
 }
+

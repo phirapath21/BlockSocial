@@ -56,7 +56,8 @@ class BlockclockPainterTest {
     private fun allScenes(): List<BlockclockScene> {
         val metrics = listOf("USD", "THB").flatMap { currency ->
             (0 until BlockclockMetrics.MODE_COUNT).map { mode ->
-                BlockclockScene(BlockclockMetrics.forMode(mode, data, currency), stale = true)
+                // A large stack checks the widest values fit.
+                BlockclockScene(BlockclockMetrics.forMode(mode, data, currency, stackSats = 123_456_789_012), stale = true)
             }
         }
         val halving = (0..2).map {

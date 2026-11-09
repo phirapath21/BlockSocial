@@ -49,7 +49,7 @@ class BlockclockDisplayTest {
 
     @Test
     fun forKey_matchesModeOrder() {
-        assertEquals(13, BlockclockMetrics.MODE_COUNT)
+        assertEquals(14, BlockclockMetrics.MODE_COUNT)
         assertEquals(BlockclockMetrics.MODE_COUNT, BlockclockMetrics.MODE_NAMES.size)
         assertEquals("925000", BlockclockMetrics.forKey("BLOCK", data, "USD").value)
         assertEquals("7", BlockclockMetrics.forKey("FEES", data, "USD").value)
@@ -99,7 +99,7 @@ class BlockclockDisplayTest {
         assertEquals(BlockclockMetrics.MODE_COUNT, default.size)
         val categories = default.map { BlockclockMetrics.categoryOf(it) }
         assertEquals(categories.sortedBy { it.ordinal }, categories)
-        assertEquals(listOf("PRICE", "SATS", "MSCW"), default.take(3))
+        assertEquals(listOf("STACK", "PRICE", "SATS", "MSCW"), default.take(4))
         assertEquals(MetricCategory.STRATEGY, BlockclockMetrics.categoryOf("MSTR_PRICE"))
     }
 
@@ -128,9 +128,9 @@ class BlockclockDisplayTest {
     @Test
     fun move_swapsLikeAGridWithinACategory() {
         // Drag down onto a later item: lands after it.
-        assertEquals(listOf("SATS", "MSCW", "PRICE"), BlockclockMetrics.move(default, "PRICE", "MSCW").take(3))
+        assertEquals(listOf("SATS", "MSCW", "PRICE"), market(BlockclockMetrics.move(default, "PRICE", "MSCW")))
         // Drag up onto an earlier item: lands before it.
-        assertEquals(listOf("MSCW", "PRICE", "SATS"), BlockclockMetrics.move(default, "MSCW", "PRICE").take(3))
+        assertEquals(listOf("MSCW", "PRICE", "SATS"), market(BlockclockMetrics.move(default, "MSCW", "PRICE")))
     }
 
     @Test
@@ -145,7 +145,7 @@ class BlockclockDisplayTest {
         val visible = default.filter { it != "MSCW" }
         assertEquals(default, BlockclockMetrics.moveAmongVisible(default, visible, "SATS", +1))
         // Moving PRICE later swaps it with SATS.
-        assertEquals(listOf("SATS", "PRICE"), BlockclockMetrics.moveAmongVisible(default, visible, "PRICE", +1).take(2))
+        assertEquals(listOf("SATS", "PRICE", "MSCW"), market(BlockclockMetrics.moveAmongVisible(default, visible, "PRICE", +1)))
         // First in section: no-op.
         assertEquals(default, BlockclockMetrics.moveAmongVisible(default, visible, "BLOCK", -1))
     }
@@ -154,9 +154,54 @@ class BlockclockDisplayTest {
     fun nextActiveMode_followsGroupedUserOrder() {
         val order = BlockclockMetrics.sanitizeOrder(listOf("FEES", "BLOCK"))
         val allOn = { _: Int -> true }
-        val sequence = generateSequence(0) { BlockclockMetrics.nextActiveMode(it, "USD", order, allOn) }
+        val start = BlockclockMetrics.MODE_KEYS.indexOf(order.first())
+        val sequence = generateSequence(start) { BlockclockMetrics.nextActiveMode(it, "USD", order, hasStack = true, isEnabled = allOn) }
             .take(BlockclockMetrics.MODE_COUNT + 1).map { BlockclockMetrics.MODE_KEYS[it] }.toList()
         assertEquals(order + order.first(), sequence)
-        assertEquals("FEES", order[3]) // Network section starts with the user's FEES
+        assertEquals("FEES", order[4]) // Network section starts with the user's FEES
+    }
+
+    private fun market(order: List<String>) =
+        order.filter { BlockclockMetrics.categoryOf(it) == MetricCategory.MARKET }
+
+    // ---- your stack ----
+
+    @Test
+    fun stackMode_onlyAvailableWithHoldings() {
+        val stack = BlockclockMetrics.MODE_STACK
+        assertEquals("STACK", BlockclockMetrics.MODE_KEYS[stack])
+        assertEquals(false, BlockclockMetrics.isAvailable(stack, "USD"))
+        assertEquals(true, BlockclockMetrics.isAvailable(stack, "USD", hasStack = true))
+        // Cycling skips it without holdings.
+        val allOn = { _: Int -> true }
+        val withoutStack = generateSequence(0) { BlockclockMetrics.nextActiveMode(it, "USD", isEnabled = allOn) }
+            .take(30).toSet()
+        assertEquals(false, stack in withoutStack)
+    }
+
+    @Test
+    fun stackDisplay_valueInCurrency() {
+        val withChange = data.copy(change24hUsd = 2.0, change24hThb = 2.0)
+        val usd = BlockclockMetrics.forMode(BlockclockMetrics.MODE_STACK, withChange, "USD", stackSats = 50_000_000)
+        assertEquals("STACK", usd.labelTop)
+        assertEquals("$48562", usd.value) // 0.5 * 97,123.4
+        assertEquals("0.5 BTC · +2.0% 24h", usd.caption)
+        val thb = BlockclockMetrics.forMode(BlockclockMetrics.MODE_STACK, withChange, "THB", stackSats = 50_000_000)
+        assertEquals("1.61", thb.value) // 0.5 * 3,215,000 = 1.6075M
+        assertEquals("MIL", thb.suffix)
+        val small = BlockclockMetrics.forMode(BlockclockMetrics.MODE_STACK, data, "THB", stackSats = 10_000)
+        assertEquals("322", small.value)
+        assertEquals("", small.suffix)
+    }
+
+    @Test
+    fun captionsShowTheChangeWhenKnown() {
+        val withChange = data.copy(change24hUsd = 2.41, change24hThb = -0.55)
+        assertEquals("Market price · +2.4% 24h", BlockclockMetrics.forMode(0, withChange, "USD").caption)
+        assertEquals("Market price · -0.6% 24h", BlockclockMetrics.forMode(0, withChange, "THB").caption)
+        assertEquals("Sats per 1 dollar · -2.4% 24h", BlockclockMetrics.forMode(1, withChange, "USD").caption)
+        // Unknown change: plain caption.
+        assertEquals("Market price of bitcoin", BlockclockMetrics.forMode(0, data, "USD").caption)
     }
 }
+

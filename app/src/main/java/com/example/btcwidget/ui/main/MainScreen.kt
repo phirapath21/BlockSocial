@@ -51,12 +51,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.BtcWidgetProvider
+import com.example.btcwidget.DataSources
 import com.example.btcwidget.MetricCategory
+import com.example.btcwidget.PricePoint
+import com.example.btcwidget.PriceSource
+import com.example.btcwidget.Stack
+import com.example.btcwidget.StackStore
+import com.example.btcwidget.StackUnit
+import com.example.btcwidget.ThbSource
 import com.example.btcwidget.WidgetRefreshScheduler
 import com.example.btcwidget.WidgetUpdater
 import com.example.btcwidget.alerts.AlertNotifier
 import com.example.btcwidget.alerts.AlertRule
 import com.example.btcwidget.alerts.AlertStore
+import com.example.btcwidget.alerts.PriceAlerts
 
 @Composable
 fun MainScreen(
@@ -67,6 +75,7 @@ fun MainScreen(
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val history by viewModel.history.collectAsStateWithLifecycle()
     val prefs = remember { context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE) }
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.DASHBOARD) }
     var collapsedCategories by remember {
@@ -132,6 +141,23 @@ fun MainScreen(
         modeOrder = BlockclockMetrics.sanitizeOrder(newOrder)
     }
 
+    var stackSats by remember { mutableStateOf(StackStore.sats(context)) }
+    var stackUnit by remember { mutableStateOf(StackStore.unit(context)) }
+    val onStackChange: (Long, StackUnit) -> Unit = { sats, unit ->
+        StackStore.save(context, sats, unit)
+        stackSats = sats
+        stackUnit = unit
+        WidgetUpdater.updateAllWidgets(context)
+    }
+
+    var dataSources by remember { mutableStateOf(DataSources.read(context)) }
+    val onDataSourcesChange: (DataSources) -> Unit = { sources ->
+        DataSources.save(context, sources)
+        dataSources = sources
+        // Show the new source's price right away.
+        viewModel.refreshData(context)
+    }
+
     var alerts by remember { mutableStateOf(AlertStore.load(context)) }
     var notificationsAllowed by remember { mutableStateOf(AlertNotifier.canNotify(context)) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -154,7 +180,7 @@ fun MainScreen(
 
     val onModeToggle: (Int, Boolean) -> Unit = { index, checked ->
         val activeCount = modeStates.indices.count {
-            BlockclockMetrics.isActive(it, modeStates[it], currencySetting)
+            BlockclockMetrics.isActive(it, modeStates[it], currencySetting, hasStack = stackSats > 0)
         }
         if (checked || activeCount > 1) {
             prefs.edit().putBoolean("mode_enabled_$index", checked).apply()
@@ -180,6 +206,12 @@ fun MainScreen(
         collapsedCategories = collapsedCategories,
         onToggleCategory = onToggleCategory,
         appVersion = appVersion,
+        stackSats = stackSats,
+        stackUnit = stackUnit,
+        onStackChange = onStackChange,
+        dataSources = dataSources,
+        onDataSourcesChange = onDataSourcesChange,
+        history = history,
         onModeToggle = onModeToggle,
         onRefresh = { viewModel.refreshData(context) },
         isRefreshing = isRefreshing,
@@ -220,9 +252,19 @@ fun MainScreenContent(
     notificationsAllowed: Boolean = true,
     collapsedCategories: Set<MetricCategory> = emptySet(),
     onToggleCategory: (MetricCategory) -> Unit = {},
-    appVersion: String? = null
+    appVersion: String? = null,
+    stackSats: Long = 0,
+    stackUnit: StackUnit = StackUnit.BTC,
+    onStackChange: (Long, StackUnit) -> Unit = { _, _ -> },
+    dataSources: DataSources = DataSources(PriceSource.COINBASE, ThbSource.CONVERTED),
+    onDataSourcesChange: (DataSources) -> Unit = {},
+    history: List<PricePoint> = emptyList()
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
+    val stackValue = data?.takeIf { stackSats > 0 }?.let {
+        val btc = stackSats / Stack.SATS_PER_BTC.toDouble()
+        PriceAlerts.formatPrice(btc * PriceAlerts.price(it, currencySetting), currencySetting)
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -264,7 +306,10 @@ fun MainScreenContent(
                                 order = modeOrder,
                                 onOrderChange = onModeOrderChange,
                                 collapsedCategories = collapsedCategories,
-                                onToggleCategory = onToggleCategory
+                                onToggleCategory = onToggleCategory,
+                                stackSats = stackSats,
+                                onSetUpStack = { onTabSelected(MainTab.SETTINGS) },
+                                history = history
                             )
                             else -> Column(
                                 modifier = Modifier
@@ -295,7 +340,8 @@ fun MainScreenContent(
                     onModeToggle = onModeToggle,
                     currencySetting = currencySetting,
                     modeOrder = modeOrder,
-                    data = data
+                    data = data,
+                    hasStack = stackSats > 0
                 )
                 MainTab.SETTINGS -> SettingsScreen(
                     currencySetting = currencySetting,
@@ -304,7 +350,13 @@ fun MainScreenContent(
                     onRefreshIntervalSelected = onRefreshIntervalSelected,
                     hapticEnabled = hapticEnabled,
                     onHapticToggle = onHapticToggle,
-                    appVersion = appVersion
+                    appVersion = appVersion,
+                    stackSats = stackSats,
+                    stackUnit = stackUnit,
+                    onStackChange = onStackChange,
+                    stackValue = stackValue,
+                    dataSources = dataSources,
+                    onDataSourcesChange = onDataSourcesChange
                 )
             }
         }

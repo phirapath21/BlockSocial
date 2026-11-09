@@ -105,6 +105,8 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  // Real org.json for parser tests (android.jar only has stubs)
+  testImplementation("org.json:json:20240303")
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
