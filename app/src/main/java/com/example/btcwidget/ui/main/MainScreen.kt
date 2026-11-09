@@ -51,10 +51,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.BtcWidgetProvider
+import com.example.btcwidget.DataSources
 import com.example.btcwidget.MetricCategory
+import com.example.btcwidget.PriceSource
 import com.example.btcwidget.Stack
 import com.example.btcwidget.StackStore
 import com.example.btcwidget.StackUnit
+import com.example.btcwidget.ThbSource
 import com.example.btcwidget.WidgetRefreshScheduler
 import com.example.btcwidget.WidgetUpdater
 import com.example.btcwidget.alerts.AlertNotifier
@@ -145,6 +148,14 @@ fun MainScreen(
         WidgetUpdater.updateAllWidgets(context)
     }
 
+    var dataSources by remember { mutableStateOf(DataSources.read(context)) }
+    val onDataSourcesChange: (DataSources) -> Unit = { sources ->
+        DataSources.save(context, sources)
+        dataSources = sources
+        // Show the new source's price right away.
+        viewModel.refreshData(context)
+    }
+
     var alerts by remember { mutableStateOf(AlertStore.load(context)) }
     var notificationsAllowed by remember { mutableStateOf(AlertNotifier.canNotify(context)) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -196,6 +207,8 @@ fun MainScreen(
         stackSats = stackSats,
         stackUnit = stackUnit,
         onStackChange = onStackChange,
+        dataSources = dataSources,
+        onDataSourcesChange = onDataSourcesChange,
         onModeToggle = onModeToggle,
         onRefresh = { viewModel.refreshData(context) },
         isRefreshing = isRefreshing,
@@ -239,7 +252,9 @@ fun MainScreenContent(
     appVersion: String? = null,
     stackSats: Long = 0,
     stackUnit: StackUnit = StackUnit.BTC,
-    onStackChange: (Long, StackUnit) -> Unit = { _, _ -> }
+    onStackChange: (Long, StackUnit) -> Unit = { _, _ -> },
+    dataSources: DataSources = DataSources(PriceSource.COINBASE, ThbSource.CONVERTED),
+    onDataSourcesChange: (DataSources) -> Unit = {}
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
     val stackValue = data?.takeIf { stackSats > 0 }?.let {
@@ -334,7 +349,9 @@ fun MainScreenContent(
                     stackSats = stackSats,
                     stackUnit = stackUnit,
                     onStackChange = onStackChange,
-                    stackValue = stackValue
+                    stackValue = stackValue,
+                    dataSources = dataSources,
+                    onDataSourcesChange = onDataSourcesChange
                 )
             }
         }

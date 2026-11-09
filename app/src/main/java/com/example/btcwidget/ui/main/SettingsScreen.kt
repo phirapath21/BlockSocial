@@ -28,8 +28,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.btcwidget.DataSources
+import com.example.btcwidget.PriceSource
 import com.example.btcwidget.Stack
 import com.example.btcwidget.StackUnit
+import com.example.btcwidget.ThbSource
 
 /** General app settings: display currency, refresh cadence, haptics, and about. */
 @Composable
@@ -44,7 +47,9 @@ fun SettingsScreen(
     stackSats: Long = 0,
     stackUnit: StackUnit = StackUnit.BTC,
     onStackChange: (Long, StackUnit) -> Unit = { _, _ -> },
-    stackValue: String? = null
+    stackValue: String? = null,
+    dataSources: DataSources = DataSources(PriceSource.COINBASE, ThbSource.CONVERTED),
+    onDataSourcesChange: (DataSources) -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -106,6 +111,39 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        EInkPanel(title = "Data sources") {
+            SettingRow("BTC price", note = "Spot price in USD") {
+                PriceSource.entries.forEach { source ->
+                    EInkChip(
+                        text = source.label.uppercase(),
+                        selected = dataSources.price == source,
+                        onClick = { onDataSourcesChange(dataSources.copy(price = source)) }
+                    )
+                }
+            }
+            SettingRow(
+                "THB price",
+                note = if (dataSources.thb == ThbSource.BITKUB) "Bitkub's BTC/THB market" else "USD price × exchange rate"
+            ) {
+                ThbSource.entries.forEach { source ->
+                    EInkChip(
+                        text = source.label.uppercase(),
+                        selected = dataSources.thb == source,
+                        onClick = { onDataSourcesChange(dataSources.copy(thb = source)) }
+                    )
+                }
+            }
+            Text(
+                text = "If a source is unreachable, Blockface falls back to Coinbase or the last known price.",
+                color = EInk.Caption,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         EInkPanel(title = "Feedback") {
             SettingRow(
                 label = "Haptics",
@@ -120,7 +158,7 @@ fun SettingsScreen(
 
         EInkPanel(title = "About") {
             AboutLine("Blockface" + (appVersion?.let { " $it" } ?: ""))
-            AboutLine("Prices: Coinbase · Network: mempool.space")
+            AboutLine("Prices: ${dataSources.price.label}" + (if (dataSources.thb == ThbSource.BITKUB) ", Bitkub (THB)" else "") + " · Network: mempool.space")
             AboutLine("Supply: blockchain.info · MSTR: Yahoo Finance, CoinGecko")
             AboutLine("Display type: Oswald (SIL Open Font License)")
         }
