@@ -30,7 +30,7 @@ fun MainScreenPreview() {
     BTCWidgetTheme {
         MainScreenContent(
             state = MainScreenUiState.Success(sampleData),
-            showSettings = false,
+            selectedTab = MainTab.DASHBOARD,
             heroMetric = "BLOCK",
             modeStates = List(13) { true },
             currencySetting = "USD",
@@ -40,7 +40,7 @@ fun MainScreenPreview() {
             hapticEnabled = true,
             onHapticToggle = {},
             onHeroMetricSelected = {},
-            onShowSettingsChange = {},
+            onTabSelected = {},
             onModeToggle = { _, _ -> },
             onRefresh = {},
             onItemClick = {}
@@ -69,7 +69,7 @@ fun MainScreenSettingsPreview() {
     BTCWidgetTheme {
         MainScreenContent(
             state = MainScreenUiState.Success(sampleData),
-            showSettings = true,
+            selectedTab = MainTab.SETTINGS,
             heroMetric = "BLOCK",
             modeStates = List(13) { true },
             currencySetting = "USD",
@@ -79,7 +79,7 @@ fun MainScreenSettingsPreview() {
             hapticEnabled = true,
             onHapticToggle = {},
             onHeroMetricSelected = {},
-            onShowSettingsChange = {},
+            onTabSelected = {},
             onModeToggle = { _, _ -> },
             onRefresh = {},
             onItemClick = {}

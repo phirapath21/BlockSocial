@@ -3,6 +3,7 @@ package com.example.btcwidget.ui.main
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +21,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -36,18 +42,20 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.btcwidget.BlockclockMetrics
+import com.example.btcwidget.MetricCategory
 import com.example.btcwidget.PriceData
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyGridState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyGridState
 
 /** Metrics that can be pinned to the large device at the top of the dashboard. */
 private val HERO_CHOICES = listOf("BLOCK", "PRICE", "SATS", "FEES")
@@ -93,8 +101,10 @@ fun DashboardContent(
     onHeroMetricSelected: (String) -> Unit,
     enabledModes: List<Boolean>,
     currencySetting: String,
-    order: List<String> = BlockclockMetrics.MODE_KEYS,
+    order: List<String> = BlockclockMetrics.DEFAULT_ORDER,
     onOrderChange: (List<String>) -> Unit = {},
+    collapsedCategories: Set<MetricCategory> = emptySet(),
+    onToggleCategory: (MetricCategory) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val haptics = LocalHapticFeedback.current
@@ -112,7 +122,8 @@ fun DashboardContent(
 
     val gridState = rememberLazyGridState()
     val reorderState = rememberReorderableLazyGridState(gridState) { from, to ->
-        // Only metric cards are ReorderableItems, so both keys are mode keys.
+        // Only metric cards are ReorderableItems, so both keys are mode keys. A drop on
+        // another section is ignored by move(): metrics stay in their category.
         val fromKey = from.key as? String ?: return@rememberReorderableLazyGridState
         val toKey = to.key as? String ?: return@rememberReorderableLazyGridState
         workingOrder = BlockclockMetrics.move(workingOrder, fromKey, toKey)
@@ -172,75 +183,90 @@ fun DashboardContent(
             }
         }
 
-        fullWidth("metrics_header") {
+        fullWidth("reorder_hint") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
-                    SectionLabel("All metrics")
-                    Text(
-                        text = "Hold and drag to reorder · widget taps follow this order",
-                        color = EInk.Caption,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
+                Text(
+                    text = "Hold and drag to reorder within a section",
+                    color = EInk.Caption,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 4.dp)
+                )
                 if (!BlockclockMetrics.isDefaultOrder(workingOrder)) {
                     EInkChip(
                         text = "RESET",
                         selected = false,
                         onClick = {
-                            workingOrder = BlockclockMetrics.MODE_KEYS
-                            onOrderChange(BlockclockMetrics.MODE_KEYS)
+                            workingOrder = BlockclockMetrics.DEFAULT_ORDER
+                            onOrderChange(BlockclockMetrics.DEFAULT_ORDER)
                         }
                     )
                 }
             }
         }
 
-        items(visibleKeys, key = { it }) { key ->
-            ReorderableItem(reorderState, key = key) { isDragging ->
-                val scale by animateFloatAsState(if (isDragging) 1.05f else 1f, label = "lift")
-                val elevation by animateDpAsState(if (isDragging) 16.dp else 0.dp, label = "shadow")
-                val index = BlockclockMetrics.MODE_KEYS.indexOf(key)
+        MetricCategory.entries.forEach { category ->
+            val keys = visibleKeys.filter { BlockclockMetrics.categoryOf(it) == category }
+            if (keys.isEmpty()) return@forEach
+            val collapsed = category in collapsedCategories
 
-                EInkDevice(
-                    display = BlockclockMetrics.forMode(index, data, currencySetting),
-                    aspectRatio = 1.7f,
-                    progress = if (key == "HALVING") {
-                        BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
-                    } else {
-                        null
-                    },
-                    modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                        .shadow(elevation, CardShape)
-                        .then(if (isDragging) Modifier.border(1.dp, EInk.Label, CardShape) else Modifier)
-                        .longPressDraggableHandle(
-                            onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
-                            onDragStopped = { onOrderChange(workingOrder) }
-                        )
-                        .semantics {
-                            // TalkBack alternative to dragging.
-                            customActions = listOf(
-                                CustomAccessibilityAction("Move earlier") {
-                                    workingOrder = BlockclockMetrics.moveAmongVisible(workingOrder, visibleKeys, key, -1)
-                                    onOrderChange(workingOrder)
-                                    true
-                                },
-                                CustomAccessibilityAction("Move later") {
-                                    workingOrder = BlockclockMetrics.moveAmongVisible(workingOrder, visibleKeys, key, +1)
-                                    onOrderChange(workingOrder)
-                                    true
-                                }
-                            )
-                        }
+            fullWidth("section_${category.name}") {
+                CategoryHeader(
+                    title = category.title,
+                    count = keys.size,
+                    collapsed = collapsed,
+                    onClick = { onToggleCategory(category) }
                 )
+            }
+            if (collapsed) return@forEach
+
+            items(keys, key = { it }) { key ->
+                ReorderableItem(reorderState, key = key) { isDragging ->
+                    val scale by animateFloatAsState(if (isDragging) 1.05f else 1f, label = "lift")
+                    val elevation by animateDpAsState(if (isDragging) 16.dp else 0.dp, label = "shadow")
+                    val index = BlockclockMetrics.MODE_KEYS.indexOf(key)
+
+                    EInkDevice(
+                        display = BlockclockMetrics.forMode(index, data, currencySetting),
+                        aspectRatio = 1.7f,
+                        progress = if (key == "HALVING") {
+                            BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
+                        } else {
+                            null
+                        },
+                        modifier = Modifier
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                            .shadow(elevation, CardShape)
+                            .then(if (isDragging) Modifier.border(1.dp, EInk.Label, CardShape) else Modifier)
+                            .longPressDraggableHandle(
+                                onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
+                                onDragStopped = { onOrderChange(workingOrder) }
+                            )
+                            .semantics {
+                                // TalkBack alternative to dragging.
+                                customActions = listOf(
+                                    CustomAccessibilityAction("Move earlier") {
+                                        workingOrder = BlockclockMetrics.moveAmongVisible(workingOrder, visibleKeys, key, -1)
+                                        onOrderChange(workingOrder)
+                                        true
+                                    },
+                                    CustomAccessibilityAction("Move later") {
+                                        workingOrder = BlockclockMetrics.moveAmongVisible(workingOrder, visibleKeys, key, +1)
+                                        onOrderChange(workingOrder)
+                                        true
+                                    }
+                                )
+                            }
+                    )
+                }
             }
         }
 
@@ -258,6 +284,37 @@ fun DashboardContent(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+/** Tappable section title that collapses or expands its metrics. */
+@Composable
+private fun CategoryHeader(title: String, count: Int, collapsed: Boolean, onClick: () -> Unit) {
+    val rotation by animateFloatAsState(if (collapsed) -90f else 0f, label = "chevron")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .clip(EInk.ChipShape)
+            .clickable(onClickLabel = if (collapsed) "Expand" else "Collapse", onClick = onClick)
+            .semantics { stateDescription = if (collapsed) "Collapsed" else "Expanded" }
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SectionLabel(title)
+        Text(
+            text = "  $count",
+            color = EInk.Caption,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = Icons.Default.KeyboardArrowDown,
+            contentDescription = null,
+            tint = EInk.Label,
+            modifier = Modifier.rotate(rotation)
+        )
     }
 }
 
