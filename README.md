@@ -41,6 +41,11 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 ### 3. Active Mode Customization
 - Enable or disable specific widget modes inside settings to customize your widget cycling.
 
+### 3b. Price Alerts
+- **BTC rises above / falls below** a price (USD or THB) and **fees at or below** a sat/vB level, set in Settings.
+- Notifies once per crossing, then re-arms when the condition turns false again; stale data never triggers an alert.
+- Checked with each background refresh (15/30/60 min), even with no widget on the home screen. Android 13+ asks for notification permission when you switch an alert on.
+
 ### 4. Design
 The widgets and the app share one look: a **dark grained panel** with **tall condensed type**.
 - A **stacked label** beside the value (e.g. `BTC` over `USD` with a rule between), the **value in large type**, and an optional **unit** set high on the right (e.g. `MIL`, `EH/S`).

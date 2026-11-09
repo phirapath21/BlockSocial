@@ -11,6 +11,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.btcwidget.alerts.AlertStore
 import java.util.concurrent.TimeUnit
 
 /**
@@ -73,8 +74,12 @@ object WidgetRefreshScheduler {
             .enqueueUniqueWork(ONE_TIME_WORK, ExistingWorkPolicy.KEEP, request)
     }
 
-    /** Cancels background refreshes once the last widget of any type is removed. */
-    fun cancelIfNoWidgets(context: Context) {
+    /**
+     * Cancels background refreshes once nothing needs them: no widget of any type is
+     * placed and no price alert is enabled.
+     */
+    fun cancelIfUnused(context: Context) {
+        if (AlertStore.anyEnabled(context)) return
         val manager = AppWidgetManager.getInstance(context)
         val providers = listOf(
             BtcWidgetProvider::class.java,

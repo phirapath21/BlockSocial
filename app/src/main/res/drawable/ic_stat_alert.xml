@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon: the condensed bitcoin sign from the launcher icon, single colour. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M9,4.5 L9,19.5 M9,4.5 L11.7,4.5 C13.8,4.5 14.6,5.75 14.6,7.94 C14.6,10.13 13.8,11.38 11.7,11.38 L9,11.38 M9,11.38 L12.1,11.38 C14.4,11.38 15.5,12.63 15.5,15.44 C15.5,18.25 14.4,19.5 12.1,19.5 L9,19.5 M10.5,2.2 L10.5,4.5 M12.8,2.2 L12.8,4.5 M10.5,19.5 L10.5,21.8 M12.8,19.5 L12.8,21.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6" />
+</vector>

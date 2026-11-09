@@ -3,6 +3,7 @@ package com.example.btcwidget
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.example.btcwidget.alerts.AlertNotifier
 
 /** Fetches fresh data in the background and redraws every widget. */
 class PriceRefreshWorker(
@@ -16,6 +17,7 @@ class PriceRefreshWorker(
 
         PriceRepository.saveToPrefs(applicationContext, data)
         WidgetUpdater.updateAllWidgets(applicationContext)
+        AlertNotifier.checkAndNotify(applicationContext, data)
 
         // Core sources failed: try again sooner than the next periodic run.
         return if (!data.lastFetchSuccessful && runAttemptCount < MAX_RETRIES) {
