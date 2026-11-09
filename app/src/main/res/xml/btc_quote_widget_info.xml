@@ -8,5 +8,6 @@
     android:initialLayout="@layout/btc_widget_quote"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
+    android:previewImage="@drawable/widget_preview_quote"
     android:description="@string/widget_quote_description">
 </appwidget-provider>

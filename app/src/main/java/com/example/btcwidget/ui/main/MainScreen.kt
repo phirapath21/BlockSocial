@@ -17,12 +17,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +34,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -54,6 +59,7 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val prefs = remember { context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE) }
     var showSettings by remember { mutableStateOf(false) }
     var heroMetric by remember { mutableStateOf(prefs.getString("hero_metric", "BLOCK") ?: "BLOCK") }
@@ -144,6 +150,7 @@ fun MainScreen(
         onShowSettingsChange = { newValue: Boolean -> showSettings = newValue },
         onModeToggle = onModeToggle,
         onRefresh = { viewModel.refreshData(context) },
+        isRefreshing = isRefreshing,
         onItemClick = onItemClick,
         modifier = modifier,
         alerts = alerts,
@@ -152,6 +159,7 @@ fun MainScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenContent(
     state: MainScreenUiState,
@@ -169,6 +177,7 @@ fun MainScreenContent(
     onModeToggle: (Int, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onItemClick: (NavKey) -> Unit,
+    isRefreshing: Boolean = false,
     modifier: Modifier = Modifier,
     alerts: List<AlertRule> = emptyList(),
     onAlertChange: (AlertRule) -> Unit = {},
@@ -200,27 +209,45 @@ fun MainScreenContent(
                     notificationsAllowed = notificationsAllowed
                 )
             } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp)
+                // Pull down on the dashboard to fetch fresh data now.
+                val pullState = rememberPullToRefreshState()
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = onRefresh,
+                    state = pullState,
+                    modifier = Modifier.fillMaxSize(),
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            state = pullState,
+                            isRefreshing = isRefreshing,
+                            containerColor = EInk.Body,
+                            color = EInk.Value,
+                            modifier = Modifier.align(Alignment.TopCenter)
+                        )
+                    }
                 ) {
-                    HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 12.dp)
+                    ) {
+                        HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
 
-                    when (val currentState = state) {
-                        is MainScreenUiState.Loading -> LoadingScreen()
-                        is MainScreenUiState.Success -> DashboardContent(
-                            data = currentState.data,
-                            heroMetric = heroMetric,
-                            onHeroMetricSelected = onHeroMetricSelected,
-                            enabledModes = modeStates,
-                            currencySetting = currencySetting
-                        )
-                        is MainScreenUiState.Error -> ErrorScreen(
-                            error = currentState.throwable,
-                            onRefresh = onRefresh
-                        )
+                        when (val currentState = state) {
+                            is MainScreenUiState.Loading -> LoadingScreen()
+                            is MainScreenUiState.Success -> DashboardContent(
+                                data = currentState.data,
+                                heroMetric = heroMetric,
+                                onHeroMetricSelected = onHeroMetricSelected,
+                                enabledModes = modeStates,
+                                currencySetting = currencySetting
+                            )
+                            is MainScreenUiState.Error -> ErrorScreen(
+                                error = currentState.throwable,
+                                onRefresh = onRefresh
+                            )
+                        }
                     }
                 }
             }
