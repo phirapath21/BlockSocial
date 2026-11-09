@@ -63,6 +63,19 @@ The widgets and the app share one look: a **dark grained panel** with **tall con
 
 ---
 
+## 📦 Release Build
+
+- **Application ID:** `io.github.phirapath21.btcwidget` (the Kotlin package stays `com.example.btcwidget`).
+- **Signing:** create a keystore, then add a git-ignored `keystore.properties` at the project root:
+  ```properties
+  storeFile=release.jks
+  storePassword=...
+  keyAlias=...
+  keyPassword=...
+  ```
+  Without it, `./gradlew assembleRelease` produces an unsigned APK.
+- **Shrinking:** release builds run R8 with resource shrinking; app rules live in `app/proguard-rules.pro`.
+
 ## 🚀 Getting Started
 
 ### Prerequisites

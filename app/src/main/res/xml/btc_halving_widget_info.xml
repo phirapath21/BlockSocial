@@ -8,6 +8,7 @@
     android:initialLayout="@layout/btc_widget_blockclock"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
+    android:description="@string/widget_halving_description"
     android:configure="com.example.btcwidget.WidgetConfigActivity"
     android:widgetFeatures="reconfigurable">
 </appwidget-provider>
