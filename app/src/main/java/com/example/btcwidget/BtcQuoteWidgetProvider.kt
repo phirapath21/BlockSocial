@@ -71,7 +71,7 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
         ) {
-            val quoteIndex = getWidgetQuoteIndex(context, appWidgetId)
+            val quoteIndex = AppPrefs.quoteIndex(context, appWidgetId)
             val quote = QUOTES[quoteIndex % QUOTES.size]
 
             val layoutId = R.layout.btc_widget_quote
@@ -104,15 +104,6 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
             return PendingIntent.getBroadcast(context, requestCode, intent, flags)
         }
 
-        private fun getWidgetQuoteIndex(context: Context, appWidgetId: Int): Int {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            return prefs.getInt("quote_index_$appWidgetId", 0)
-        }
-
-        private fun saveWidgetQuoteIndex(context: Context, appWidgetId: Int, index: Int) {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            prefs.edit().putInt("quote_index_$appWidgetId", index).apply()
-        }
 
     }
 
@@ -130,8 +121,7 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
 
         if (action == ACTION_NEXT_QUOTE) {
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                val currentIndex = getWidgetQuoteIndex(context, appWidgetId)
-                saveWidgetQuoteIndex(context, appWidgetId, currentIndex + 1)
+                AppPrefs.setQuoteIndex(context, appWidgetId, AppPrefs.quoteIndex(context, appWidgetId) + 1)
 
                 val appWidgetManager = AppWidgetManager.getInstance(context)
                 updateWidgetLayout(context, appWidgetManager, appWidgetId)
@@ -159,6 +149,11 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         WidgetRefreshScheduler.schedulePeriodic(context)
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        AppPrefs.forgetWidgets(context, appWidgetIds)
     }
 
     override fun onDisabled(context: Context) {

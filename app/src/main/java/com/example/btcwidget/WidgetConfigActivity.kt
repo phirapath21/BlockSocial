@@ -36,10 +36,9 @@ class WidgetConfigActivity : ComponentActivity() {
         val provider = AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider
         isHalving = provider?.className == BtcHalvingWidgetProvider::class.java.name
 
-        val prefs = getSharedPreferences(WIDGET_PREFS, MODE_PRIVATE)
-        val currency = prefs.getString("currency", "USD") ?: "USD"
+        val currency = AppPrefs.currency(this)
         val data = PriceRepository.getFromPrefs(this)
-        val stackSats = StackStore.sats(this)
+        val stackSats = AppPrefs.stackSats(this)
 
         val choices = if (isHalving) {
             listOf("Epoch progress", "Days to halving", "Blocks to halving").mapIndexed { mode, name ->
@@ -47,16 +46,16 @@ class WidgetConfigActivity : ComponentActivity() {
             }
         } else {
             // Listed in the user's dashboard order.
-            BlockclockMetrics.orderedModes(BtcWidgetProvider.modeOrder(prefs))
+            BlockclockMetrics.orderedModes(AppPrefs.modeOrder(this))
                 .filter { BlockclockMetrics.isAvailable(it, currency, hasStack = stackSats > 0) }
                 .map { mode ->
                     ModeChoice(mode, BlockclockMetrics.MODE_NAMES[mode], data?.let { BlockclockMetrics.forMode(mode, it, currency, stackSats) })
                 }
         }
         val current = if (isHalving) {
-            BtcHalvingWidgetProvider.getWidgetMode(this, appWidgetId)
+            AppPrefs.halvingMode(this, appWidgetId)
         } else {
-            BtcWidgetProvider.getWidgetMode(this, appWidgetId)
+            AppPrefs.widgetMode(this, appWidgetId)
         }
         val progress = data?.let { BlockclockMetrics.halvingProgress(it.blockHeight).toFloat() }
 
@@ -81,16 +80,14 @@ class WidgetConfigActivity : ComponentActivity() {
         val manager = AppWidgetManager.getInstance(this)
         val data = PriceRepository.getFromPrefs(this)
         if (isHalving) {
-            BtcHalvingWidgetProvider.saveWidgetMode(this, appWidgetId, mode)
+            AppPrefs.setHalvingMode(this, appWidgetId, mode)
             if (data != null) BtcHalvingWidgetProvider.updateWidgetLayout(this, manager, appWidgetId, data)
             else WidgetPlaceholder.show(this, manager, appWidgetId)
         } else {
             // Choosing a mode the user had switched off turns it back on, so the
             // widget shows it instead of skipping ahead.
-            getSharedPreferences(WIDGET_PREFS, MODE_PRIVATE).edit()
-                .putBoolean("mode_enabled_$mode", true)
-                .apply()
-            BtcWidgetProvider.saveWidgetMode(this, appWidgetId, mode)
+            AppPrefs.setModeEnabled(this, mode, true)
+            AppPrefs.setWidgetMode(this, appWidgetId, mode)
             if (data != null) BtcWidgetProvider.updateWidgetLayout(this, manager, appWidgetId, data)
             else WidgetPlaceholder.show(this, manager, appWidgetId)
         }

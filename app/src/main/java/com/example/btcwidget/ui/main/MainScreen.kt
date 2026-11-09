@@ -50,13 +50,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.BlockclockMetrics
-import com.example.btcwidget.BtcWidgetProvider
 import com.example.btcwidget.DataSources
 import com.example.btcwidget.MetricCategory
 import com.example.btcwidget.PricePoint
 import com.example.btcwidget.PriceSource
 import com.example.btcwidget.Stack
-import com.example.btcwidget.StackStore
+import com.example.btcwidget.AppPrefs
 import com.example.btcwidget.StackUnit
 import com.example.btcwidget.ThbSource
 import com.example.btcwidget.WidgetRefreshScheduler
@@ -128,25 +127,25 @@ fun MainScreen(
     }
 
     var modeOrder by remember {
-        mutableStateOf(BlockclockMetrics.parseOrder(prefs.getString(BtcWidgetProvider.KEY_MODE_ORDER, null)))
+        mutableStateOf(AppPrefs.modeOrder(context))
     }
     val onModeOrderChange: (List<String>) -> Unit = { newOrder ->
-        prefs.edit().putString(BtcWidgetProvider.KEY_MODE_ORDER, BlockclockMetrics.serializeOrder(newOrder)).apply()
+        AppPrefs.setModeOrder(context, newOrder)
         modeOrder = BlockclockMetrics.sanitizeOrder(newOrder)
     }
 
-    var stackSats by remember { mutableStateOf(StackStore.sats(context)) }
-    var stackUnit by remember { mutableStateOf(StackStore.unit(context)) }
+    var stackSats by remember { mutableStateOf(AppPrefs.stackSats(context)) }
+    var stackUnit by remember { mutableStateOf(AppPrefs.stackUnit(context)) }
     val onStackChange: (Long, StackUnit) -> Unit = { sats, unit ->
-        StackStore.save(context, sats, unit)
+        AppPrefs.setStack(context, sats, unit)
         stackSats = sats
         stackUnit = unit
         WidgetUpdater.updateAllWidgets(context)
     }
 
-    var dataSources by remember { mutableStateOf(DataSources.read(context)) }
+    var dataSources by remember { mutableStateOf(AppPrefs.dataSources(context)) }
     val onDataSourcesChange: (DataSources) -> Unit = { sources ->
-        DataSources.save(context, sources)
+        AppPrefs.setDataSources(context, sources)
         dataSources = sources
         // Show the new source's price right away.
         viewModel.refreshData(context)

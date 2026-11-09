@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit
 object WidgetRefreshScheduler {
     private const val PERIODIC_WORK = "price_refresh_periodic"
     private const val ONE_TIME_WORK = "price_refresh_now"
-    private const val DEFAULT_INTERVAL_MINUTES = 30
 
     /** Skip on-demand refreshes when the cache is younger than this. */
     private const val MIN_REFRESH_GAP_MS = 60_000L
@@ -35,9 +34,8 @@ object WidgetRefreshScheduler {
      * @param intervalChanged pass true after the user changes the interval so the new one applies.
      */
     fun schedulePeriodic(context: Context, intervalChanged: Boolean = false) {
-        val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
         // WorkManager's minimum periodic interval is 15 minutes.
-        val minutes = prefs.getInt("refresh_interval", DEFAULT_INTERVAL_MINUTES)
+        val minutes = AppPrefs.refreshInterval(context)
             .coerceAtLeast(15).toLong()
 
         val request = PeriodicWorkRequestBuilder<PriceRefreshWorker>(minutes, TimeUnit.MINUTES)

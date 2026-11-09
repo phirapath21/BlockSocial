@@ -7,7 +7,7 @@ import com.example.btcwidget.WidgetUpdater
 import com.example.btcwidget.alerts.AlertNotifier
 import com.example.btcwidget.PriceData
 import com.example.btcwidget.PricePoint
-import com.example.btcwidget.HistoryStore
+import com.example.btcwidget.AppPrefs
 import com.example.btcwidget.ChartRange
 import com.example.btcwidget.PriceRepository
 import kotlinx.coroutines.Dispatchers
@@ -37,7 +37,7 @@ class MainScreenViewModel : ViewModel() {
      */
     fun loadHistory(context: Context, force: Boolean = false) {
         val appContext = context.applicationContext
-        if (_history.value.isEmpty()) _history.value = HistoryStore.load(appContext)
+        if (_history.value.isEmpty()) _history.value = AppPrefs.history(appContext)
         val now = System.currentTimeMillis()
         if (!force && now - historyFetchedAt < HISTORY_MAX_AGE_MS) return
         historyFetchedAt = now
@@ -45,7 +45,7 @@ class MainScreenViewModel : ViewModel() {
             val fresh = runCatching { PriceRepository.fetchHistory(ChartRange.WEEK.hours) }.getOrNull()
             if (fresh != null && fresh.size >= 2) {
                 _history.value = fresh
-                HistoryStore.save(appContext, fresh)
+                AppPrefs.setHistory(appContext, fresh)
             } else {
                 historyFetchedAt = 0L // try again next time
             }

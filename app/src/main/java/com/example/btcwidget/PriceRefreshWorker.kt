@@ -35,10 +35,10 @@ class PriceRefreshWorker(
         val manager = AppWidgetManager.getInstance(applicationContext)
         val ids = manager.getAppWidgetIds(ComponentName(applicationContext, BtcChartWidgetProvider::class.java))
         if (ids.isEmpty()) return
-        if (System.currentTimeMillis() - HistoryStore.fetchedAt(applicationContext) < HISTORY_MAX_AGE_MS) return
+        if (System.currentTimeMillis() - AppPrefs.historyFetchedAt(applicationContext) < HISTORY_MAX_AGE_MS) return
         val fresh = runCatching { PriceRepository.fetchHistory(ChartRange.WEEK.hours) }.getOrNull()
         if (fresh != null && fresh.size >= 2) {
-            HistoryStore.save(applicationContext, fresh)
+            AppPrefs.setHistory(applicationContext, fresh)
             for (id in ids) BtcChartWidgetProvider.updateWidgetLayout(applicationContext, manager, id)
         }
     }
