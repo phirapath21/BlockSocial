@@ -1,6 +1,5 @@
 package com.example.btcwidget.ui.main
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,26 +11,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.btcwidget.BlockclockMetrics
-import com.example.btcwidget.MetricCategory
 import com.example.btcwidget.PriceData
 
 /**
- * Everything about the home-screen widgets: how to add them, a live preview, and which
- * modes a tap cycles through (grouped like the dashboard, in the same order).
+ * Everything about the home-screen widgets: a live preview, how to add one, and where
+ * to choose what it shows (the switch under each dashboard metric).
  */
 @Composable
 fun WidgetsScreen(
-    modeStates: List<Boolean>,
-    onModeToggle: (Int, Boolean) -> Unit,
     currencySetting: String,
-    modeOrder: List<String>,
     data: PriceData?,
-    hasStack: Boolean = false
+    onWidgetCount: Int,
+    availableCount: Int,
+    onOpenDashboard: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -59,44 +57,28 @@ fun WidgetsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "Modes the Bitcoin metrics widget cycles through. The order follows the dashboard.",
-            color = EInk.Caption,
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            modifier = Modifier.padding(start = 4.dp, bottom = 10.dp)
-        )
-
-        val ordered = BlockclockMetrics.orderedModes(modeOrder)
-        MetricCategory.entries.forEach { category ->
-            val modes = ordered.filter { BlockclockMetrics.categoryOf(it) == category }
-            if (modes.isEmpty()) return@forEach
-            EInkPanel(title = category.title) {
-                modes.forEach { index ->
-                    val available = BlockclockMetrics.isAvailable(index, currencySetting, hasStack)
-                    val checked = available && modeStates.getOrElse(index) { true }
-                    SettingRow(
-                        label = BlockclockMetrics.MODE_NAMES[index],
-                        note = when {
-                            available -> null
-                            index == BlockclockMetrics.MODE_STACK -> "Set your stack in Settings first"
-                            else -> "USD only · off while THB is selected"
-                        },
-                        dimmed = !available,
-                        modifier = if (available) Modifier.clickable { onModeToggle(index, !checked) } else Modifier
-                    ) {
-                        EInkSwitch(
-                            checked = checked,
-                            onCheckedChange = { onModeToggle(index, it) },
-                            enabled = available
-                        )
-                    }
+        EInkPanel(title = "What it cycles through") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+                    Text(
+                        text = "$onWidgetCount of $availableCount metrics on",
+                        color = EInk.Value,
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "Use the switch under each metric on the dashboard. Order follows the dashboard too.",
+                        color = EInk.Caption,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
                 }
+                EInkChip(text = "DASHBOARD", selected = true, onClick = onOpenDashboard)
             }
-            Spacer(modifier = Modifier.height(12.dp))
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(20.dp))
     }
 }
 

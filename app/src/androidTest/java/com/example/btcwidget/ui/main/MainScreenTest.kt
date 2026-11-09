@@ -69,10 +69,39 @@ class MainScreenTest {
     }
 
     @Test
-    fun widgets_moscowTimeLockedOffInThb() {
-        setContent(currency = "THB")
+    fun dashboard_offMetricsStayVisibleWithTheirSwitch() {
+        composeTestRule.setContent {
+            val states = remember { androidx.compose.runtime.mutableStateListOf(*Array(14) { it != 1 }) } // SATS off
+            MainScreenContent(
+                state = MainScreenUiState.Success(sample),
+                selectedTab = MainTab.DASHBOARD,
+                heroMetric = "PRICE",
+                modeStates = states,
+                currencySetting = "USD",
+                onCurrencySelected = {},
+                refreshInterval = 30,
+                onRefreshIntervalSelected = {},
+                hapticEnabled = true,
+                onHapticToggle = {},
+                onHeroMetricSelected = {},
+                onTabSelected = {},
+                onModeToggle = { index, on -> states[index] = on },
+                onRefresh = {},
+                onItemClick = {}
+            )
+        }
+        // The switched-off SATS panel is still shown, with its switch off.
+        composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertExists()
+        composeTestRule.onNodeWithText("OFF WIDGET").assertExists().performClick()
+        composeTestRule.onNodeWithText("OFF WIDGET").assertDoesNotExist()
+    }
+
+    @Test
+    fun widgets_tabCountsMetricsOnTheWidget() {
+        setContent()
         composeTestRule.onNodeWithContentDescription("Widgets").performClick()
-        composeTestRule.onNodeWithText("USD only · off while THB is selected").performScrollTo().assertExists()
+        // STACK needs holdings, so 13 of the 14 modes are available.
+        composeTestRule.onNodeWithText("13 of 13 metrics on").assertExists()
     }
 
     @Test

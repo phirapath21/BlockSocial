@@ -309,7 +309,8 @@ fun MainScreenContent(
                                 onToggleCategory = onToggleCategory,
                                 stackSats = stackSats,
                                 onSetUpStack = { onTabSelected(MainTab.SETTINGS) },
-                                history = history
+                                history = history,
+                                onModeToggle = onModeToggle
                             )
                             else -> Column(
                                 modifier = Modifier
@@ -335,14 +336,18 @@ fun MainScreenContent(
                     notificationsAllowed = notificationsAllowed,
                     data = data
                 )
-                MainTab.WIDGETS -> WidgetsScreen(
-                    modeStates = modeStates,
-                    onModeToggle = onModeToggle,
-                    currencySetting = currencySetting,
-                    modeOrder = modeOrder,
-                    data = data,
-                    hasStack = stackSats > 0
-                )
+                MainTab.WIDGETS -> {
+                    val hasStack = stackSats > 0
+                    val available = (0 until BlockclockMetrics.MODE_COUNT)
+                        .filter { BlockclockMetrics.isAvailable(it, currencySetting, hasStack) }
+                    WidgetsScreen(
+                        currencySetting = currencySetting,
+                        data = data,
+                        onWidgetCount = available.count { modeStates.getOrElse(it) { true } },
+                        availableCount = available.size,
+                        onOpenDashboard = { onTabSelected(MainTab.DASHBOARD) }
+                    )
+                }
                 MainTab.SETTINGS -> SettingsScreen(
                     currencySetting = currencySetting,
                     onCurrencySelected = onCurrencySelected,

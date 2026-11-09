@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -35,13 +36,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -111,6 +115,7 @@ fun DashboardContent(
     stackSats: Long = 0,
     onSetUpStack: () -> Unit = {},
     history: List<PricePoint> = emptyList(),
+    onModeToggle: (Int, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val hasStack = stackSats > 0
@@ -124,7 +129,8 @@ fun DashboardContent(
 
     val visibleKeys = BlockclockMetrics.orderedModes(workingOrder)
         .filter { index ->
-            BlockclockMetrics.isActive(index, enabledModes.getOrElse(index) { true }, currencySetting, hasStack) &&
+            // Switched-off metrics stay on the dashboard (dimmed) so they can be switched back on.
+            BlockclockMetrics.isAvailable(index, currencySetting, hasStack) &&
                 BlockclockMetrics.MODE_KEYS[index] != hero
         }
         .map { BlockclockMetrics.MODE_KEYS[it] }
@@ -168,11 +174,17 @@ fun DashboardContent(
 
         // Hero panel, same proportions as a 2x1 widget.
         fullWidth("hero") {
-            EInkDevice(
-                display = BlockclockMetrics.forKey(hero, data, currencySetting, stackSats),
-                aspectRatio = 2f,
-                stale = !data.lastFetchSuccessful
-            )
+            val heroIndex = BlockclockMetrics.MODE_KEYS.indexOf(hero)
+            val heroOn = enabledModes.getOrElse(heroIndex) { true }
+            Column {
+                EInkDevice(
+                    display = BlockclockMetrics.forKey(hero, data, currencySetting, stackSats),
+                    aspectRatio = 2f,
+                    stale = !data.lastFetchSuccessful,
+                    modifier = Modifier.alpha(if (heroOn) 1f else OFF_ALPHA)
+                )
+                WidgetToggle(on = heroOn, onToggle = { onModeToggle(heroIndex, it) })
+            }
         }
 
         fullWidth("hero_choices") {
@@ -209,7 +221,7 @@ fun DashboardContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Hold and drag to reorder within a section",
+                    text = "Hold and drag to reorder · switch sets what the widget shows",
                     color = EInk.Caption,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
@@ -257,41 +269,48 @@ fun DashboardContent(
                     val elevation by animateDpAsState(if (isDragging) 16.dp else 0.dp, label = "shadow")
                     val index = BlockclockMetrics.MODE_KEYS.indexOf(key)
 
-                    EInkDevice(
-                        display = BlockclockMetrics.forMode(index, data, currencySetting, stackSats),
-                        aspectRatio = 1.7f,
-                        progress = if (key == "HALVING") {
-                            BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
-                        } else {
-                            null
-                        },
-                        modifier = Modifier
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                            .shadow(elevation, CardShape)
-                            .then(if (isDragging) Modifier.border(1.dp, EInk.Label, CardShape) else Modifier)
-                            .longPressDraggableHandle(
-                                onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
-                                onDragStopped = { onOrderChange(workingOrder) }
-                            )
-                            .semantics {
-                                // TalkBack alternative to dragging.
-                                customActions = listOf(
-                                    CustomAccessibilityAction("Move earlier") {
-                                        workingOrder = BlockclockMetrics.moveAmongVisible(workingOrder, visibleKeys, key, -1)
-                                        onOrderChange(workingOrder)
-                                        true
-                                    },
-                                    CustomAccessibilityAction("Move later") {
-                                        workingOrder = BlockclockMetrics.moveAmongVisible(workingOrder, visibleKeys, key, +1)
-                                        onOrderChange(workingOrder)
-                                        true
-                                    }
+                    val on = enabledModes.getOrElse(index) { true }
+
+                    Column(
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                    ) {
+                        EInkDevice(
+                            display = BlockclockMetrics.forMode(index, data, currencySetting, stackSats),
+                            aspectRatio = 1.7f,
+                            progress = if (key == "HALVING") {
+                                BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
+                            } else {
+                                null
+                            },
+                            modifier = Modifier
+                                .alpha(if (on || isDragging) 1f else OFF_ALPHA)
+                                .shadow(elevation, CardShape)
+                                .then(if (isDragging) Modifier.border(1.dp, EInk.Label, CardShape) else Modifier)
+                                .longPressDraggableHandle(
+                                    onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
+                                    onDragStopped = { onOrderChange(workingOrder) }
                                 )
-                            }
-                    )
+                                .semantics {
+                                    // TalkBack alternative to dragging.
+                                    customActions = listOf(
+                                        CustomAccessibilityAction("Move earlier") {
+                                            workingOrder = BlockclockMetrics.moveAmongVisible(workingOrder, visibleKeys, key, -1)
+                                            onOrderChange(workingOrder)
+                                            true
+                                        },
+                                        CustomAccessibilityAction("Move later") {
+                                            workingOrder = BlockclockMetrics.moveAmongVisible(workingOrder, visibleKeys, key, +1)
+                                            onOrderChange(workingOrder)
+                                            true
+                                        }
+                                    )
+                                }
+                        )
+                        WidgetToggle(on = on, onToggle = { onModeToggle(index, it) })
+                    }
                 }
             }
         }
@@ -310,6 +329,36 @@ fun DashboardContent(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+/** Opacity of a metric switched off for the widget. */
+private const val OFF_ALPHA = 0.38f
+
+/**
+ * "On widget" switch under a metric panel: whether tapping the home-screen widget
+ * cycles through this metric. The whole row toggles, with Switch semantics.
+ */
+@Composable
+private fun WidgetToggle(on: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp)
+            .clip(EInk.ChipShape)
+            .toggleable(value = on, role = Role.Switch, onValueChange = onToggle)
+            .padding(start = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = if (on) "ON WIDGET" else "OFF WIDGET",
+            color = if (on) EInk.Label else EInk.Caption,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 0.5.sp,
+            modifier = Modifier.weight(1f)
+        )
+        EInkSwitch(checked = on, onCheckedChange = null, modifier = Modifier.scale(0.7f))
     }
 }
 

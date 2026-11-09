@@ -143,11 +143,17 @@ fun EInkChip(
 }
 
 @Composable
-fun EInkSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true) {
+fun EInkSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
+) {
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
         enabled = enabled,
+        modifier = modifier,
         colors = SwitchDefaults.colors(
             checkedThumbColor = EInk.Body,
             checkedTrackColor = EInk.Value,
