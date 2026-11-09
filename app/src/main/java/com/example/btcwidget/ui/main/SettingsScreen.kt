@@ -35,15 +35,13 @@ import com.example.btcwidget.Stack
 import com.example.btcwidget.StackUnit
 import com.example.btcwidget.ThbSource
 
-/** General app settings: display currency, refresh cadence, haptics, and about. */
+/** General app settings: your stack, display currency, refresh cadence, data sources and about. */
 @Composable
 fun SettingsScreen(
     currencySetting: String,
     onCurrencySelected: (String) -> Unit,
     refreshInterval: Int,
     onRefreshIntervalSelected: (Int) -> Unit,
-    hapticEnabled: Boolean,
-    onHapticToggle: (Boolean) -> Unit,
     appVersion: String? = null,
     stackSats: Long = 0,
     stackUnit: StackUnit = StackUnit.BTC,
@@ -141,18 +139,6 @@ fun SettingsScreen(
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(top = 4.dp)
             )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        EInkPanel(title = "Feedback") {
-            SettingRow(
-                label = "Haptics",
-                note = "Vibrate on widget taps and drag",
-                modifier = Modifier.clickable { onHapticToggle(!hapticEnabled) }
-            ) {
-                EInkSwitch(checked = hapticEnabled, onCheckedChange = onHapticToggle)
-            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))

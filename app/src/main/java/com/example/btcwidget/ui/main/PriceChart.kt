@@ -26,9 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -66,7 +64,6 @@ fun PriceChartPanel(
     val points = remember(history, range, usdToCurrency) { ChartMath.slice(history, range, usdToCurrency) }
     val summary = remember(points) { ChartMath.summary(points) }
     var selected by remember(points) { mutableStateOf<Int?>(null) }
-    val haptics = LocalHapticFeedback.current
     val timeFormat = remember { SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault()) }
     fun price(value: Double) = PriceAlerts.formatPrice(value, currency)
 
@@ -127,10 +124,7 @@ fun PriceChartPanel(
                 .pointerInput(points) {
                     fun pick(x: Float) {
                         val index = ChartMath.nearestIndex(points, x, size.width.toFloat())
-                        if (index != selected) {
-                            selected = index
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
+                        if (index != selected) selected = index
                     }
                     detectHorizontalDragGestures(
                         onDragStart = { pick(it.x) },

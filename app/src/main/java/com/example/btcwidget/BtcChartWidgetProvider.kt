@@ -78,7 +78,6 @@ class BtcChartWidgetProvider : AppWidgetProvider() {
         if (intent.action != ACTION_NEXT_RANGE) return
         val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
-        Haptics.click(context)
         val next = ChartRange.entries[(getRange(context, id).ordinal + 1) % ChartRange.entries.size]
         saveRange(context, id, next)
         updateWidgetLayout(context, AppWidgetManager.getInstance(context), id)

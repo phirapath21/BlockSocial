@@ -8,7 +8,7 @@ Blockface ("the app") shows Bitcoin market and network data in an Android app an
 
 The app keeps the following only on your device, in its private app storage:
 
-- **Your settings** — display currency, refresh interval, data sources, haptics, which metrics the widget shows and their order, collapsed sections.
+- **Your settings** — display currency, refresh interval, data sources, which metrics the widget shows and their order, collapsed sections.
 - **Your stack** — the amount of bitcoin you choose to enter, to show what it is worth. It is never sent anywhere by the app.
 - **Alerts** — the price, fee and network-event alerts you set.
 - **Cached market data** — the latest prices, network figures and hourly price history, so widgets and charts work offline.
@@ -39,7 +39,6 @@ Requests run when you open or refresh the app and in the background at the inter
 
 - **Internet** — to fetch the data above.
 - **Notifications** (Android 13 and later) — to show the alerts you switch on. Asked for only when you turn on an alert; you can revoke it in system settings at any time.
-- **Vibrate** — for optional haptic feedback, which you can turn off in Settings.
 - The background-work library the app uses (Android WorkManager) also declares permissions to check network status, keep scheduled updates after a restart, and run briefly in the background. They are used only to refresh the data above.
 
 ## What the app does not do

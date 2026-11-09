@@ -82,7 +82,6 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
         val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
 
         if (action == ACTION_NEXT_MODE) {
-            Haptics.click(context)
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
                 val currentMode = getWidgetMode(context, appWidgetId)
                 val nextMode = (currentMode + 1) % 3

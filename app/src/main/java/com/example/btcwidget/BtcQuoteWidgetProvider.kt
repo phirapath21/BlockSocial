@@ -129,7 +129,6 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
         val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
 
         if (action == ACTION_NEXT_QUOTE) {
-            Haptics.click(context)
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
                 val currentIndex = getWidgetQuoteIndex(context, appWidgetId)
                 saveWidgetQuoteIndex(context, appWidgetId, currentIndex + 1)

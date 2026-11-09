@@ -94,7 +94,6 @@ fun MainScreen(
     }
     var heroMetric by remember { mutableStateOf(prefs.getString("hero_metric", "BLOCK") ?: "BLOCK") }
     var currencySetting by remember { mutableStateOf(prefs.getString("currency", "USD") ?: "USD") }
-    var hapticEnabled by remember { mutableStateOf(prefs.getBoolean("haptic_enabled", true)) }
     var refreshInterval by remember { mutableStateOf(prefs.getInt("refresh_interval", 30)) }
 
     // Mode states for Settings
@@ -126,11 +125,6 @@ fun MainScreen(
         prefs.edit().putInt("refresh_interval", newInterval).apply()
         refreshInterval = newInterval
         WidgetRefreshScheduler.schedulePeriodic(context, intervalChanged = true)
-    }
-
-    val onHapticToggle: (Boolean) -> Unit = { enabled ->
-        prefs.edit().putBoolean("haptic_enabled", enabled).apply()
-        hapticEnabled = enabled
     }
 
     var modeOrder by remember {
@@ -199,8 +193,6 @@ fun MainScreen(
         onCurrencySelected = onCurrencySelected,
         refreshInterval = refreshInterval,
         onRefreshIntervalSelected = onRefreshIntervalSelected,
-        hapticEnabled = hapticEnabled,
-        onHapticToggle = onHapticToggle,
         onHeroMetricSelected = onHeroMetricSelected,
         onTabSelected = { selectedTab = it },
         collapsedCategories = collapsedCategories,
@@ -236,8 +228,6 @@ fun MainScreenContent(
     onCurrencySelected: (String) -> Unit,
     refreshInterval: Int,
     onRefreshIntervalSelected: (Int) -> Unit,
-    hapticEnabled: Boolean,
-    onHapticToggle: (Boolean) -> Unit,
     onHeroMetricSelected: (String) -> Unit,
     onTabSelected: (MainTab) -> Unit,
     onModeToggle: (Int, Boolean) -> Unit,
@@ -347,8 +337,6 @@ fun MainScreenContent(
                     onCurrencySelected = onCurrencySelected,
                     refreshInterval = refreshInterval,
                     onRefreshIntervalSelected = onRefreshIntervalSelected,
-                    hapticEnabled = hapticEnabled,
-                    onHapticToggle = onHapticToggle,
                     appVersion = appVersion,
                     stackSats = stackSats,
                     stackUnit = stackUnit,
