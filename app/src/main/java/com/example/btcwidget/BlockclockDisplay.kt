@@ -14,6 +14,14 @@ data class BlockclockDisplay(
     val caption: String = ""
 )
 
+/** Dashboard sections, in display order. */
+enum class MetricCategory(val title: String) {
+    MARKET("Market"),
+    NETWORK("Network"),
+    SUPPLY("Supply & Lightning"),
+    STRATEGY("Strategy (MSTR)")
+}
+
 object BlockclockMetrics {
     /** Stable keys for the 13 modes, in widget mode order. */
     val MODE_KEYS = listOf(
@@ -38,6 +46,26 @@ object BlockclockMetrics {
     )
 
     val MODE_COUNT = MODE_KEYS.size
+
+    private val CATEGORY = mapOf(
+        "PRICE" to MetricCategory.MARKET,
+        "SATS" to MetricCategory.MARKET,
+        "MSCW" to MetricCategory.MARKET,
+        "BLOCK" to MetricCategory.NETWORK,
+        "FEES" to MetricCategory.NETWORK,
+        "HASHRATE" to MetricCategory.NETWORK,
+        "DIFF_ADJ" to MetricCategory.NETWORK,
+        "HALVING" to MetricCategory.NETWORK,
+        "CIRCULATION" to MetricCategory.SUPPLY,
+        "LN_CAP" to MetricCategory.SUPPLY,
+        "MSTR_HELD" to MetricCategory.STRATEGY,
+        "MSTR_RATIO" to MetricCategory.STRATEGY,
+        "MSTR_PRICE" to MetricCategory.STRATEGY
+    )
+
+    fun categoryOf(key: String): MetricCategory = CATEGORY[key] ?: MetricCategory.MARKET
+
+    fun categoryOf(mode: Int): MetricCategory = categoryOf(MODE_KEYS.getOrElse(mode) { "" })
 
     const val MODE_PRICE = 0
     const val MODE_MOSCOW_TIME = 3
@@ -78,13 +106,17 @@ object BlockclockMetrics {
 
     /**
      * A complete order of all mode keys from a saved one: unknown keys are dropped,
-     * duplicates removed, and modes missing from it (e.g. added in a later version)
-     * are appended in default order.
+     * duplicates removed, modes missing from it (e.g. added in a later version) are
+     * appended, and the result is grouped by [MetricCategory] while keeping the user's
+     * order inside each category.
      */
     fun sanitizeOrder(saved: List<String>): List<String> {
         val known = saved.filter { it in MODE_KEYS }.distinct()
-        return known + MODE_KEYS.filter { it !in known }
+        return (known + MODE_KEYS.filter { it !in known }).sortedBy { categoryOf(it).ordinal }
     }
+
+    /** The default order: categories in order, modes in definition order within each. */
+    val DEFAULT_ORDER: List<String> get() = sanitizeOrder(MODE_KEYS)
 
     fun parseOrder(saved: String?): List<String> =
         sanitizeOrder(saved?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty())
@@ -94,18 +126,20 @@ object BlockclockMetrics {
     /** Mode indices in the order given by [order]. */
     fun orderedModes(order: List<String>): List<Int> = sanitizeOrder(order).map { MODE_KEYS.indexOf(it) }
 
-    fun isDefaultOrder(order: List<String>): Boolean = sanitizeOrder(order) == MODE_KEYS
+    fun isDefaultOrder(order: List<String>): Boolean = sanitizeOrder(order) == DEFAULT_ORDER
 
     /**
      * Moves [fromKey] to the position of [toKey]. Dragging down lands after [toKey],
      * dragging up lands before it, which matches swapping neighbours in a grid. Keys
-     * hidden from the dashboard keep their relative place.
+     * hidden from the dashboard keep their relative place. Moves across categories are
+     * ignored: each metric stays in its own section.
      */
     fun move(order: List<String>, fromKey: String, toKey: String): List<String> {
         val list = sanitizeOrder(order).toMutableList()
         val from = list.indexOf(fromKey)
         val to = list.indexOf(toKey)
         if (from < 0 || to < 0 || from == to) return list
+        if (categoryOf(fromKey) != categoryOf(toKey)) return list
         list.add(to, list.removeAt(from))
         return list
     }
@@ -115,10 +149,11 @@ object BlockclockMetrics {
      * actions); [step] is -1 or +1. Returns the order unchanged at either end.
      */
     fun moveAmongVisible(order: List<String>, visible: List<String>, key: String, step: Int): List<String> {
-        val i = visible.indexOf(key)
+        val sameSection = visible.filter { categoryOf(it) == categoryOf(key) }
+        val i = sameSection.indexOf(key)
         val j = i + step
-        if (i < 0 || j !in visible.indices) return sanitizeOrder(order)
-        return move(order, key, visible[j])
+        if (i < 0 || j !in sameSection.indices) return sanitizeOrder(order)
+        return move(order, key, sameSection[j])
     }
 
     private const val HALVING_INTERVAL = 210_000

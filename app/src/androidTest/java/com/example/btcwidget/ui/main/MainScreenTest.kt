@@ -27,11 +27,11 @@ class MainScreenTest {
 
     private fun setContent(currency: String = "USD") {
         composeTestRule.setContent {
-            var showSettings by remember { mutableStateOf(false) }
+            var tab by remember { mutableStateOf(MainTab.DASHBOARD) }
             var hero by remember { mutableStateOf("PRICE") }
             MainScreenContent(
                 state = MainScreenUiState.Success(sample),
-                showSettings = showSettings,
+                selectedTab = tab,
                 heroMetric = hero,
                 modeStates = List(13) { true },
                 currencySetting = currency,
@@ -41,7 +41,7 @@ class MainScreenTest {
                 hapticEnabled = true,
                 onHapticToggle = {},
                 onHeroMetricSelected = { hero = it },
-                onShowSettingsChange = { showSettings = it },
+                onTabSelected = { tab = it },
                 onModeToggle = { _, _ -> },
                 onRefresh = {},
                 onItemClick = {}
@@ -64,14 +64,52 @@ class MainScreenTest {
         setContent()
         composeTestRule.onNodeWithContentDescription("Settings").performClick()
         // Header subtitle; "SETTINGS" alone also matches the navigation label.
-        composeTestRule.onNodeWithText("CONSOLE CONFIGURATION").assertExists()
+        composeTestRule.onNodeWithText("APP PREFERENCES").assertExists()
         composeTestRule.onNodeWithText("Currency").assertExists()
     }
 
     @Test
-    fun settings_moscowTimeLockedOffInThb() {
+    fun widgets_moscowTimeLockedOffInThb() {
         setContent(currency = "THB")
-        composeTestRule.onNodeWithContentDescription("Settings").performClick()
+        composeTestRule.onNodeWithContentDescription("Widgets").performClick()
         composeTestRule.onNodeWithText("USD only · off while THB is selected").performScrollTo().assertExists()
     }
+
+    @Test
+    fun dashboard_sectionsCollapse() {
+        composeTestRule.setContent {
+            var collapsed by remember { mutableStateOf(emptySet<com.example.btcwidget.MetricCategory>()) }
+            MainScreenContent(
+                state = MainScreenUiState.Success(sample),
+                selectedTab = MainTab.DASHBOARD,
+                heroMetric = "PRICE",
+                modeStates = List(13) { true },
+                currencySetting = "USD",
+                onCurrencySelected = {},
+                refreshInterval = 30,
+                onRefreshIntervalSelected = {},
+                hapticEnabled = true,
+                onHapticToggle = {},
+                onHeroMetricSelected = {},
+                onTabSelected = {},
+                onModeToggle = { _, _ -> },
+                onRefresh = {},
+                onItemClick = {},
+                collapsedCategories = collapsed,
+                onToggleCategory = { c -> collapsed = if (c in collapsed) collapsed - c else collapsed + c }
+            )
+        }
+        val sats = "SATS 1USD 1343. Sats per 1 dollar"
+        composeTestRule.onNodeWithContentDescription(sats).assertExists()
+        composeTestRule.onNodeWithText("MARKET").performClick()
+        composeTestRule.onNodeWithContentDescription(sats).assertDoesNotExist()
+    }
+
+    @Test
+    fun alerts_tabShowsCurrentPrice() {
+        setContent()
+        composeTestRule.onNodeWithContentDescription("Alerts").performClick()
+        composeTestRule.onNodeWithText("\$74,455").assertExists()
+    }
 }
+

@@ -38,8 +38,12 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 12. **Difficulty Adjustment** — Difficulty change percentage and retarget epoch progress.
 13. **Lightning Capacity** — Public Lightning Network capacity in BTC.
 
-### 3. Active Mode Customization
-- Enable or disable specific widget modes inside settings to customize your widget cycling.
+### 3. App Layout
+Four tabs along the bottom:
+- **Dashboard** — a hero panel (BLOCK / PRICE / SATS / FEES) above four sections: **Market**, **Network**, **Supply & Lightning** and **Strategy (MSTR)**. Tap a section title to collapse it; hold and drag a panel to reorder it within its section. Pull down to refresh.
+- **Alerts** — current price and fee for reference, plus price and fee alerts.
+- **Widgets** — how to add widgets, a live preview, and which modes the metrics widget cycles through (grouped like the dashboard, in the same order).
+- **Settings** — display currency, refresh interval, haptics and about.
 
 ### 3b. Price Alerts
 - **BTC rises above / falls below** a price (USD or THB) and **fees at or below** a sat/vB level, set in Settings.

@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -33,10 +34,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -46,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.BtcWidgetProvider
+import com.example.btcwidget.MetricCategory
 import com.example.btcwidget.WidgetRefreshScheduler
 import com.example.btcwidget.WidgetUpdater
 import com.example.btcwidget.alerts.AlertNotifier
@@ -62,7 +68,21 @@ fun MainScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val prefs = remember { context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE) }
-    var showSettings by remember { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableStateOf(MainTab.DASHBOARD) }
+    var collapsedCategories by remember {
+        mutableStateOf(
+            prefs.getStringSet(KEY_COLLAPSED, emptySet()).orEmpty()
+                .mapNotNull { name -> MetricCategory.entries.firstOrNull { it.name == name } }
+                .toSet()
+        )
+    }
+    val onToggleCategory: (MetricCategory) -> Unit = { category ->
+        collapsedCategories = if (category in collapsedCategories) collapsedCategories - category else collapsedCategories + category
+        prefs.edit().putStringSet(KEY_COLLAPSED, collapsedCategories.map { it.name }.toSet()).apply()
+    }
+    val appVersion = remember {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+    }
     var heroMetric by remember { mutableStateOf(prefs.getString("hero_metric", "BLOCK") ?: "BLOCK") }
     var currencySetting by remember { mutableStateOf(prefs.getString("currency", "USD") ?: "USD") }
     var hapticEnabled by remember { mutableStateOf(prefs.getBoolean("haptic_enabled", true)) }
@@ -146,7 +166,7 @@ fun MainScreen(
 
     MainScreenContent(
         state = state,
-        showSettings = showSettings,
+        selectedTab = selectedTab,
         heroMetric = heroMetric,
         modeStates = modeStates,
         currencySetting = currencySetting,
@@ -156,7 +176,10 @@ fun MainScreen(
         hapticEnabled = hapticEnabled,
         onHapticToggle = onHapticToggle,
         onHeroMetricSelected = onHeroMetricSelected,
-        onShowSettingsChange = { newValue: Boolean -> showSettings = newValue },
+        onTabSelected = { selectedTab = it },
+        collapsedCategories = collapsedCategories,
+        onToggleCategory = onToggleCategory,
+        appVersion = appVersion,
         onModeToggle = onModeToggle,
         onRefresh = { viewModel.refreshData(context) },
         isRefreshing = isRefreshing,
@@ -174,7 +197,7 @@ fun MainScreen(
 @Composable
 fun MainScreenContent(
     state: MainScreenUiState,
-    showSettings: Boolean,
+    selectedTab: MainTab,
     heroMetric: String,
     modeStates: List<Boolean>,
     currencySetting: String,
@@ -184,7 +207,7 @@ fun MainScreenContent(
     hapticEnabled: Boolean,
     onHapticToggle: (Boolean) -> Unit,
     onHeroMetricSelected: (String) -> Unit,
-    onShowSettingsChange: (Boolean) -> Unit,
+    onTabSelected: (MainTab) -> Unit,
     onModeToggle: (Int, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onItemClick: (NavKey) -> Unit,
@@ -194,8 +217,12 @@ fun MainScreenContent(
     modifier: Modifier = Modifier,
     alerts: List<AlertRule> = emptyList(),
     onAlertChange: (AlertRule) -> Unit = {},
-    notificationsAllowed: Boolean = true
+    notificationsAllowed: Boolean = true,
+    collapsedCategories: Set<MetricCategory> = emptySet(),
+    onToggleCategory: (MetricCategory) -> Unit = {},
+    appVersion: String? = null
 ) {
+    val data = (state as? MainScreenUiState.Success)?.data
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -207,65 +234,78 @@ fun MainScreenContent(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            if (showSettings) {
-                SettingsScreen(
+            when (selectedTab) {
+                MainTab.DASHBOARD -> {
+                    // Pull down on the dashboard to fetch fresh data now.
+                    val pullState = rememberPullToRefreshState()
+                    PullToRefreshBox(
+                        isRefreshing = isRefreshing,
+                        onRefresh = onRefresh,
+                        state = pullState,
+                        modifier = Modifier.fillMaxSize(),
+                        indicator = {
+                            PullToRefreshDefaults.Indicator(
+                                state = pullState,
+                                isRefreshing = isRefreshing,
+                                containerColor = EInk.Body,
+                                color = EInk.Value,
+                                modifier = Modifier.align(Alignment.TopCenter)
+                            )
+                        }
+                    ) {
+                        when (val currentState = state) {
+                            // The dashboard is its own scrolling grid (with drag-to-reorder).
+                            is MainScreenUiState.Success -> DashboardContent(
+                                data = currentState.data,
+                                heroMetric = heroMetric,
+                                onHeroMetricSelected = onHeroMetricSelected,
+                                enabledModes = modeStates,
+                                currencySetting = currencySetting,
+                                order = modeOrder,
+                                onOrderChange = onModeOrderChange,
+                                collapsedCategories = collapsedCategories,
+                                onToggleCategory = onToggleCategory
+                            )
+                            else -> Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 12.dp)
+                            ) {
+                                HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
+                                if (currentState is MainScreenUiState.Error) {
+                                    ErrorScreen(error = currentState.throwable, onRefresh = onRefresh)
+                                } else {
+                                    LoadingScreen()
+                                }
+                            }
+                        }
+                    }
+                }
+                MainTab.ALERTS -> AlertsScreen(
+                    alerts = alerts,
+                    onAlertChange = onAlertChange,
+                    currencySetting = currencySetting,
+                    refreshInterval = refreshInterval,
+                    notificationsAllowed = notificationsAllowed,
+                    data = data
+                )
+                MainTab.WIDGETS -> WidgetsScreen(
                     modeStates = modeStates,
                     onModeToggle = onModeToggle,
+                    currencySetting = currencySetting,
+                    modeOrder = modeOrder,
+                    data = data
+                )
+                MainTab.SETTINGS -> SettingsScreen(
                     currencySetting = currencySetting,
                     onCurrencySelected = onCurrencySelected,
                     refreshInterval = refreshInterval,
                     onRefreshIntervalSelected = onRefreshIntervalSelected,
                     hapticEnabled = hapticEnabled,
                     onHapticToggle = onHapticToggle,
-                    alerts = alerts,
-                    onAlertChange = onAlertChange,
-                    notificationsAllowed = notificationsAllowed,
-                    modeOrder = modeOrder
+                    appVersion = appVersion
                 )
-            } else {
-                // Pull down on the dashboard to fetch fresh data now.
-                val pullState = rememberPullToRefreshState()
-                PullToRefreshBox(
-                    isRefreshing = isRefreshing,
-                    onRefresh = onRefresh,
-                    state = pullState,
-                    modifier = Modifier.fillMaxSize(),
-                    indicator = {
-                        PullToRefreshDefaults.Indicator(
-                            state = pullState,
-                            isRefreshing = isRefreshing,
-                            containerColor = EInk.Body,
-                            color = EInk.Value,
-                            modifier = Modifier.align(Alignment.TopCenter)
-                        )
-                    }
-                ) {
-                    when (val currentState = state) {
-                        // The dashboard is its own scrolling grid (with drag-to-reorder).
-                        is MainScreenUiState.Success -> DashboardContent(
-                            data = currentState.data,
-                            heroMetric = heroMetric,
-                            onHeroMetricSelected = onHeroMetricSelected,
-                            enabledModes = modeStates,
-                            currencySetting = currencySetting,
-                            order = modeOrder,
-                            onOrderChange = onModeOrderChange
-                        )
-                        else -> Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 12.dp)
-                        ) {
-                            HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
-                            if (currentState is MainScreenUiState.Error) {
-                                ErrorScreen(error = currentState.throwable, onRefresh = onRefresh)
-                            } else {
-                                LoadingScreen()
-                            }
-                        }
-                    }
-                }
             }
         }
 
@@ -281,20 +321,38 @@ fun MainScreenContent(
                 unselectedIconColor = EInk.Caption,
                 unselectedTextColor = EInk.Caption
             )
-            NavigationBarItem(
-                icon = { Icon(Icons.Default.Home, contentDescription = "Dashboard") },
-                label = { Text("DASHBOARD", fontFamily = FontFamily.Monospace, fontSize = 10.sp, letterSpacing = 1.sp) },
-                selected = !showSettings,
-                onClick = { onShowSettingsChange(false) },
-                colors = itemColors
-            )
-            NavigationBarItem(
-                icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                label = { Text("SETTINGS", fontFamily = FontFamily.Monospace, fontSize = 10.sp, letterSpacing = 1.sp) },
-                selected = showSettings,
-                onClick = { onShowSettingsChange(true) },
-                colors = itemColors
-            )
+            MainTab.entries.forEach { tab ->
+                NavigationBarItem(
+                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                    label = { Text(tab.label.uppercase(), fontFamily = FontFamily.Monospace, fontSize = 9.sp, letterSpacing = 0.5.sp, maxLines = 1) },
+                    selected = selectedTab == tab,
+                    onClick = { onTabSelected(tab) },
+                    colors = itemColors
+                )
+            }
         }
     }
 }
+
+/** Bottom-bar destinations. */
+enum class MainTab(val label: String, val icon: ImageVector) {
+    DASHBOARD("Dashboard", Icons.Default.Home),
+    ALERTS("Alerts", Icons.Default.Notifications),
+    WIDGETS("Widgets", WidgetsIcon),
+    SETTINGS("Settings", Icons.Default.Settings)
+}
+
+private const val KEY_COLLAPSED = "collapsed_categories"
+
+/** Material "widgets" glyph (not in the core icon set). */
+private val WidgetsIcon: ImageVector = ImageVector.Builder(
+    name = "Widgets",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f
+).addPath(
+    pathData = addPathNodes("M13,13v8h8v-8h-8zM3,21h8v-8L3,13v8zM3,3v8h8L11,3L3,3zM16.66,1.69L11,7.34 16.66,13l5.66,-5.66 -5.66,-5.65z"),
+    fill = SolidColor(Color.Black)
+).build()
+
