@@ -61,7 +61,7 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
             // Essay title (2001)
             Quote("Trusted third parties are security holes.", "Nick Szabo"),
             // Added at the app owner's request
-            Quote("เงินเฟ้อแม่งเหี้ย", "Wichai Saiklao"),
+            Quote("เงินเฟ้อแม่งเหี้ย", "Wichit Saiklao"),
             Quote("Don't trust. Verify.", "Bitcoin proverb"),
             Quote("Fix the money, fix the world.", "Bitcoin proverb")
         )
