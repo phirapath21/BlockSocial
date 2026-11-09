@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name">Satoshi Dashboard</string>
+    <string name="app_name">Blockface</string>
 
     <!-- Widget picker labels and descriptions -->
-    <string name="widget_blockclock_label">Blockclock</string>
+    <string name="widget_blockclock_label">Bitcoin metrics</string>
     <string name="widget_blockclock_description">BTC price, sats, block height, fees and more. Tap to cycle.</string>
     <string name="widget_halving_label">Halving countdown</string>
     <string name="widget_halving_description">Progress, days and blocks to the next halving.</string>

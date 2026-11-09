@@ -52,7 +52,7 @@ class MainScreenTest {
     @Test
     fun dashboard_showsHeroPanelForSelectedMetric() {
         setContent()
-        composeTestRule.onNodeWithText("SATOSHI DASHBOARD").assertExists()
+        composeTestRule.onNodeWithText("BLOCKFACE").assertExists()
         composeTestRule.onNodeWithContentDescription("BTC USD \$74455. Market price of bitcoin").assertExists()
 
         composeTestRule.onNodeWithText("BLOCK").performClick()

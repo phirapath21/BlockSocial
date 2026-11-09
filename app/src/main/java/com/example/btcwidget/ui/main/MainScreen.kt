@@ -170,7 +170,7 @@ fun MainScreenContent(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 12.dp)
                 ) {
-                    HeaderSection(title = "SATOSHI DASHBOARD", subtitle = "Blockclock console")
+                    HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
 
                     when (val currentState = state) {
                         is MainScreenUiState.Loading -> LoadingScreen()
