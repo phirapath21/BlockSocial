@@ -309,8 +309,7 @@ fun MainScreenContent(
                                 onToggleCategory = onToggleCategory,
                                 stackSats = stackSats,
                                 onSetUpStack = { onTabSelected(MainTab.SETTINGS) },
-                                history = history,
-                                onModeToggle = onModeToggle
+                                history = history
                             )
                             else -> Column(
                                 modifier = Modifier
@@ -343,9 +342,12 @@ fun MainScreenContent(
                     WidgetsScreen(
                         currencySetting = currencySetting,
                         data = data,
+                        modeStates = modeStates,
+                        onModeToggle = onModeToggle,
+                        modeOrder = modeOrder,
+                        stackSats = stackSats,
                         onWidgetCount = available.count { modeStates.getOrElse(it) { true } },
-                        availableCount = available.size,
-                        onOpenDashboard = { onTabSelected(MainTab.DASHBOARD) }
+                        availableCount = available.size
                     )
                 }
                 MainTab.SETTINGS -> SettingsScreen(
