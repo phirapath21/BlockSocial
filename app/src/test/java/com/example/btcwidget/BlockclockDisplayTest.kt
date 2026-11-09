@@ -63,4 +63,29 @@ class BlockclockDisplayTest {
         assertEquals("868", BlockclockMetrics.halving(1, 925_000).value)
         assertEquals(0.40476, BlockclockMetrics.halvingProgress(925_000), 1e-4)
     }
+
+    @Test
+    fun moscowTime_unavailableInThb() {
+        val moscow = BlockclockMetrics.MODE_MOSCOW_TIME
+        assertEquals(true, BlockclockMetrics.isAvailable(moscow, "USD"))
+        assertEquals(false, BlockclockMetrics.isAvailable(moscow, "THB"))
+        assertEquals(false, BlockclockMetrics.isActive(moscow, enabled = true, currency = "THB"))
+        // Sats per baht is still meaningful.
+        assertEquals(true, BlockclockMetrics.isAvailable(1, "THB"))
+    }
+
+    @Test
+    fun cyclingSkipsMoscowTimeInThb() {
+        val allOn = { _: Int -> true }
+        assertEquals(3, BlockclockMetrics.nextActiveMode(2, "USD", allOn))
+        assertEquals(4, BlockclockMetrics.nextActiveMode(2, "THB", allOn))
+    }
+
+    @Test
+    fun cyclingFallsBackToPriceWhenNothingIsActive() {
+        // Only Moscow Time enabled, then the user switches to THB.
+        val onlyMoscow = { m: Int -> m == BlockclockMetrics.MODE_MOSCOW_TIME }
+        assertEquals(BlockclockMetrics.MODE_PRICE, BlockclockMetrics.nextActiveMode(3, "THB", onlyMoscow))
+        assertEquals(3, BlockclockMetrics.nextActiveMode(3, "USD", onlyMoscow))
+    }
 }

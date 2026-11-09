@@ -91,8 +91,10 @@ fun MainScreen(
     }
 
     val onModeToggle: (Int, Boolean) -> Unit = { index, checked ->
-        val enabledCount = modeStates.count { it }
-        if (checked || enabledCount > 1) {
+        val activeCount = modeStates.indices.count {
+            BlockclockMetrics.isActive(it, modeStates[it], currencySetting)
+        }
+        if (checked || activeCount > 1) {
             prefs.edit().putBoolean("mode_enabled_$index", checked).apply()
             modeStates[index] = checked
             WidgetUpdater.updateAllWidgets(context)
