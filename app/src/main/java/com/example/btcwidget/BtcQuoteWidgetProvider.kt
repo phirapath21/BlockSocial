@@ -5,12 +5,8 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
 import android.os.Build
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.view.View
 import android.widget.RemoteViews
 
@@ -42,44 +38,18 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
         ) {
-            val theme = getWidgetTheme(context)
             val quoteIndex = getWidgetQuoteIndex(context, appWidgetId)
             val quote = QUOTES[quoteIndex % QUOTES.size]
 
             val layoutId = R.layout.btc_widget_quote
             val views = RemoteViews(context.packageName, layoutId)
 
-            // Theme colors and background resource mapping
-            val bgResId: Int
-            val labelColor: Int
-            val valueColor: Int
-            val subTextColor: Int
-
-            when (theme) {
-                1 -> { // White / Light Theme
-                    bgResId = R.drawable.widget_background_ios_light
-                    labelColor = 0xFF8E8E93.toInt()
-                    valueColor = 0xFF000000.toInt()
-                    subTextColor = 0xFF8E8E93.toInt()
-                }
-                9 -> { // Orange Pill Theme
-                    bgResId = R.drawable.widget_background_ios_orange
-                    labelColor = 0xFFA66210.toInt()
-                    valueColor = 0xFFF7931A.toInt()
-                    subTextColor = 0xFFA66210.toInt()
-                }
-                else -> { // Dark Theme (Default/Theme 0)
-                    bgResId = R.drawable.widget_background_ios_dark
-                    labelColor = 0xFF8E8E93.toInt()
-                    valueColor = 0xFFFFFFFF.toInt()
-                    subTextColor = 0xFF8E8E93.toInt()
-                }
-            }
+            val style = WidgetStyle.current(context)
 
             // Apply theme styles to views
-            views.setInt(R.id.widget_root, "setBackgroundResource", bgResId)
-            views.setTextColor(R.id.txt_quote_text, valueColor)
-            views.setTextColor(R.id.txt_quote_author, labelColor)
+            views.setInt(R.id.widget_root, "setBackgroundResource", style.background)
+            views.setTextColor(R.id.txt_quote_text, style.valueColor)
+            views.setTextColor(R.id.txt_quote_author, style.labelColor)
 
             // Format quotation with typography quotes
             views.setTextViewText(R.id.txt_quote_text, "\"${quote.text}\"")
@@ -118,49 +88,6 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
             prefs.edit().putInt("quote_index_$appWidgetId", index).apply()
         }
 
-        private fun getWidgetTheme(context: Context): Int {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            return prefs.getInt("blockclock_theme", 10)
-        }
-
-        fun triggerVibration(context: Context) {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            if (!prefs.getBoolean("haptic_enabled", true)) {
-                return
-            }
-            try {
-                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                    vibratorManager?.defaultVibrator
-                } else {
-                    @Suppress("DEPRECATION")
-                    context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                }
-
-                if (vibrator != null && vibrator.hasVibrator()) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        val effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
-                        val audioAttributes = AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                            .build()
-                        vibrator.vibrate(effect, audioAttributes)
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        val effect = VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
-                        val audioAttributes = AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                            .build()
-                        vibrator.vibrate(effect, audioAttributes)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        vibrator.vibrate(50)
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
@@ -176,7 +103,7 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
         val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
 
         if (action == ACTION_NEXT_QUOTE) {
-            triggerVibration(context)
+            Haptics.click(context)
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
                 val currentIndex = getWidgetQuoteIndex(context, appWidgetId)
                 saveWidgetQuoteIndex(context, appWidgetId, currentIndex + 1)
