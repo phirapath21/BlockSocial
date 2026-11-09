@@ -18,19 +18,52 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
 
         data class Quote(val text: String, val author: String)
 
+        /**
+         * Quotes with a checkable original wording; the source is noted for each.
+         * Only add quotes whose exact words appear in a primary or reputable source;
+         * never paraphrase and attribute.
+         */
         val QUOTES = listOf(
+            // Bitcoin whitepaper, abstract (2008)
+            Quote("A purely peer-to-peer version of electronic cash would allow online payments to be sent directly from one party to another without going through a financial institution.", "Satoshi Nakamoto"),
+            // Coinbase text of the genesis block (3 Jan 2009)
+            Quote("The Times 03/Jan/2009 Chancellor on brink of second bailout for banks", "Bitcoin genesis block"),
+            // Tweet, 10 Jan 2009
+            Quote("Running bitcoin", "Hal Finney"),
+            // Announcement on the Cryptography mailing list (Oct 2008)
+            Quote("I've been working on a new electronic cash system that's fully peer-to-peer, with no trusted third party.", "Satoshi Nakamoto"),
+            // P2P Foundation post (Feb 2009)
+            Quote("The root problem with conventional currency is all the trust that's required to make it work.", "Satoshi Nakamoto"),
+            // Cryptography mailing list (Nov 2008)
+            Quote("We can win a major battle in the arms race and gain a new territory of freedom for several years.", "Satoshi Nakamoto"),
+            // Cryptography mailing list (Nov 2008)
+            Quote("It's very attractive to the libertarian viewpoint if we can explain it properly.", "Satoshi Nakamoto"),
+            // Email (Jan 2009)
+            Quote("It might make sense just to get some in case it catches on.", "Satoshi Nakamoto"),
+            // BitcoinTalk (Jun 2010)
+            Quote("Lost coins only make everyone else's coins worth slightly more. Think of it as a donation to everyone.", "Satoshi Nakamoto"),
+            // BitcoinTalk (Jun 2010)
+            Quote("The nature of Bitcoin is such that once version 0.1 was released, the core design was set in stone for the rest of its lifetime.", "Satoshi Nakamoto"),
+            // BitcoinTalk (Jul 2010)
+            Quote("Writing a description for this thing for general audiences is bloody hard. There's nothing to relate it to.", "Satoshi Nakamoto"),
+            // Cryptography mailing list (Nov 2008)
             Quote("If you don't believe me or don't get it, I don't have time to try to convince you, sorry.", "Satoshi Nakamoto"),
+            // "Why remailers..." essay (1992)
             Quote("The computer can be used as a tool to liberate and protect people.", "Hal Finney"),
+            // "Bitcoin and me" on BitcoinTalk (Mar 2013)
+            Quote("I'm comfortable with my legacy.", "Hal Finney"),
+            // A Cypherpunk's Manifesto (1993)
             Quote("Privacy is necessary for an open society in the electronic age.", "Eric Hughes"),
+            Quote("Privacy is the power to selectively reveal oneself to the world.", "Eric Hughes"),
             Quote("Cypherpunks write code.", "Eric Hughes"),
-            Quote("Lost coins only make everyone else's coins worth slightly more.", "Satoshi Nakamoto"),
-            Quote("The root problem with conventional currency is all the trust that's required.", "Satoshi Nakamoto"),
-            Quote("We are writing code to defend our privacy.", "Eric Hughes"),
-            Quote("Don't trust. Verify.", "Bitcoin Motto"),
-            Quote("Fix the money, fix the world.", "Bitcoin Motto"),
-            Quote("It's very attractive to the libertarian perspective if we can explain it properly.", "Satoshi Nakamoto"),
-            Quote("I've been working on a new electronic cash system that's fully peer-to-peer...", "Satoshi Nakamoto"),
-            Quote("We are heading into a future where everyone has the power of strong cryptography.", "Hal Finney")
+            // The Crypto Anarchist Manifesto (1988)
+            Quote("A specter is haunting the modern world, the specter of crypto anarchy.", "Timothy C. May"),
+            // Essay title (2001)
+            Quote("Trusted third parties are security holes.", "Nick Szabo"),
+            // Asia Property Awards interview with the Bitkub founder
+            Quote("I believe in Bitcoin and the tokenisation concept.", "Jirayut Srupsrisopa, Bitkub"),
+            Quote("Don't trust. Verify.", "Bitcoin proverb"),
+            Quote("Fix the money, fix the world.", "Bitcoin proverb")
         )
 
         fun updateWidgetLayout(
