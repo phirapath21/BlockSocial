@@ -101,16 +101,16 @@ class MainScreenTest {
         setContent()
         composeTestRule.onNodeWithContentDescription("Widgets").performClick()
         // STACK needs holdings, so 13 of the 14 modes are available.
-        composeTestRule.onNodeWithText("13 of 13 metrics", substring = true).assertExists()
+        composeTestRule.onNodeWithText("13 OF 13", substring = true).assertExists()
     }
 
     @Test
-    fun dashboard_sectionsCollapse() {
+    fun widgets_sectionsCollapse() {
         composeTestRule.setContent {
             var collapsed by remember { mutableStateOf(emptySet<com.example.btcwidget.MetricCategory>()) }
             MainScreenContent(
                 state = MainScreenUiState.Success(sample),
-                selectedTab = MainTab.DASHBOARD,
+                selectedTab = MainTab.WIDGETS,
                 heroMetric = "PRICE",
                 modeStates = List(13) { true },
                 currencySetting = "USD",
@@ -140,5 +140,13 @@ class MainScreenTest {
         composeTestRule.onNodeWithContentDescription("Alerts").performClick()
         composeTestRule.onNodeWithText("\$74,455").assertExists()
     }
-}
 
+    @Test
+    fun dashboard_hasNoMetricPanels() {
+        setContent()
+        // Only the hero shows on the dashboard; metric panels live in the Widgets tab.
+        composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Widgets").performClick()
+        composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertExists()
+    }
+}

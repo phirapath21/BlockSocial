@@ -40,9 +40,8 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 
 ### 3. App Layout
 Four tabs along the bottom:
-- **Dashboard** — a BTC price chart (24H / 7D, drag to read any hour), a hero panel (BLOCK / PRICE / SATS / FEES) above four sections: **Market**, **Network**, **Supply & Lightning** and **Strategy (MSTR)**. Tap a section title to collapse it; hold and drag a panel to reorder it within its section. Pull down to refresh.
-- **Alerts** — current price and fee for reference, plus price and fee alerts.
-- **Widgets** — how to add widgets, then every metric as a panel with an **On widget** switch that chooses whether tapping the widget cycles through it (grouped and ordered like the dashboard).
+- **Dashboard** — a hero panel (STACK / BLOCK / PRICE / SATS / FEES) and a BTC price chart (24H / 7D, drag to read any hour). Pull down to refresh.
+- **Widgets** — how to add widgets, then every metric as a panel in four collapsible sections (**Market**, **Network**, **Supply & Lightning**, **Strategy (MSTR)**, plus **Your stack**). Each panel has an **On widget** switch; hold and drag a panel to reorder it within its section — that order is the order widget taps cycle through.
 - **Settings** — your stack, display currency, refresh interval, **data sources** (BTC price from Coinbase or Kraken; THB converted or from Bitkub), haptics and about.
 
 ### 3a. Your Stack
