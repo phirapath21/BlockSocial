@@ -39,7 +39,8 @@ class PriceMergeTest {
         fees = Fees(10, 8, 6),
         difficulty = Difficulty(-2.0, 55.0),
         hashRate = 850.0,
-        lightningCapacity = 5100.0
+        lightningCapacity = 5100.0,
+        mstrBtcHeld = 850_000.0
     )
 
     @Test
@@ -50,8 +51,19 @@ class PriceMergeTest {
         assertEquals(0.004, result.mstrBtc, 1e-9)
         assertEquals(900_100, result.blockHeight)
         assertEquals(10, result.feeFastest)
+        assertEquals(850_000.0, result.mstrBtcHeld, 0.0)
         assertEquals(2_000L, result.timestamp)
         assertTrue(result.lastFetchSuccessful)
+    }
+
+    @Test
+    fun mstrHoldingsFail_usesCacheThenFallback() {
+        val fresh = allFresh.copy(mstrBtcHeld = null)
+        assertEquals(843_738.0, PriceRepository.mergeWithCache(fresh, cached, 2_000L)!!.mstrBtcHeld, 0.0)
+        val olderCache = cached.copy(mstrBtcHeld = 0.0) // pref missing on older installs
+        assertEquals(843_738.0, PriceRepository.mergeWithCache(fresh, olderCache, 2_000L)!!.mstrBtcHeld, 0.0)
+        val updatedCache = cached.copy(mstrBtcHeld = 860_000.0)
+        assertEquals(860_000.0, PriceRepository.mergeWithCache(fresh, updatedCache, 2_000L)!!.mstrBtcHeld, 0.0)
     }
 
     @Test

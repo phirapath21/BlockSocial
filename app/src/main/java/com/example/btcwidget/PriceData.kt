@@ -58,7 +58,8 @@ object PriceRepository {
     private const val TIMEOUT_MS = 8000
     private const val SATS_PER_BTC = 100_000_000.0
     private const val FALLBACK_BTC_CIRCULATION = 19_850_000.0
-    private const val MSTR_BTC_HELD = 843_738.0
+    /** Last known Strategy (MSTR) holdings, used only until the first successful fetch. */
+    private const val FALLBACK_MSTR_BTC_HELD = 843_738.0
 
     /**
      * Fetches every data source in parallel. Each source fails independently:
@@ -76,6 +77,7 @@ object PriceRepository {
             val difficulty = async { fetchSafely("difficulty adjustment") { fetchDifficulty() } }
             val hashRate = async { fetchSafely("hashrate") { fetchHashRate() } }
             val lightning = async { fetchSafely("lightning capacity") { fetchLightningCapacity() } }
+            val mstrHeld = async { fetchSafely("MSTR holdings") { fetchMstrHoldings() } }
             FetchResults(
                 rates = rates.await(),
                 mstrUsd = mstr.await(),
@@ -84,7 +86,8 @@ object PriceRepository {
                 fees = fees.await(),
                 difficulty = difficulty.await(),
                 hashRate = hashRate.await(),
-                lightningCapacity = lightning.await()
+                lightningCapacity = lightning.await(),
+                mstrBtcHeld = mstrHeld.await()
             )
         }
         mergeWithCache(fresh, getFromPrefs(context), System.currentTimeMillis())
@@ -103,7 +106,8 @@ object PriceRepository {
         val fees: Fees? = null,
         val difficulty: Difficulty? = null,
         val hashRate: Double? = null,
-        val lightningCapacity: Double? = null
+        val lightningCapacity: Double? = null,
+        val mstrBtcHeld: Double? = null
     )
 
     /**
@@ -124,7 +128,9 @@ object PriceRepository {
             mstrUsd = mstrUsd,
             mstrBtc = if (btcUsd > 0) mstrUsd / btcUsd else 0.0,
             blockHeight = fresh.blockHeight ?: cached?.blockHeight ?: 0,
-            mstrBtcHeld = MSTR_BTC_HELD,
+            mstrBtcHeld = fresh.mstrBtcHeld
+                ?: cached?.mstrBtcHeld?.takeIf { it > 0 }
+                ?: FALLBACK_MSTR_BTC_HELD,
             btcCirculation = fresh.btcCirculation ?: cached?.btcCirculation ?: FALLBACK_BTC_CIRCULATION,
             timestamp = if (coreOk || cached == null) now else cached.timestamp,
             currency = cached?.currency ?: "USD",
@@ -196,6 +202,19 @@ object PriceRepository {
     private fun fetchHashRate(): Double =
         JSONObject(httpGet("https://mempool.space/api/v1/mining/hashrate/3d"))
             .getDouble("currentHashrate") / 1e18
+
+    /** Strategy (MSTR) bitcoin holdings from CoinGecko's public treasury list. */
+    private fun fetchMstrHoldings(): Double {
+        val companies = JSONObject(httpGet("https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin"))
+            .getJSONArray("companies")
+        for (i in 0 until companies.length()) {
+            val company = companies.getJSONObject(i)
+            if (company.optString("symbol").startsWith("MSTR")) {
+                return company.getDouble("total_holdings").also { require(it > 0) }
+            }
+        }
+        throw IOException("MSTR not found in treasury list")
+    }
 
     /** Public Lightning capacity, converted from sats to BTC. */
     private fun fetchLightningCapacity(): Double =
