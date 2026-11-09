@@ -1,8 +1,6 @@
 package com.example.btcwidget.ui.main
 
 import android.Manifest
-import android.content.Context
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -31,9 +29,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,178 +38,82 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.BlockclockMetrics
-import com.example.btcwidget.BtcWidgetProvider
 import com.example.btcwidget.DataSources
 import com.example.btcwidget.MetricCategory
 import com.example.btcwidget.PricePoint
 import com.example.btcwidget.PriceSource
 import com.example.btcwidget.Stack
-import com.example.btcwidget.StackStore
 import com.example.btcwidget.StackUnit
 import com.example.btcwidget.ThbSource
-import com.example.btcwidget.WidgetRefreshScheduler
-import com.example.btcwidget.WidgetUpdater
-import com.example.btcwidget.alerts.AlertNotifier
 import com.example.btcwidget.alerts.AlertRule
-import com.example.btcwidget.alerts.AlertStore
 import com.example.btcwidget.alerts.PriceAlerts
 
+/**
+ * Connects [MainScreenViewModel] to [MainScreenContent]. State lives in the ViewModel;
+ * this keeps only what needs the Activity: the selected tab and the notification
+ * permission prompt.
+ */
 @Composable
 fun MainScreen(
     onItemClick: (NavKey) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MainScreenViewModel = viewModel()
 ) {
-    val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
-    val prefs = remember { context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE) }
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.DASHBOARD) }
-    var collapsedCategories by remember {
-        mutableStateOf(
-            prefs.getStringSet(KEY_COLLAPSED, emptySet()).orEmpty()
-                .mapNotNull { name -> MetricCategory.entries.firstOrNull { it.name == name } }
-                .toSet()
-        )
-    }
-    val onToggleCategory: (MetricCategory) -> Unit = { category ->
-        collapsedCategories = if (category in collapsedCategories) collapsedCategories - category else collapsedCategories + category
-        prefs.edit().putStringSet(KEY_COLLAPSED, collapsedCategories.map { it.name }.toSet()).apply()
-    }
-    val appVersion = remember {
-        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
-    }
-    var heroMetric by remember { mutableStateOf(prefs.getString("hero_metric", "BLOCK") ?: "BLOCK") }
-    var currencySetting by remember { mutableStateOf(prefs.getString("currency", "USD") ?: "USD") }
-    var refreshInterval by remember { mutableStateOf(prefs.getInt("refresh_interval", 30)) }
 
-    // Mode states for Settings
-    val modeStates = remember {
-        mutableStateListOf<Boolean>().apply {
-            addAll((0 until BlockclockMetrics.MODE_COUNT).map { prefs.getBoolean("mode_enabled_$it", true) })
-        }
-    }
-
-    val onHeroMetricSelected: (String) -> Unit = { metric ->
-        prefs.edit().putString("hero_metric", metric).apply()
-        heroMetric = metric
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.loadInitialData(context)
-        WidgetRefreshScheduler.schedulePeriodic(context)
-        // Redraw placed widgets with the current layout and cached data.
-        WidgetUpdater.updateAllWidgets(context)
-    }
-
-    val onCurrencySelected: (String) -> Unit = { newCurrency ->
-        prefs.edit().putString("currency", newCurrency).apply()
-        currencySetting = newCurrency
-        WidgetUpdater.updateAllWidgets(context)
-    }
-
-    val onRefreshIntervalSelected: (Int) -> Unit = { newInterval ->
-        prefs.edit().putInt("refresh_interval", newInterval).apply()
-        refreshInterval = newInterval
-        WidgetRefreshScheduler.schedulePeriodic(context, intervalChanged = true)
-    }
-
-    var modeOrder by remember {
-        mutableStateOf(BlockclockMetrics.parseOrder(prefs.getString(BtcWidgetProvider.KEY_MODE_ORDER, null)))
-    }
-    val onModeOrderChange: (List<String>) -> Unit = { newOrder ->
-        prefs.edit().putString(BtcWidgetProvider.KEY_MODE_ORDER, BlockclockMetrics.serializeOrder(newOrder)).apply()
-        modeOrder = BlockclockMetrics.sanitizeOrder(newOrder)
-    }
-
-    var stackSats by remember { mutableStateOf(StackStore.sats(context)) }
-    var stackUnit by remember { mutableStateOf(StackStore.unit(context)) }
-    val onStackChange: (Long, StackUnit) -> Unit = { sats, unit ->
-        StackStore.save(context, sats, unit)
-        stackSats = sats
-        stackUnit = unit
-        WidgetUpdater.updateAllWidgets(context)
-    }
-
-    var dataSources by remember { mutableStateOf(DataSources.read(context)) }
-    val onDataSourcesChange: (DataSources) -> Unit = { sources ->
-        DataSources.save(context, sources)
-        dataSources = sources
-        // Show the new source's price right away.
-        viewModel.refreshData(context)
-    }
-
-    var alerts by remember { mutableStateOf(AlertStore.load(context)) }
-    var notificationsAllowed by remember { mutableStateOf(AlertNotifier.canNotify(context)) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        notificationsAllowed = AlertNotifier.canNotify(context)
-    }
-    val onAlertChange: (AlertRule) -> Unit = { rule ->
-        val current = (state as? MainScreenUiState.Success)?.data
-        AlertStore.save(context, rule, current)
-        alerts = AlertStore.load(context)
-        if (rule.enabled) {
-            // Alerts need the background refresh even with no widget placed.
-            WidgetRefreshScheduler.schedulePeriodic(context)
-            if (!AlertNotifier.canNotify(context) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        } else {
-            WidgetRefreshScheduler.cancelIfUnused(context)
-        }
+        viewModel.refreshNotificationPermission()
     }
 
-    val onModeToggle: (Int, Boolean) -> Unit = { index, checked ->
-        val activeCount = modeStates.indices.count {
-            BlockclockMetrics.isActive(it, modeStates[it], currencySetting, hasStack = stackSats > 0)
-        }
-        if (checked || activeCount > 1) {
-            prefs.edit().putBoolean("mode_enabled_$index", checked).apply()
-            modeStates[index] = checked
-            // Only which modes are shown changed: redraw from cached data, no network fetch.
-            WidgetUpdater.updateAllWidgets(context)
-        }
-    }
+    LaunchedEffect(Unit) { viewModel.start() }
+    // Notifications may have been allowed or blocked in system settings meanwhile.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationPermission() }
 
     MainScreenContent(
         state = state,
         selectedTab = selectedTab,
-        heroMetric = heroMetric,
-        modeStates = modeStates,
-        currencySetting = currencySetting,
-        onCurrencySelected = onCurrencySelected,
-        refreshInterval = refreshInterval,
-        onRefreshIntervalSelected = onRefreshIntervalSelected,
-        onHeroMetricSelected = onHeroMetricSelected,
+        heroMetric = settings.heroMetric,
+        modeStates = settings.modeStates,
+        currencySetting = settings.currency,
+        onCurrencySelected = viewModel::setCurrency,
+        refreshInterval = settings.refreshInterval,
+        onRefreshIntervalSelected = viewModel::setRefreshInterval,
+        onHeroMetricSelected = viewModel::selectHero,
         onTabSelected = { selectedTab = it },
-        collapsedCategories = collapsedCategories,
-        onToggleCategory = onToggleCategory,
-        appVersion = appVersion,
-        stackSats = stackSats,
-        stackUnit = stackUnit,
-        onStackChange = onStackChange,
-        dataSources = dataSources,
-        onDataSourcesChange = onDataSourcesChange,
+        collapsedCategories = settings.collapsedCategories,
+        onToggleCategory = viewModel::toggleCategory,
+        appVersion = viewModel.appVersion,
+        stackSats = settings.stackSats,
+        stackUnit = settings.stackUnit,
+        onStackChange = viewModel::setStack,
+        dataSources = settings.dataSources,
+        onDataSourcesChange = viewModel::setDataSources,
         history = history,
-        onModeToggle = onModeToggle,
-        onRefresh = { viewModel.refreshData(context) },
+        onModeToggle = viewModel::setModeEnabled,
+        onRefresh = viewModel::refreshData,
         isRefreshing = isRefreshing,
-        modeOrder = modeOrder,
-        onModeOrderChange = onModeOrderChange,
+        modeOrder = settings.modeOrder,
+        onModeOrderChange = viewModel::setModeOrder,
         onItemClick = onItemClick,
         modifier = modifier,
-        alerts = alerts,
-        onAlertChange = onAlertChange,
-        notificationsAllowed = notificationsAllowed
+        alerts = settings.alerts,
+        onAlertChange = { rule ->
+            if (viewModel.updateAlert(rule)) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        },
+        notificationsAllowed = settings.notificationsAllowed
     )
 }
 
@@ -380,8 +280,6 @@ enum class MainTab(val label: String, val icon: ImageVector) {
     WIDGETS("Widgets", WidgetsIcon),
     SETTINGS("Settings", Icons.Default.Settings)
 }
-
-private const val KEY_COLLAPSED = "collapsed_categories"
 
 /** Material "widgets" glyph (not in the core icon set). */
 private val WidgetsIcon: ImageVector = ImageVector.Builder(

@@ -21,7 +21,7 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
             appWidgetId: Int,
             data: PriceData
         ) {
-            val mode = getWidgetMode(context, appWidgetId)
+            val mode = AppPrefs.halvingMode(context, appWidgetId)
             val scene = BlockclockScene(
                 display = BlockclockMetrics.halving(mode, data.blockHeight),
                 stale = !data.lastFetchSuccessful,
@@ -54,15 +54,6 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
             return PendingIntent.getBroadcast(context, requestCode, intent, flags)
         }
 
-        fun getWidgetMode(context: Context, appWidgetId: Int): Int {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            return prefs.getInt("halving_mode_$appWidgetId", 0)
-        }
-
-        fun saveWidgetMode(context: Context, appWidgetId: Int, mode: Int) {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            prefs.edit().putInt("halving_mode_$appWidgetId", mode).apply()
-        }
 
     }
 
@@ -83,9 +74,9 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
 
         if (action == ACTION_NEXT_MODE) {
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                val currentMode = getWidgetMode(context, appWidgetId)
+                val currentMode = AppPrefs.halvingMode(context, appWidgetId)
                 val nextMode = (currentMode + 1) % 3
-                saveWidgetMode(context, appWidgetId, nextMode)
+                AppPrefs.setHalvingMode(context, appWidgetId, nextMode)
 
                 val appWidgetManager = AppWidgetManager.getInstance(context)
                 val data = PriceRepository.getFromPrefs(context)
@@ -119,6 +110,11 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         WidgetRefreshScheduler.schedulePeriodic(context)
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        AppPrefs.forgetWidgets(context, appWidgetIds)
     }
 
     override fun onDisabled(context: Context) {

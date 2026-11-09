@@ -20,12 +20,11 @@ class BtcChartWidgetProvider : AppWidgetProvider() {
         fun updateWidgetLayout(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val data = PriceRepository.getFromPrefs(context)
                 ?: return WidgetPlaceholder.show(context, appWidgetManager, appWidgetId)
-            val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
-            val currency = prefs.getString("currency", "USD") ?: "USD"
-            val range = getRange(context, appWidgetId)
+            val currency = AppPrefs.currency(context)
+            val range = AppPrefs.chartRange(context, appWidgetId)
             val factor = if (currency == "THB" && data.btcUsd > 0) data.btcThb / data.btcUsd else 1.0
             val scene = ChartScene(
-                points = ChartMath.slice(HistoryStore.load(context), range, factor),
+                points = ChartMath.slice(AppPrefs.history(context), range, factor),
                 currency = currency,
                 range = range,
                 price = if (currency == "THB") data.btcThb else data.btcUsd,
@@ -54,17 +53,6 @@ class BtcChartWidgetProvider : AppWidgetProvider() {
             )
         }
 
-        private fun getRange(context: Context, appWidgetId: Int): ChartRange {
-            val name = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
-                .getString("chart_range_$appWidgetId", null)
-            return ChartRange.entries.firstOrNull { it.name == name } ?: ChartRange.DAY
-        }
-
-        private fun saveRange(context: Context, appWidgetId: Int, range: ChartRange) {
-            context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE).edit()
-                .putString("chart_range_$appWidgetId", range.name)
-                .apply()
-        }
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
@@ -78,8 +66,8 @@ class BtcChartWidgetProvider : AppWidgetProvider() {
         if (intent.action != ACTION_NEXT_RANGE) return
         val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
-        val next = ChartRange.entries[(getRange(context, id).ordinal + 1) % ChartRange.entries.size]
-        saveRange(context, id, next)
+        val next = ChartRange.entries[(AppPrefs.chartRange(context, id).ordinal + 1) % ChartRange.entries.size]
+        AppPrefs.setChartRange(context, id, next)
         updateWidgetLayout(context, AppWidgetManager.getInstance(context), id)
     }
 
@@ -96,6 +84,11 @@ class BtcChartWidgetProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         WidgetRefreshScheduler.schedulePeriodic(context)
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        AppPrefs.forgetWidgets(context, appWidgetIds)
     }
 
     override fun onDisabled(context: Context) {

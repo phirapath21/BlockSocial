@@ -9,7 +9,6 @@ import android.graphics.Canvas
 import android.widget.RemoteViews
 import kotlin.math.sqrt
 
-internal const val WIDGET_PREFS = "blockclock_prefs"
 
 /** Paints a blockclock into a bitmap sized for one widget instance. */
 object WidgetBitmapRenderer {

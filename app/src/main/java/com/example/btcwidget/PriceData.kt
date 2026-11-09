@@ -74,7 +74,7 @@ object PriceRepository {
      * Returns null only when the BTC price could not be fetched and nothing is cached.
      */
     suspend fun fetchPriceData(context: Context): PriceData? = withContext(Dispatchers.IO) {
-        val sources = DataSources.read(context)
+        val sources = AppPrefs.dataSources(context)
         val fresh = coroutineScope {
             // Coinbase rates also supply the USD->THB conversion, so they are always fetched.
             val rates = async { fetchSafely("exchange rates") { fetchRates() } }

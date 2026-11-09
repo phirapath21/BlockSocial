@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
 import android.widget.RemoteViews
@@ -16,7 +15,6 @@ class BtcWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_NEXT_MODE = "com.example.btcwidget.ACTION_NEXT_MODE"
         const val ACTION_REFRESH = "com.example.btcwidget.ACTION_REFRESH"
-        const val KEY_MODE_ORDER = "mode_order"
 
         fun updateWidgetLayout(
             context: Context,
@@ -24,18 +22,18 @@ class BtcWidgetProvider : AppWidgetProvider() {
             appWidgetId: Int,
             data: PriceData
         ) {
-            val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
-            val currency = prefs.getString("currency", "USD") ?: "USD"
-            val savedMode = getWidgetMode(context, appWidgetId)
-            val stackSats = StackStore.sats(context)
+            val currency = AppPrefs.currency(context)
+            val savedMode = AppPrefs.widgetMode(context, appWidgetId)
+            val stackSats = AppPrefs.stackSats(context)
             val hasStack = stackSats > 0
-            val isEnabled = { m: Int -> prefs.getBoolean("mode_enabled_$m", true) }
+            val enabled = AppPrefs.enabledModes(context)
+            val isEnabled = { m: Int -> enabled.getOrElse(m) { true } }
             // A widget left on a mode that is now off or unavailable (e.g. Moscow Time
             // after switching to THB) shows the next active mode instead.
             val mode = if (BlockclockMetrics.isActive(savedMode, isEnabled(savedMode), currency, hasStack)) {
                 savedMode
             } else {
-                BlockclockMetrics.nextActiveMode(savedMode, currency, modeOrder(prefs), hasStack, isEnabled)
+                BlockclockMetrics.nextActiveMode(savedMode, currency, AppPrefs.modeOrder(context), hasStack, isEnabled)
             }
             val display = BlockclockMetrics.forMode(mode, data, currency, stackSats)
             val scene = BlockclockScene(
@@ -75,27 +73,15 @@ class BtcWidgetProvider : AppWidgetProvider() {
             return PendingIntent.getBroadcast(context, requestCode, intent, flags)
         }
 
-        fun getWidgetMode(context: Context, appWidgetId: Int): Int {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            return prefs.getInt("mode_$appWidgetId", 0) // Default to mode 0 (BTC/USD)
-        }
-
-        fun saveWidgetMode(context: Context, appWidgetId: Int, mode: Int) {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            prefs.edit().putInt("mode_$appWidgetId", mode).apply()
-        }
-
-        /** The user's mode order from the dashboard; tapping the widget cycles in this order. */
-        fun modeOrder(prefs: SharedPreferences): List<String> =
-            BlockclockMetrics.parseOrder(prefs.getString(KEY_MODE_ORDER, null))
 
         private fun getNextActiveMode(context: Context, currentMode: Int): Int {
-            val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
-            val currency = prefs.getString("currency", "USD") ?: "USD"
-            val hasStack = StackStore.sats(context) > 0
-            return BlockclockMetrics.nextActiveMode(currentMode, currency, modeOrder(prefs), hasStack) {
-                prefs.getBoolean("mode_enabled_$it", true)
-            }
+            val enabled = AppPrefs.enabledModes(context)
+            return BlockclockMetrics.nextActiveMode(
+                currentMode,
+                AppPrefs.currency(context),
+                AppPrefs.modeOrder(context),
+                hasStack = AppPrefs.stackSats(context) > 0
+            ) { enabled.getOrElse(it) { true } }
         }
 
     }
@@ -118,9 +104,9 @@ class BtcWidgetProvider : AppWidgetProvider() {
 
         if (action == ACTION_NEXT_MODE) {
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                val currentMode = getWidgetMode(context, appWidgetId)
+                val currentMode = AppPrefs.widgetMode(context, appWidgetId)
                 val nextMode = getNextActiveMode(context, currentMode)
-                saveWidgetMode(context, appWidgetId, nextMode)
+                AppPrefs.setWidgetMode(context, appWidgetId, nextMode)
 
                 // Instantly update the widget view using cached data
                 val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -149,6 +135,11 @@ class BtcWidgetProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         WidgetRefreshScheduler.schedulePeriodic(context)
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        AppPrefs.forgetWidgets(context, appWidgetIds)
     }
 
     override fun onDisabled(context: Context) {
