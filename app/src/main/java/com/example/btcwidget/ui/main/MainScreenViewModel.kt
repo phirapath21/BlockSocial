@@ -17,6 +17,11 @@ class MainScreenViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Loading)
     val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+
+    /** True while a fetch is running; drives the pull-to-refresh indicator. */
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     /** Shows cached data immediately and refreshes in the background if it is old. */
     fun loadInitialData(context: Context) {
         val cached = PriceRepository.getFromPrefs(context)
@@ -36,20 +41,27 @@ class MainScreenViewModel : ViewModel() {
      */
     fun refreshData(context: Context) {
         val appContext = context.applicationContext
+        // One fetch at a time: a pull while one is running just waits for it.
+        if (_isRefreshing.value) return
+        _isRefreshing.value = true
         viewModelScope.launch(Dispatchers.IO) {
-            if (_uiState.value !is MainScreenUiState.Success) {
-                _uiState.value = MainScreenUiState.Loading
-            }
-            val data = PriceRepository.fetchPriceData(appContext)
-            if (data != null) {
-                PriceRepository.saveToPrefs(appContext, data)
-                _uiState.value = MainScreenUiState.Success(data)
-                WidgetUpdater.updateAllWidgets(appContext)
-                AlertNotifier.checkAndNotify(appContext, data)
-            } else if (_uiState.value !is MainScreenUiState.Success) {
-                _uiState.value = MainScreenUiState.Error(
-                    Exception("Failed to fetch price data. Please verify your internet connection.")
-                )
+            try {
+                if (_uiState.value !is MainScreenUiState.Success) {
+                    _uiState.value = MainScreenUiState.Loading
+                }
+                val data = PriceRepository.fetchPriceData(appContext)
+                if (data != null) {
+                    PriceRepository.saveToPrefs(appContext, data)
+                    _uiState.value = MainScreenUiState.Success(data)
+                    WidgetUpdater.updateAllWidgets(appContext)
+                    AlertNotifier.checkAndNotify(appContext, data)
+                } else if (_uiState.value !is MainScreenUiState.Success) {
+                    _uiState.value = MainScreenUiState.Error(
+                        Exception("Failed to fetch price data. Please verify your internet connection.")
+                    )
+                }
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }

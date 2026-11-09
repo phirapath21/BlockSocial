@@ -17,12 +17,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +34,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -40,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.BlockclockMetrics
+import com.example.btcwidget.BtcWidgetProvider
 import com.example.btcwidget.WidgetRefreshScheduler
 import com.example.btcwidget.WidgetUpdater
 import com.example.btcwidget.alerts.AlertNotifier
@@ -54,6 +60,7 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val prefs = remember { context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE) }
     var showSettings by remember { mutableStateOf(false) }
     var heroMetric by remember { mutableStateOf(prefs.getString("hero_metric", "BLOCK") ?: "BLOCK") }
@@ -95,6 +102,14 @@ fun MainScreen(
     val onHapticToggle: (Boolean) -> Unit = { enabled ->
         prefs.edit().putBoolean("haptic_enabled", enabled).apply()
         hapticEnabled = enabled
+    }
+
+    var modeOrder by remember {
+        mutableStateOf(BlockclockMetrics.parseOrder(prefs.getString(BtcWidgetProvider.KEY_MODE_ORDER, null)))
+    }
+    val onModeOrderChange: (List<String>) -> Unit = { newOrder ->
+        prefs.edit().putString(BtcWidgetProvider.KEY_MODE_ORDER, BlockclockMetrics.serializeOrder(newOrder)).apply()
+        modeOrder = BlockclockMetrics.sanitizeOrder(newOrder)
     }
 
     var alerts by remember { mutableStateOf(AlertStore.load(context)) }
@@ -144,6 +159,9 @@ fun MainScreen(
         onShowSettingsChange = { newValue: Boolean -> showSettings = newValue },
         onModeToggle = onModeToggle,
         onRefresh = { viewModel.refreshData(context) },
+        isRefreshing = isRefreshing,
+        modeOrder = modeOrder,
+        onModeOrderChange = onModeOrderChange,
         onItemClick = onItemClick,
         modifier = modifier,
         alerts = alerts,
@@ -152,6 +170,7 @@ fun MainScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenContent(
     state: MainScreenUiState,
@@ -169,6 +188,9 @@ fun MainScreenContent(
     onModeToggle: (Int, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onItemClick: (NavKey) -> Unit,
+    isRefreshing: Boolean = false,
+    modeOrder: List<String> = BlockclockMetrics.MODE_KEYS,
+    onModeOrderChange: (List<String>) -> Unit = {},
     modifier: Modifier = Modifier,
     alerts: List<AlertRule> = emptyList(),
     onAlertChange: (AlertRule) -> Unit = {},
@@ -197,30 +219,51 @@ fun MainScreenContent(
                     onHapticToggle = onHapticToggle,
                     alerts = alerts,
                     onAlertChange = onAlertChange,
-                    notificationsAllowed = notificationsAllowed
+                    notificationsAllowed = notificationsAllowed,
+                    modeOrder = modeOrder
                 )
             } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp)
+                // Pull down on the dashboard to fetch fresh data now.
+                val pullState = rememberPullToRefreshState()
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = onRefresh,
+                    state = pullState,
+                    modifier = Modifier.fillMaxSize(),
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            state = pullState,
+                            isRefreshing = isRefreshing,
+                            containerColor = EInk.Body,
+                            color = EInk.Value,
+                            modifier = Modifier.align(Alignment.TopCenter)
+                        )
+                    }
                 ) {
-                    HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
-
                     when (val currentState = state) {
-                        is MainScreenUiState.Loading -> LoadingScreen()
+                        // The dashboard is its own scrolling grid (with drag-to-reorder).
                         is MainScreenUiState.Success -> DashboardContent(
                             data = currentState.data,
                             heroMetric = heroMetric,
                             onHeroMetricSelected = onHeroMetricSelected,
                             enabledModes = modeStates,
-                            currencySetting = currencySetting
+                            currencySetting = currencySetting,
+                            order = modeOrder,
+                            onOrderChange = onModeOrderChange
                         )
-                        is MainScreenUiState.Error -> ErrorScreen(
-                            error = currentState.throwable,
-                            onRefresh = onRefresh
-                        )
+                        else -> Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 12.dp)
+                        ) {
+                            HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
+                            if (currentState is MainScreenUiState.Error) {
+                                ErrorScreen(error = currentState.throwable, onRefresh = onRefresh)
+                            } else {
+                                LoadingScreen()
+                            }
+                        }
                     }
                 }
             }

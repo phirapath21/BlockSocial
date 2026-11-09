@@ -88,6 +88,9 @@ dependencies {
   // Background refresh
   implementation(libs.androidx.work.runtime.ktx)
 
+  // Drag-and-drop reordering in lazy grids (dashboard metrics)
+  implementation(libs.reorderable)
+
   // Compose
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.tooling.preview)

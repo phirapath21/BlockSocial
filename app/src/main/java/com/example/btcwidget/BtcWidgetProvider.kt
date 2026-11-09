@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
 import android.widget.RemoteViews
@@ -15,6 +16,7 @@ class BtcWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_NEXT_MODE = "com.example.btcwidget.ACTION_NEXT_MODE"
         const val ACTION_REFRESH = "com.example.btcwidget.ACTION_REFRESH"
+        const val KEY_MODE_ORDER = "mode_order"
 
         fun updateWidgetLayout(
             context: Context,
@@ -31,7 +33,7 @@ class BtcWidgetProvider : AppWidgetProvider() {
             val mode = if (BlockclockMetrics.isActive(savedMode, isEnabled(savedMode), currency)) {
                 savedMode
             } else {
-                BlockclockMetrics.nextActiveMode(savedMode, currency, isEnabled)
+                BlockclockMetrics.nextActiveMode(savedMode, currency, modeOrder(prefs), isEnabled)
             }
             val display = BlockclockMetrics.forMode(mode, data, currency)
             val scene = BlockclockScene(
@@ -81,10 +83,16 @@ class BtcWidgetProvider : AppWidgetProvider() {
             prefs.edit().putInt("mode_$appWidgetId", mode).apply()
         }
 
+        /** The user's mode order from the dashboard; tapping the widget cycles in this order. */
+        fun modeOrder(prefs: SharedPreferences): List<String> =
+            BlockclockMetrics.parseOrder(prefs.getString(KEY_MODE_ORDER, null))
+
         private fun getNextActiveMode(context: Context, currentMode: Int): Int {
             val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
             val currency = prefs.getString("currency", "USD") ?: "USD"
-            return BlockclockMetrics.nextActiveMode(currentMode, currency) { prefs.getBoolean("mode_enabled_$it", true) }
+            return BlockclockMetrics.nextActiveMode(currentMode, currency, modeOrder(prefs)) {
+                prefs.getBoolean("mode_enabled_$it", true)
+            }
         }
 
     }
