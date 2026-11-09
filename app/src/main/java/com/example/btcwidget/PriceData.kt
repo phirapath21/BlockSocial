@@ -3,9 +3,12 @@ package com.example.btcwidget
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -52,184 +55,171 @@ object PriceRepository {
     private const val KEY_HASH_RATE = "hash_rate"
     private const val KEY_LIGHTNING_CAPACITY = "lightning_capacity"
 
-    fun fetchPriceData(context: Context): PriceData? {
-        return try {
-            // 1. Fetch BTC Exchange Rates (both USD and THB in a single call)
-            val ratesUrl = URL("https://api.coinbase.com/v2/exchange-rates?currency=BTC")
-            val ratesConn = ratesUrl.openConnection() as HttpURLConnection
-            ratesConn.requestMethod = "GET"
-            ratesConn.connectTimeout = 8000
-            ratesConn.readTimeout = 8000
-            val ratesResponse = ratesConn.inputStream.bufferedReader().use { it.readText() }
-            ratesConn.disconnect()
-            
-            val ratesObj = JSONObject(ratesResponse).getJSONObject("data").getJSONObject("rates")
-            val btcPrice = ratesObj.getString("USD").toDouble()
-            val btcThbVal = ratesObj.getString("THB").toDouble()
+    private const val TIMEOUT_MS = 8000
+    private const val SATS_PER_BTC = 100_000_000.0
+    private const val FALLBACK_BTC_CIRCULATION = 19_850_000.0
+    /** Last known Strategy (MSTR) holdings, used only until the first successful fetch. */
+    private const val FALLBACK_MSTR_BTC_HELD = 843_738.0
 
-            // 2. Fetch MSTR/USD (from Yahoo Finance in USD)
-            val mstrUrl = URL("https://query1.finance.yahoo.com/v8/finance/chart/MSTR")
-            val mstrConn = mstrUrl.openConnection() as HttpURLConnection
-            mstrConn.requestMethod = "GET"
-            mstrConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            mstrConn.connectTimeout = 8000
-            mstrConn.readTimeout = 8000
-            val mstrStream = mstrConn.inputStream
-            val mstrReader = BufferedReader(InputStreamReader(mstrStream))
-            val mstrResponse = mstrReader.use { it.readText() }
-            mstrConn.disconnect()
-
-            val mstrObj = JSONObject(mstrResponse)
-            val result = mstrObj.getJSONObject("chart").getJSONArray("result").getJSONObject(0)
-            val mstrPrice = result.getJSONObject("meta").getDouble("regularMarketPrice")
-
-            // 3. Fetch Block Height
-            val blockUrl = URL("https://mempool.space/api/blocks/tip/height")
-            val blockConn = blockUrl.openConnection() as HttpURLConnection
-            blockConn.requestMethod = "GET"
-            blockConn.connectTimeout = 8000
-            blockConn.readTimeout = 8000
-            val blockStream = blockConn.inputStream
-            val blockReader = BufferedReader(InputStreamReader(blockStream))
-            val blockResponse = blockReader.use { it.readText() }.trim()
-            blockConn.disconnect()
-
-            val height = blockResponse.toInt()
-
-            // Calculate metrics
-            val moscowTimeVal = if (btcPrice > 0) (100_000_000.0 / btcPrice).toInt() else 0
-            val mstrBtcRatio = if (btcPrice > 0) mstrPrice / btcPrice else 0.0
-
-            // 4. Fetch BTC in circulation
-            var circulationVal = 19850000.0
-            try {
-                val circUrl = URL("https://blockchain.info/q/totalbc")
-                val circConn = circUrl.openConnection() as HttpURLConnection
-                circConn.requestMethod = "GET"
-                circConn.connectTimeout = 8000
-                circConn.readTimeout = 8000
-                val circStream = circConn.inputStream
-                val circReader = BufferedReader(InputStreamReader(circStream))
-                val circResponse = circReader.use { it.readText() }.trim()
-                circConn.disconnect()
-                circulationVal = circResponse.toDouble() / 100_000_000.0
-            } catch (e: Exception) {
-                Log.e(TAG, "Error fetching circulating supply, using fallback", e)
-            }
-
-            // MSTR BTC held
-            val mstrBtcHeldVal = 843738.0
-
-            // 5. Fetch recommended fees from mempool.space
-            var fastestFeeVal = 1
-            var halfHourFeeVal = 1
-            var hourFeeVal = 1
-            try {
-                val feeUrl = URL("https://mempool.space/api/v1/fees/recommended")
-                val feeConn = feeUrl.openConnection() as HttpURLConnection
-                feeConn.requestMethod = "GET"
-                feeConn.connectTimeout = 8000
-                feeConn.readTimeout = 8000
-                val feeStream = feeConn.inputStream
-                val feeReader = BufferedReader(InputStreamReader(feeStream))
-                val feeResponse = feeReader.use { it.readText() }.trim()
-                feeConn.disconnect()
-
-                val feeObj = JSONObject(feeResponse)
-                fastestFeeVal = feeObj.getInt("fastestFee")
-                halfHourFeeVal = feeObj.getInt("halfHourFee")
-                hourFeeVal = feeObj.getInt("hourFee")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error fetching recommended fees", e)
-            }
-
-            // 6. Fetch difficulty retarget info
-            var diffChangeVal = 0.0
-            var diffProgressVal = 0.0
-            try {
-                val diffUrl = URL("https://mempool.space/api/v1/difficulty-adjustment")
-                val diffConn = diffUrl.openConnection() as HttpURLConnection
-                diffConn.requestMethod = "GET"
-                diffConn.connectTimeout = 8000
-                diffConn.readTimeout = 8000
-                val diffResponse = diffConn.inputStream.bufferedReader().use { it.readText() }
-                diffConn.disconnect()
-
-                val diffObj = JSONObject(diffResponse)
-                diffChangeVal = diffObj.getDouble("difficultyChange")
-                diffProgressVal = diffObj.getDouble("progressPercent")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error fetching difficulty adjustment", e)
-            }
-
-            // 7. Fetch network hashrate estimate (3d)
-            var hashrateVal = 0.0
-            try {
-                val hashUrl = URL("https://mempool.space/api/v1/mining/hashrate/3d")
-                val hashConn = hashUrl.openConnection() as HttpURLConnection
-                hashConn.requestMethod = "GET"
-                hashConn.connectTimeout = 8000
-                hashConn.readTimeout = 8000
-                val hashResponse = hashConn.inputStream.bufferedReader().use { it.readText() }
-                hashConn.disconnect()
-
-                val hashObj = JSONObject(hashResponse)
-                val rawHashrate = hashObj.getDouble("currentHashrate")
-                // Convert from H/s to EH/s
-                hashrateVal = rawHashrate / 1_000_000_000_000_000_000.0
-            } catch (e: Exception) {
-                Log.e(TAG, "Error fetching hashrate", e)
-            }
-
-            // 8. Fetch Lightning Network capacity
-            var lnCapacityVal = 0.0
-            try {
-                val lnUrl = URL("https://mempool.space/api/v1/lightning/statistics/latest")
-                val lnConn = lnUrl.openConnection() as HttpURLConnection
-                lnConn.requestMethod = "GET"
-                lnConn.connectTimeout = 8000
-                lnConn.readTimeout = 8000
-                val lnResponse = lnConn.inputStream.bufferedReader().use { it.readText() }
-                lnConn.disconnect()
-
-                val lnObj = JSONObject(lnResponse)
-                val totalCapSats = lnObj.getJSONObject("latest").getDouble("total_capacity")
-                // Convert Satoshis to BTC
-                lnCapacityVal = totalCapSats / 100_000_000.0
-            } catch (e: Exception) {
-                Log.e(TAG, "Error fetching lightning capacity", e)
-            }
-
-            PriceData(
-                btcUsd = btcPrice,
-                btcThb = btcThbVal,
-                moscowTime = moscowTimeVal,
-                mstrUsd = mstrPrice,
-                mstrBtc = mstrBtcRatio,
-                blockHeight = height,
-                mstrBtcHeld = mstrBtcHeldVal,
-                btcCirculation = circulationVal,
-                timestamp = System.currentTimeMillis(),
-                currency = "USD",
-                lastFetchSuccessful = true,
-                feeFastest = fastestFeeVal,
-                feeHalfHour = halfHourFeeVal,
-                feeHour = hourFeeVal,
-                difficultyChange = diffChangeVal,
-                difficultyProgress = diffProgressVal,
-                hashRate = hashrateVal,
-                lightningCapacity = lnCapacityVal
+    /**
+     * Fetches every data source in parallel. Each source fails independently:
+     * a failed source keeps its last cached value instead of discarding the whole update.
+     *
+     * Returns null only when the BTC price could not be fetched and nothing is cached.
+     */
+    suspend fun fetchPriceData(context: Context): PriceData? = withContext(Dispatchers.IO) {
+        val fresh = coroutineScope {
+            val rates = async { fetchSafely("exchange rates") { fetchRates() } }
+            val mstr = async { fetchSafely("MSTR price") { fetchMstrPrice() } }
+            val height = async { fetchSafely("block height") { fetchBlockHeight() } }
+            val circulation = async { fetchSafely("circulating supply") { fetchCirculation() } }
+            val fees = async { fetchSafely("recommended fees") { fetchFees() } }
+            val difficulty = async { fetchSafely("difficulty adjustment") { fetchDifficulty() } }
+            val hashRate = async { fetchSafely("hashrate") { fetchHashRate() } }
+            val lightning = async { fetchSafely("lightning capacity") { fetchLightningCapacity() } }
+            val mstrHeld = async { fetchSafely("MSTR holdings") { fetchMstrHoldings() } }
+            FetchResults(
+                rates = rates.await(),
+                mstrUsd = mstr.await(),
+                blockHeight = height.await(),
+                btcCirculation = circulation.await(),
+                fees = fees.await(),
+                difficulty = difficulty.await(),
+                hashRate = hashRate.await(),
+                lightningCapacity = lightning.await(),
+                mstrBtcHeld = mstrHeld.await()
             )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching price data", e)
-            val cached = getFromPrefs(context)
-            if (cached != null) {
-                cached.copy(lastFetchSuccessful = false, timestamp = System.currentTimeMillis())
-            } else {
-                null
-            }
+        }
+        mergeWithCache(fresh, getFromPrefs(context), System.currentTimeMillis())
+    }
+
+    data class Rates(val usd: Double, val thb: Double)
+    data class Fees(val fastest: Int, val halfHour: Int, val hour: Int)
+    data class Difficulty(val change: Double, val progress: Double)
+
+    /** Result of one refresh round; null means that source failed. */
+    data class FetchResults(
+        val rates: Rates? = null,
+        val mstrUsd: Double? = null,
+        val blockHeight: Int? = null,
+        val btcCirculation: Double? = null,
+        val fees: Fees? = null,
+        val difficulty: Difficulty? = null,
+        val hashRate: Double? = null,
+        val lightningCapacity: Double? = null,
+        val mstrBtcHeld: Double? = null
+    )
+
+    /**
+     * Combines freshly fetched values with the cache, field by field.
+     * The data counts as fresh (timestamp updated, no stale badge) only when the
+     * core sources — BTC price and block height — both succeeded.
+     */
+    fun mergeWithCache(fresh: FetchResults, cached: PriceData?, now: Long): PriceData? {
+        val btcUsd = fresh.rates?.usd ?: cached?.btcUsd ?: return null
+        val btcThb = fresh.rates?.thb ?: cached?.btcThb ?: 0.0
+        val mstrUsd = fresh.mstrUsd ?: cached?.mstrUsd ?: 0.0
+        val coreOk = fresh.rates != null && fresh.blockHeight != null
+
+        return PriceData(
+            btcUsd = btcUsd,
+            btcThb = btcThb,
+            moscowTime = if (btcUsd > 0) (SATS_PER_BTC / btcUsd).toInt() else 0,
+            mstrUsd = mstrUsd,
+            mstrBtc = if (btcUsd > 0) mstrUsd / btcUsd else 0.0,
+            blockHeight = fresh.blockHeight ?: cached?.blockHeight ?: 0,
+            mstrBtcHeld = fresh.mstrBtcHeld
+                ?: cached?.mstrBtcHeld?.takeIf { it > 0 }
+                ?: FALLBACK_MSTR_BTC_HELD,
+            btcCirculation = fresh.btcCirculation ?: cached?.btcCirculation ?: FALLBACK_BTC_CIRCULATION,
+            timestamp = if (coreOk || cached == null) now else cached.timestamp,
+            currency = cached?.currency ?: "USD",
+            lastFetchSuccessful = coreOk,
+            feeFastest = fresh.fees?.fastest ?: cached?.feeFastest ?: 1,
+            feeHalfHour = fresh.fees?.halfHour ?: cached?.feeHalfHour ?: 1,
+            feeHour = fresh.fees?.hour ?: cached?.feeHour ?: 1,
+            difficultyChange = fresh.difficulty?.change ?: cached?.difficultyChange ?: 0.0,
+            difficultyProgress = fresh.difficulty?.progress ?: cached?.difficultyProgress ?: 0.0,
+            hashRate = fresh.hashRate ?: cached?.hashRate ?: 0.0,
+            lightningCapacity = fresh.lightningCapacity ?: cached?.lightningCapacity ?: 0.0
+        )
+    }
+
+    private inline fun <T> fetchSafely(name: String, block: () -> T): T? = try {
+        block()
+    } catch (e: Exception) {
+        Log.e(TAG, "Error fetching $name", e)
+        null
+    }
+
+    private fun httpGet(url: String, userAgent: String? = null): String {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "GET"
+            conn.connectTimeout = TIMEOUT_MS
+            conn.readTimeout = TIMEOUT_MS
+            if (userAgent != null) conn.setRequestProperty("User-Agent", userAgent)
+            val code = conn.responseCode
+            if (code !in 200..299) throw IOException("HTTP $code from $url")
+            return conn.inputStream.bufferedReader().use { it.readText() }.trim()
+        } finally {
+            conn.disconnect()
         }
     }
+
+    private fun fetchRates(): Rates {
+        val rates = JSONObject(httpGet("https://api.coinbase.com/v2/exchange-rates?currency=BTC"))
+            .getJSONObject("data").getJSONObject("rates")
+        return Rates(usd = rates.getString("USD").toDouble(), thb = rates.getString("THB").toDouble())
+    }
+
+    private fun fetchMstrPrice(): Double {
+        val response = httpGet(
+            "https://query1.finance.yahoo.com/v8/finance/chart/MSTR",
+            userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        return JSONObject(response).getJSONObject("chart").getJSONArray("result")
+            .getJSONObject(0).getJSONObject("meta").getDouble("regularMarketPrice")
+    }
+
+    private fun fetchBlockHeight(): Int =
+        httpGet("https://mempool.space/api/blocks/tip/height").toInt()
+
+    private fun fetchCirculation(): Double =
+        httpGet("https://blockchain.info/q/totalbc").toDouble() / SATS_PER_BTC
+
+    private fun fetchFees(): Fees {
+        val obj = JSONObject(httpGet("https://mempool.space/api/v1/fees/recommended"))
+        return Fees(obj.getInt("fastestFee"), obj.getInt("halfHourFee"), obj.getInt("hourFee"))
+    }
+
+    private fun fetchDifficulty(): Difficulty {
+        val obj = JSONObject(httpGet("https://mempool.space/api/v1/difficulty-adjustment"))
+        return Difficulty(obj.getDouble("difficultyChange"), obj.getDouble("progressPercent"))
+    }
+
+    /** Network hashrate estimate (3d), converted from H/s to EH/s. */
+    private fun fetchHashRate(): Double =
+        JSONObject(httpGet("https://mempool.space/api/v1/mining/hashrate/3d"))
+            .getDouble("currentHashrate") / 1e18
+
+    /** Strategy (MSTR) bitcoin holdings from CoinGecko's public treasury list. */
+    private fun fetchMstrHoldings(): Double {
+        val companies = JSONObject(httpGet("https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin"))
+            .getJSONArray("companies")
+        for (i in 0 until companies.length()) {
+            val company = companies.getJSONObject(i)
+            if (company.optString("symbol").startsWith("MSTR")) {
+                return company.getDouble("total_holdings").also { require(it > 0) }
+            }
+        }
+        throw IOException("MSTR not found in treasury list")
+    }
+
+    /** Public Lightning capacity, converted from sats to BTC. */
+    private fun fetchLightningCapacity(): Double =
+        JSONObject(httpGet("https://mempool.space/api/v1/lightning/statistics/latest"))
+            .getJSONObject("latest").getDouble("total_capacity") / SATS_PER_BTC
 
     fun saveToPrefs(context: Context, data: PriceData) {
         val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

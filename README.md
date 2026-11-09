@@ -17,9 +17,9 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by the
   - 💬 **Quotes Widget** — Rotates classic, inspiring Cypherpunk and Bitcoin quotes (Satoshi Nakamoto, Hal Finney, Eric Hughes).
   - ⏳ **Halving Countdown Progress Bar** — Renders a block-filled ASCII progress bar (`[████████░░░░░░░]`) showing percent progress, blocks remaining, or estimated days.
 - **Tap to Cycle**: Tap the widgets to cycle through modes or quotes on the fly.
-- **Custom Refresh Intervals**: Configure background updates (15m, 30m, 60m) inside settings to optimize battery life. Reschedules automatically on device boot.
+- **Custom Refresh Intervals**: Configure background updates (15m, 30m, 60m) inside settings to optimize battery life. Powered by WorkManager: Doze-friendly, runs only when online, and survives reboots.
 - **Haptic Feedback**: Soft vibration feedback on taps confirms mode selection changes. Respects global toggle.
-- **Stale Data Warning Badge**: Displays a warning icon `(!)` if a background update fails.
+- **Stale Data Warning Badge**: Displays a warning icon `(!)` if the BTC price or block height could not be refreshed. Other sources fail independently and keep their last known value.
 - **Dynamic Dashboard Previews**: Settings app preview reflects your active theme in real-time.
 
 ### 2. The 13 Information Modes (Blockclock Widget)
@@ -58,9 +58,9 @@ Seamlessly switch styles. The selected theme applies instantly to both your in-a
 ## 🛠️ Tech Stack & Architecture
 
 - **Core UI**: [Jetpack Compose](https://developer.android.com/jetpack/compose) & Material Design 3.
-- **Background scheduling**: [AlarmManager](https://developer.android.com/reference/android/app/AlarmManager) with `BOOT_COMPLETED` reboot persistence.
+- **Background scheduling**: [WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager) periodic work with a network constraint and exponential backoff retries.
 - **Widget Engine**: Standard Android `AppWidgetProvider` paired with custom remote views tinting.
-- **Concurrency & Network**: Kotlin Coroutines for asynchronous networking.
+- **Concurrency & Network**: Kotlin Coroutines; all API sources are fetched in parallel and merged per-field with the cache.
 - **Storage**: `SharedPreferences` for caching widget modes, selected themes, and API data.
 - **API Integrations**:
   - **Coinbase Spot API** (BTC Price & THB Rate)

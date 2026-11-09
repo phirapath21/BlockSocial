@@ -6,17 +6,10 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
 import android.os.Build
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.view.View
 import android.widget.RemoteViews
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.util.Locale
 
 class BtcWidgetProvider : AppWidgetProvider() {
@@ -32,49 +25,19 @@ class BtcWidgetProvider : AppWidgetProvider() {
             data: PriceData
         ) {
             val mode = getWidgetMode(context, appWidgetId)
-            val theme = getWidgetTheme(context)
             val layoutId = R.layout.btc_widget_blockclock
             val views = RemoteViews(context.packageName, layoutId)
 
-            // Theme colors and background resource mapping
-            val bgResId: Int
-            val labelColor: Int
-            val valueColor: Int
-            val subTextColor: Int
-            val dividerColor: Int
-
-            when (theme) {
-                1 -> { // White / Light Theme
-                    bgResId = R.drawable.widget_background_ios_light
-                    labelColor = 0xFF8E8E93.toInt()
-                    valueColor = 0xFF000000.toInt()
-                    subTextColor = 0xFF8E8E93.toInt()
-                    dividerColor = 0xFF007AFF.toInt() // System Blue
-                }
-                9 -> { // Orange Pill Theme
-                    bgResId = R.drawable.widget_background_ios_orange
-                    labelColor = 0xFFA66210.toInt()
-                    valueColor = 0xFFF7931A.toInt()
-                    subTextColor = 0xFFA66210.toInt()
-                    dividerColor = 0xFFF7931A.toInt() // Bitcoin Orange
-                }
-                else -> { // Dark Theme (Default/Theme 0)
-                    bgResId = R.drawable.widget_background_ios_dark
-                    labelColor = 0xFF8E8E93.toInt()
-                    valueColor = 0xFFFFFFFF.toInt()
-                    subTextColor = 0xFF8E8E93.toInt()
-                    dividerColor = 0xFF007AFF.toInt() // System Blue
-                }
-            }
+            val style = WidgetStyle.current(context)
 
             // Apply theme styles to views
-            views.setInt(R.id.widget_root, "setBackgroundResource", bgResId)
-            views.setTextColor(R.id.txt_blockclock_label_top, labelColor)
-            views.setTextColor(R.id.txt_blockclock_label_bottom, labelColor)
-            views.setTextColor(R.id.txt_blockclock_value, valueColor)
-            views.setTextColor(R.id.txt_blockclock_suffix, labelColor)
-            views.setTextColor(R.id.txt_blockclock_sub, subTextColor)
-            views.setInt(R.id.lbl_divider, "setBackgroundColor", dividerColor)
+            views.setInt(R.id.widget_root, "setBackgroundResource", style.background)
+            views.setTextColor(R.id.txt_blockclock_label_top, style.labelColor)
+            views.setTextColor(R.id.txt_blockclock_label_bottom, style.labelColor)
+            views.setTextColor(R.id.txt_blockclock_value, style.valueColor)
+            views.setTextColor(R.id.txt_blockclock_suffix, style.labelColor)
+            views.setTextColor(R.id.txt_blockclock_sub, style.subTextColor)
+            views.setInt(R.id.lbl_divider, "setBackgroundColor", style.dividerColor)
 
             // Bind data based on active mode
             val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
@@ -324,11 +287,6 @@ class BtcWidgetProvider : AppWidgetProvider() {
             prefs.edit().putInt("mode_$appWidgetId", mode).apply()
         }
 
-        private fun getWidgetTheme(context: Context): Int {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            return prefs.getInt("blockclock_theme", 10) // Default to 10 (Android 16 Dynamic Theme)
-        }
-
         private fun getNextActiveMode(context: Context, currentMode: Int): Int {
             val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
             for (i in 1..13) {
@@ -340,48 +298,17 @@ class BtcWidgetProvider : AppWidgetProvider() {
             return currentMode
         }
 
-        fun triggerVibration(context: Context) {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            if (!prefs.getBoolean("haptic_enabled", true)) {
-                return
-            }
-            try {
-                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                    vibratorManager?.defaultVibrator
-                } else {
-                    @Suppress("DEPRECATION")
-                    context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                }
-
-                if (vibrator != null && vibrator.hasVibrator()) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        val effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
-                        val audioAttributes = AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                            .build()
-                        vibrator.vibrate(effect, audioAttributes)
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        val effect = VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
-                        val audioAttributes = AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                            .build()
-                        vibrator.vibrate(effect, audioAttributes)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        vibrator.vibrate(50)
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore vibration errors if permission or hardware fails
-            }
-        }
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        triggerRefresh(context)
+        // Draw cached data immediately, then fetch fresh data in the background.
+        PriceRepository.getFromPrefs(context)?.let { data ->
+            for (id in appWidgetIds) {
+                updateWidgetLayout(context, appWidgetManager, id, data)
+            }
+        }
+        WidgetRefreshScheduler.schedulePeriodic(context)
+        WidgetRefreshScheduler.refreshNow(context)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -390,7 +317,7 @@ class BtcWidgetProvider : AppWidgetProvider() {
         val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
 
         if (action == ACTION_NEXT_MODE) {
-            triggerVibration(context)
+            Haptics.click(context)
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
                 val currentMode = getWidgetMode(context, appWidgetId)
                 val nextMode = getNextActiveMode(context, currentMode)
@@ -404,18 +331,7 @@ class BtcWidgetProvider : AppWidgetProvider() {
                 }
             }
         } else if (action == ACTION_REFRESH) {
-            val pendingResult = goAsync()
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    val data = PriceRepository.fetchPriceData(context)
-                    if (data != null) {
-                        PriceRepository.saveToPrefs(context, data)
-                        WidgetUpdater.updateAllWidgets(context)
-                    }
-                } finally {
-                    pendingResult.finish()
-                }
-            }
+            WidgetRefreshScheduler.refreshNow(context)
         }
     }
 
@@ -430,20 +346,13 @@ class BtcWidgetProvider : AppWidgetProvider() {
         updateWidgetLayout(context, appWidgetManager, appWidgetId, data)
     }
 
-    private fun triggerRefresh(context: Context) {
-        val intent = Intent(context, BtcWidgetProvider::class.java).apply {
-            action = ACTION_REFRESH
-        }
-        context.sendBroadcast(intent)
-    }
-
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        WidgetAlarmManager.scheduleAlarm(context)
+        WidgetRefreshScheduler.schedulePeriodic(context)
     }
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        WidgetAlarmManager.checkAndCancelAlarmIfNeeded(context)
+        WidgetRefreshScheduler.cancelIfNoWidgets(context)
     }
 }
