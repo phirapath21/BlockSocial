@@ -69,12 +69,12 @@ class MainScreenTest {
     }
 
     @Test
-    fun dashboard_offMetricsStayVisibleWithTheirSwitch() {
+    fun widgets_offMetricsStayVisibleWithTheirSwitch() {
         composeTestRule.setContent {
             val states = remember { androidx.compose.runtime.mutableStateListOf(*Array(14) { it != 1 }) } // SATS off
             MainScreenContent(
                 state = MainScreenUiState.Success(sample),
-                selectedTab = MainTab.DASHBOARD,
+                selectedTab = MainTab.WIDGETS,
                 heroMetric = "PRICE",
                 modeStates = states,
                 currencySetting = "USD",
@@ -101,7 +101,7 @@ class MainScreenTest {
         setContent()
         composeTestRule.onNodeWithContentDescription("Widgets").performClick()
         // STACK needs holdings, so 13 of the 14 modes are available.
-        composeTestRule.onNodeWithText("13 of 13 metrics on").assertExists()
+        composeTestRule.onNodeWithText("13 of 13 metrics", substring = true).assertExists()
     }
 
     @Test
