@@ -44,6 +44,8 @@ The widgets and the app share one look, modelled on small e-ink blockclock hardw
 - **Black device body** with a row of **individual e-ink screens**, one character per screen.
 - **Stacked label screen** on the left (e.g. `BTC` over `USD`) and an optional **unit screen** on the right (e.g. `MIL`, `EH/S`).
 - Values are padded with blank screens to a seven-screen device; decimal points ride with their digit.
+- The device is painted as one image, so its proportions stay correct at every widget size; the app uses the same painter.
+- Dots under the screens show which mode you are on; tap the widget to cycle.
 - **Moscow Time** reads like a clock face (1,029 sats → `10:29`).
 - Halving widget adds a thin e-ink **epoch progress bar**; the Quotes widget is a single large e-ink screen.
 

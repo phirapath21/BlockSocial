@@ -1,41 +1,62 @@
 package com.example.btcwidget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.media.AudioAttributes
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.view.View
 import android.widget.RemoteViews
+import kotlin.math.sqrt
 
 internal const val WIDGET_PREFS = "blockclock_prefs"
 
-/** Draws a [BlockclockDisplay] into the tile row of a widget layout. */
-object TileRenderer {
-    fun render(context: Context, views: RemoteViews, display: BlockclockDisplay, stale: Boolean) {
-        views.removeAllViews(R.id.tile_row)
-        views.addView(R.id.tile_row, labelTile(context, display.labelTop, display.labelBottom))
-        for (tile in display.valueTiles()) {
-            val tileViews = RemoteViews(context.packageName, R.layout.widget_tile)
-            tileViews.setTextViewText(R.id.tile_text, tile)
-            views.addView(R.id.tile_row, tileViews)
+/** Paints a blockclock into a bitmap sized for one widget instance. */
+object WidgetBitmapRenderer {
+    /** Stays well under the binder limit for RemoteViews bitmaps (~720 KB ARGB). */
+    private const val MAX_PIXELS = 180_000f
+
+    fun render(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        views: RemoteViews,
+        scene: BlockclockScene
+    ) {
+        val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+        // Portrait size: min width x max height (dp). Fall back to a 2x1 cell.
+        val widthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).takeIf { it > 0 } ?: 250
+        val heightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).takeIf { it > 0 } ?: 110
+        val density = context.resources.displayMetrics.density
+
+        // Bitmap with the device's own aspect ratio, as large as the widget allows.
+        val aspect = BlockclockPainter.aspectRatio(scene)
+        var w = widthDp * density
+        var h = heightDp * density
+        if (w / h > aspect) w = h * aspect else h = w / aspect
+        val pixels = w * h
+        if (pixels > MAX_PIXELS) {
+            val scale = sqrt(MAX_PIXELS / pixels)
+            w *= scale
+            h *= scale
         }
-        if (display.suffix.isNotEmpty()) {
-            views.addView(R.id.tile_row, labelTile(context, display.suffix, ""))
-        }
-        views.setTextViewText(R.id.txt_caption, display.caption)
-        views.setViewVisibility(R.id.txt_warning, if (stale) View.VISIBLE else View.GONE)
+
+        val bitmap = Bitmap.createBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        BlockclockPainter.paint(AndroidDrawSurface(Canvas(bitmap)), bitmap.width.toFloat(), bitmap.height.toFloat(), scene)
+        views.setImageViewBitmap(R.id.widget_image, bitmap)
+        views.setContentDescription(R.id.widget_image, describe(scene))
     }
 
-    private fun labelTile(context: Context, top: String, bottom: String): RemoteViews =
-        RemoteViews(context.packageName, R.layout.widget_tile_label).apply {
-            setTextViewText(R.id.tile_label_top, top)
-            setTextViewText(R.id.tile_label_bottom, bottom)
-            val hasBottom = if (bottom.isEmpty()) View.GONE else View.VISIBLE
-            setViewVisibility(R.id.tile_label_bottom, hasBottom)
-            setViewVisibility(R.id.tile_label_divider, hasBottom)
-        }
+    /** Spoken description for TalkBack, e.g. "BTC USD 74020. Market price of bitcoin". */
+    private fun describe(scene: BlockclockScene): String {
+        val d = scene.display
+        val parts = listOf(d.labelTop, d.labelBottom, d.value, d.suffix).filter { it.isNotEmpty() }
+        val stale = if (scene.stale) " Data may be out of date." else ""
+        return parts.joinToString(" ") + ". " + d.caption + "." + stale
+    }
 }
 
 /** Soft click feedback for widget taps; respects the in-app haptics toggle. */

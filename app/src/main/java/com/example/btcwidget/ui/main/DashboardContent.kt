@@ -83,7 +83,6 @@ fun DashboardContent(
         // Hero device: taller screens than the list below.
         EInkDevice(
             display = BlockclockMetrics.forKey(heroMetric, data, currencySetting),
-            tileAspect = 0.62f,
             stale = !data.lastFetchSuccessful
         )
 
@@ -114,7 +113,7 @@ fun DashboardContent(
             if (enabled && key != heroMetric) {
                 EInkDevice(
                     display = BlockclockMetrics.forMode(index, data, currencySetting),
-                    tileAspect = 0.9f,
+                    modifier = Modifier.padding(horizontal = 18.dp),
                     progress = if (key == "HALVING") {
                         BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
                     } else {

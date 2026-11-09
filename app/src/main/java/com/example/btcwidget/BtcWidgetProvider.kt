@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.View
 import android.widget.RemoteViews
 
 class BtcWidgetProvider : AppWidgetProvider() {
@@ -25,11 +24,23 @@ class BtcWidgetProvider : AppWidgetProvider() {
         ) {
             val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
             val currency = prefs.getString("currency", "USD") ?: "USD"
-            val display = BlockclockMetrics.forMode(getWidgetMode(context, appWidgetId), data, currency)
+            val mode = getWidgetMode(context, appWidgetId)
+            val display = BlockclockMetrics.forMode(mode, data, currency)
+            val enabledModes = (0 until BlockclockMetrics.MODE_COUNT).filter { prefs.getBoolean("mode_enabled_$it", true) }
+            val scene = BlockclockScene(
+                display = display,
+                stale = !data.lastFetchSuccessful,
+                progress = if (BlockclockMetrics.MODE_KEYS[mode.coerceIn(0, BlockclockMetrics.MODE_COUNT - 1)] == "HALVING") {
+                    BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
+                } else {
+                    null
+                },
+                modeIndex = enabledModes.indexOf(mode),
+                modeCount = enabledModes.size
+            )
 
             val views = RemoteViews(context.packageName, R.layout.btc_widget_blockclock)
-            TileRenderer.render(context, views, display, stale = !data.lastFetchSuccessful)
-            views.setViewVisibility(R.id.progress_bar, View.GONE)
+            WidgetBitmapRenderer.render(context, appWidgetManager, appWidgetId, views, scene)
 
             // Tapping anywhere on the device cycles to the next enabled mode.
             views.setOnClickPendingIntent(R.id.widget_root, getPendingSelfIntent(context, appWidgetId, ACTION_NEXT_MODE))
