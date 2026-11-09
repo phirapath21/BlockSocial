@@ -168,6 +168,7 @@ object BlockclockMetrics {
     }
 
     private const val HALVING_INTERVAL = 210_000
+    private const val RETARGET_INTERVAL = 2_016
     private const val BLOCKS_PER_DAY = 144.0
 
     fun forKey(key: String, data: PriceData, currency: String, stackSats: Long = 0): BlockclockDisplay =
@@ -244,6 +245,9 @@ object BlockclockMetrics {
     }
 
     fun blocksToHalving(blockHeight: Int): Int = HALVING_INTERVAL - (blockHeight % HALVING_INTERVAL)
+
+    /** Blocks until the next difficulty adjustment (every 2,016 blocks). */
+    fun blocksToRetarget(blockHeight: Int): Int = RETARGET_INTERVAL - (blockHeight % RETARGET_INTERVAL)
 
     fun halvingProgress(blockHeight: Int): Double =
         (blockHeight % HALVING_INTERVAL).toDouble() / HALVING_INTERVAL

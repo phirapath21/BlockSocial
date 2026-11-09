@@ -30,8 +30,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
@@ -66,7 +64,6 @@ fun WidgetsScreen(
     modifier: Modifier = Modifier
 ) {
     val hasStack = stackSats > 0
-    val haptics = LocalHapticFeedback.current
 
     // Working copy so the grid reflows instantly while dragging; saved on drop.
     var workingOrder by remember { mutableStateOf(BlockclockMetrics.sanitizeOrder(order)) }
@@ -84,7 +81,6 @@ fun WidgetsScreen(
         val fromKey = from.key as? String ?: return@rememberReorderableLazyGridState
         val toKey = to.key as? String ?: return@rememberReorderableLazyGridState
         workingOrder = BlockclockMetrics.move(workingOrder, fromKey, toKey)
-        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
 
     LazyVerticalGrid(
@@ -101,8 +97,8 @@ fun WidgetsScreen(
             EInkPanel(title = "Add a widget") {
                 Step(1, "Long-press an empty spot on your home screen.")
                 Step(2, "Open Widgets and find Blockface.")
-                Step(3, "Drag Bitcoin metrics, Halving countdown or Bitcoin quotes onto the screen, then pick what it shows.")
-                Step(4, "Tap a widget to cycle modes. On Android 12+, long-press it to choose again.")
+                Step(3, "Drag Bitcoin metrics, Price chart, Halving countdown or Bitcoin quotes onto the screen.")
+                Step(4, "Tap Bitcoin metrics to cycle modes, or the chart to switch 24H / 7D.")
             }
         }
 
@@ -194,7 +190,6 @@ fun WidgetsScreen(
                                 .shadow(elevation, CardShape)
                                 .then(if (isDragging) Modifier.border(1.dp, EInk.Label, CardShape) else Modifier)
                                 .longPressDraggableHandle(
-                                    onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
                                     onDragStopped = { onOrderChange(workingOrder) }
                                 )
                                 .semantics {

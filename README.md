@@ -16,11 +16,11 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 - **Resizable Layouts**: Widgets default to a 2x1 grid size but can be resized freely (horizontally and vertically) on your launcher.
 - **Three Unique Widget Types**:
   - 🪙 **Bitcoin Metrics Widget** — Cycles through 13 active Bitcoin/MSTR price and network metrics.
+  - 📈 **Price Chart Widget** — BTC price, change and a 24H / 7D sparkline; tap to switch range.
   - 💬 **Quotes Widget** — Rotates classic, inspiring Cypherpunk and Bitcoin quotes (Satoshi Nakamoto, Hal Finney, Eric Hughes).
   - ⏳ **Halving Countdown Progress Bar** — Renders a block-filled ASCII progress bar (`[████████░░░░░░░]`) showing percent progress, blocks remaining, or estimated days.
 - **Tap to Cycle**: Tap the widgets to cycle through modes or quotes on the fly.
 - **Custom Refresh Intervals**: Configure background updates (15m, 30m, 60m) inside settings to optimize battery life. Powered by WorkManager: Doze-friendly, runs only when online, and survives reboots.
-- **Haptic Feedback**: Soft vibration feedback on taps confirms mode selection changes. Respects global toggle.
 - **Stale Data Warning Badge**: Displays a warning icon `(!)` if the BTC price or block height could not be refreshed. Other sources fail independently and keep their last known value.
 
 ### 2. The 13 Information Modes (Bitcoin Metrics Widget)
@@ -42,7 +42,7 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 Four tabs along the bottom:
 - **Dashboard** — a hero panel (STACK / BLOCK / PRICE / SATS / FEES) and a BTC price chart (24H / 7D, drag to read any hour). Pull down to refresh.
 - **Widgets** — how to add widgets, then every metric as a panel in four collapsible sections (**Market**, **Network**, **Supply & Lightning**, **Strategy (MSTR)**, plus **Your stack**). Each panel has an **On widget** switch; hold and drag a panel to reorder it within its section — that order is the order widget taps cycle through.
-- **Settings** — your stack, display currency, refresh interval, **data sources** (BTC price from Coinbase or Kraken; THB converted or from Bitkub), haptics and about.
+- **Settings** — your stack, display currency, refresh interval, **data sources** (BTC price from Coinbase or Kraken; THB converted or from Bitkub) and about.
 
 ### 3a. Your Stack
 - Enter how much bitcoin you hold (in BTC or sats) under **Settings > Your stack**; it is stored only on the device.
@@ -50,6 +50,7 @@ Four tabs along the bottom:
 
 ### 3b. Price Alerts
 - **BTC rises above / falls below** a price (USD or THB) and **fees at or below** a sat/vB level, set in Settings.
+- **Network events:** a day before the next halving and before each difficulty adjustment (with the estimated change).
 - Notifies once per crossing, then re-arms when the condition turns false again; stale data never triggers an alert.
 - Checked with each background refresh (15/30/60 min), even with no widget on the home screen. Android 13+ asks for notification permission when you switch an alert on.
 
@@ -79,6 +80,8 @@ The widgets and the app share one look: a **dark grained panel** with **tall con
 ---
 
 ## 📦 Release Build
+
+Step-by-step guide: [`docs/RELEASE.md`](docs/RELEASE.md). Store listing text, graphics and policy-form answers: [`docs/play-store/`](docs/play-store/). Privacy policy: [`docs/privacy-policy.md`](docs/privacy-policy.md).
 
 - **Application ID:** `io.github.phirapath21.btcwidget` (the Kotlin package stays `com.example.btcwidget`).
 - **Signing:** create a keystore, then add a git-ignored `keystore.properties` at the project root:

@@ -84,7 +84,8 @@ object WidgetRefreshScheduler {
         val providers = listOf(
             BtcWidgetProvider::class.java,
             BtcQuoteWidgetProvider::class.java,
-            BtcHalvingWidgetProvider::class.java
+            BtcHalvingWidgetProvider::class.java,
+            BtcChartWidgetProvider::class.java
         )
         val hasWidgets = providers.any {
             manager.getAppWidgetIds(ComponentName(context, it)).isNotEmpty()

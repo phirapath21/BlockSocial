@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
@@ -20,6 +21,7 @@ class AndroidDrawSurface(
     private val condensed: Typeface
 ) : DrawSurface {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG)
     private val rect = RectF()
     private val bounds = Rect()
@@ -70,6 +72,28 @@ class AndroidDrawSurface(
             DrawSurface.Align.RIGHT -> Paint.Align.RIGHT
         }
         canvas.drawText(text, x, baseline, paint)
+    }
+
+    override fun polyline(xs: FloatArray, ys: FloatArray, color: Int, width: Float) {
+        if (xs.size < 2) return
+        stroke.color = color
+        stroke.strokeWidth = width
+        stroke.strokeCap = Paint.Cap.ROUND
+        stroke.strokeJoin = Paint.Join.ROUND
+        canvas.drawPath(path(xs, ys, close = false), stroke)
+    }
+
+    override fun polygon(xs: FloatArray, ys: FloatArray, color: Int) {
+        if (xs.size < 3) return
+        fill.shader = null
+        fill.color = color
+        canvas.drawPath(path(xs, ys, close = true), fill)
+    }
+
+    private fun path(xs: FloatArray, ys: FloatArray, close: Boolean) = Path().apply {
+        moveTo(xs[0], ys[0])
+        for (i in 1 until xs.size) lineTo(xs[i], ys[i])
+        if (close) close()
     }
 
     override fun measure(text: String, font: DrawSurface.Font, size: Float, tracking: Float): Float =

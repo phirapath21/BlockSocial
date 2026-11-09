@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.btcwidget.theme.BTCWidgetTheme
+import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.PriceData
 import java.util.*
 
@@ -32,13 +33,11 @@ fun MainScreenPreview() {
             state = MainScreenUiState.Success(sampleData),
             selectedTab = MainTab.DASHBOARD,
             heroMetric = "BLOCK",
-            modeStates = List(13) { true },
+            modeStates = List(BlockclockMetrics.MODE_COUNT) { true },
             currencySetting = "USD",
             onCurrencySelected = {},
             refreshInterval = 30,
             onRefreshIntervalSelected = {},
-            hapticEnabled = true,
-            onHapticToggle = {},
             onHeroMetricSelected = {},
             onTabSelected = {},
             onModeToggle = { _, _ -> },
@@ -71,13 +70,11 @@ fun MainScreenSettingsPreview() {
             state = MainScreenUiState.Success(sampleData),
             selectedTab = MainTab.SETTINGS,
             heroMetric = "BLOCK",
-            modeStates = List(13) { true },
+            modeStates = List(BlockclockMetrics.MODE_COUNT) { true },
             currencySetting = "USD",
             onCurrencySelected = {},
             refreshInterval = 30,
             onRefreshIntervalSelected = {},
-            hapticEnabled = true,
-            onHapticToggle = {},
             onHeroMetricSelected = {},
             onTabSelected = {},
             onModeToggle = { _, _ -> },

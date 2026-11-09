@@ -15,7 +15,7 @@ object AlertStore {
         return AlertKind.entries.map { kind ->
             AlertRule(
                 kind = kind,
-                threshold = p.getString("${kind.name}_threshold", null)?.toDoubleOrNull() ?: 0.0,
+                threshold = p.getString("${kind.name}_threshold", null)?.toDoubleOrNull() ?: kind.defaultThreshold,
                 currency = p.getString("${kind.name}_currency", "USD") ?: "USD",
                 enabled = p.getBoolean("${kind.name}_enabled", false)
             )

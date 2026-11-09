@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.main
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.PriceData
 import com.example.btcwidget.alerts.AlertKind
 import com.example.btcwidget.alerts.AlertRule
@@ -58,7 +60,7 @@ fun AlertsScreen(
         }
 
         EInkPanel(title = "Price") {
-            alerts.filter { it.kind != AlertKind.FEE_AT_OR_BELOW }.forEach { rule ->
+            alerts.filter { it.kind == AlertKind.PRICE_ABOVE || it.kind == AlertKind.PRICE_BELOW }.forEach { rule ->
                 AlertRow(rule = rule, currency = currencySetting, onChange = onAlertChange)
             }
         }
@@ -68,6 +70,14 @@ fun AlertsScreen(
         EInkPanel(title = "Fees") {
             alerts.filter { it.kind == AlertKind.FEE_AT_OR_BELOW }.forEach { rule ->
                 AlertRow(rule = rule, currency = currencySetting, onChange = onAlertChange)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        EInkPanel(title = "Network events") {
+            alerts.filter { it.kind.isNetworkEvent }.forEach { rule ->
+                NetworkEventRow(rule = rule, data = data, onChange = onAlertChange)
             }
         }
 
@@ -111,6 +121,8 @@ private fun AlertRow(rule: AlertRule, currency: String, onChange: (AlertRule) ->
         AlertKind.PRICE_ABOVE -> "BTC rises above"
         AlertKind.PRICE_BELOW -> "BTC falls below"
         AlertKind.FEE_AT_OR_BELOW -> "Fees at or below"
+        // Network events use NetworkEventRow.
+        AlertKind.HALVING_SOON, AlertKind.RETARGET_SOON -> rule.kind.name
     }
     // A price alert set in the other currency is shown as such until edited.
     val ruleCurrency = if (isFee || !rule.enabled) currency else rule.currency
@@ -170,3 +182,27 @@ private fun AlertRow(rule: AlertRule, currency: String, onChange: (AlertRule) ->
         )
     }
 }
+
+/** On/off alert for a network event, with how far away it is now. */
+@Composable
+private fun NetworkEventRow(rule: AlertRule, data: PriceData?, onChange: (AlertRule) -> Unit) {
+    val (label, note) = when (rule.kind) {
+        AlertKind.HALVING_SOON -> "A day before the halving" to data?.let {
+            val left = BlockclockMetrics.blocksToHalving(it.blockHeight)
+            String.format(Locale.US, "Next in %,d blocks (≈ %,.0f days)", left, left / AlertKind.BLOCKS_PER_DAY.toDouble())
+        }
+        else -> "A day before a difficulty adjustment" to data?.let {
+            val left = BlockclockMetrics.blocksToRetarget(it.blockHeight)
+            val change = BlockclockMetrics.formatChange(it.difficultyChange)
+            String.format(Locale.US, "Next in %,d blocks", left) + (change?.let { c -> " · est. $c" } ?: "")
+        }
+    }
+    SettingRow(
+        label = label,
+        note = note,
+        modifier = Modifier.clickable { onChange(rule.copy(enabled = !rule.enabled)) }
+    ) {
+        EInkSwitch(checked = rule.enabled, onCheckedChange = { onChange(rule.copy(enabled = it)) })
+    }
+}
+

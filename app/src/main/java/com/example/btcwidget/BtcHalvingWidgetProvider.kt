@@ -67,10 +67,13 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        val data = PriceRepository.getFromPrefs(context) ?: return
+        val data = PriceRepository.getFromPrefs(context)
         for (id in appWidgetIds) {
-            updateWidgetLayout(context, appWidgetManager, id, data)
+            if (data != null) updateWidgetLayout(context, appWidgetManager, id, data)
+            else WidgetPlaceholder.show(context, appWidgetManager, id)
         }
+        WidgetRefreshScheduler.schedulePeriodic(context)
+        WidgetRefreshScheduler.refreshNow(context)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -79,7 +82,6 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
         val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
 
         if (action == ACTION_NEXT_MODE) {
-            Haptics.click(context)
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
                 val currentMode = getWidgetMode(context, appWidgetId)
                 val nextMode = (currentMode + 1) % 3
@@ -109,7 +111,8 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
         newOptions: Bundle
     ) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        val data = PriceRepository.getFromPrefs(context) ?: return
+        val data = PriceRepository.getFromPrefs(context)
+            ?: return WidgetPlaceholder.show(context, appWidgetManager, appWidgetId)
         updateWidgetLayout(context, appWidgetManager, appWidgetId, data)
     }
 
