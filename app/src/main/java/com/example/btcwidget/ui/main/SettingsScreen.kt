@@ -71,12 +71,18 @@ fun SettingsScreen(
 
         EInkPanel(title = "Widget modes") {
             BlockclockMetrics.MODE_NAMES.forEachIndexed { index, name ->
-                val checked = modeStates.getOrElse(index) { true }
+                val available = BlockclockMetrics.isAvailable(index, currencySetting)
+                val checked = available && modeStates.getOrElse(index) { true }
                 SettingRow(
                     label = name,
-                    modifier = Modifier.clickable { onModeToggle(index, !checked) }
+                    note = if (available) null else "USD only · off while THB is selected",
+                    modifier = if (available) Modifier.clickable { onModeToggle(index, !checked) } else Modifier
                 ) {
-                    EInkSwitch(checked = checked, onCheckedChange = { onModeToggle(index, it) })
+                    EInkSwitch(
+                        checked = checked,
+                        onCheckedChange = { onModeToggle(index, it) },
+                        enabled = available
+                    )
                 }
             }
         }
@@ -89,6 +95,7 @@ fun SettingsScreen(
 private fun SettingRow(
     label: String,
     modifier: Modifier = Modifier,
+    note: String? = null,
     controls: @Composable RowScope.() -> Unit
 ) {
     Row(
@@ -97,13 +104,22 @@ private fun SettingRow(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            color = EInk.Value,
-            fontSize = 13.sp,
-            fontFamily = FontFamily.Monospace,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                color = if (note == null) EInk.Value else EInk.Caption,
+                fontSize = 13.sp,
+                fontFamily = FontFamily.Monospace
+            )
+            if (note != null) {
+                Text(
+                    text = note,
+                    color = EInk.Caption,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,

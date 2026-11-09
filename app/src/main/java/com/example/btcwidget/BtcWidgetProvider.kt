@@ -24,7 +24,15 @@ class BtcWidgetProvider : AppWidgetProvider() {
         ) {
             val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
             val currency = prefs.getString("currency", "USD") ?: "USD"
-            val mode = getWidgetMode(context, appWidgetId)
+            val savedMode = getWidgetMode(context, appWidgetId)
+            val isEnabled = { m: Int -> prefs.getBoolean("mode_enabled_$m", true) }
+            // A widget left on a mode that is now off or unavailable (e.g. Moscow Time
+            // after switching to THB) shows the next active mode instead.
+            val mode = if (BlockclockMetrics.isActive(savedMode, isEnabled(savedMode), currency)) {
+                savedMode
+            } else {
+                BlockclockMetrics.nextActiveMode(savedMode, currency, isEnabled)
+            }
             val display = BlockclockMetrics.forMode(mode, data, currency)
             val scene = BlockclockScene(
                 display = display,
@@ -74,15 +82,9 @@ class BtcWidgetProvider : AppWidgetProvider() {
         }
 
         private fun getNextActiveMode(context: Context, currentMode: Int): Int {
-            val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
-            val count = BlockclockMetrics.MODE_COUNT
-            for (i in 1..count) {
-                val candidate = (currentMode + i) % count
-                if (prefs.getBoolean("mode_enabled_$candidate", true)) {
-                    return candidate
-                }
-            }
-            return currentMode
+            val prefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
+            val currency = prefs.getString("currency", "USD") ?: "USD"
+            return BlockclockMetrics.nextActiveMode(currentMode, currency) { prefs.getBoolean("mode_enabled_$it", true) }
         }
 
     }

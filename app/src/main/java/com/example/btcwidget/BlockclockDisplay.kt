@@ -39,6 +39,33 @@ object BlockclockMetrics {
 
     val MODE_COUNT = MODE_KEYS.size
 
+    const val MODE_PRICE = 0
+    const val MODE_MOSCOW_TIME = 3
+
+    /**
+     * Moscow Time is by definition sats per US dollar, so it has no meaning in THB.
+     * It is hidden while THB is selected; the user's own on/off choice is kept and
+     * applies again after switching back to USD.
+     */
+    fun isAvailable(mode: Int, currency: String): Boolean =
+        !(mode == MODE_MOSCOW_TIME && currency == "THB")
+
+    /** Whether a mode is shown: enabled by the user and meaningful for [currency]. */
+    fun isActive(mode: Int, enabled: Boolean, currency: String): Boolean =
+        enabled && isAvailable(mode, currency)
+
+    /**
+     * The next active mode after [current] in cycling order, or [MODE_PRICE] when none
+     * is active (e.g. only Moscow Time was enabled and THB is selected).
+     */
+    fun nextActiveMode(current: Int, currency: String, isEnabled: (Int) -> Boolean): Int {
+        for (i in 1..MODE_COUNT) {
+            val candidate = (current + i) % MODE_COUNT
+            if (isActive(candidate, isEnabled(candidate), currency)) return candidate
+        }
+        return MODE_PRICE
+    }
+
     private const val HALVING_INTERVAL = 210_000
     private const val BLOCKS_PER_DAY = 144.0
 
@@ -59,10 +86,8 @@ object BlockclockMetrics {
                 caption = if (isThb) "Sats per 1 baht" else "Sats per 1 dollar"
             )
             2 -> BlockclockDisplay("BLOCK", "HGHT", "%d".f(data.blockHeight), caption = "Bitcoin block height")
-            3 -> BlockclockDisplay(
-                "MSCW", "TIME", "%d".f(satsPerUnit),
-                caption = if (isThb) "Moscow time (THB)" else "Moscow time"
-            )
+            // Always sats per US dollar; hidden in THB (see isAvailable).
+            3 -> BlockclockDisplay("MSCW", "TIME", "%d".f(data.moscowTime), caption = "Moscow time")
             4 -> BlockclockDisplay("MSTR", "BTC", "%.0f".f(data.mstrBtcHeld), caption = "Strategy BTC holdings")
             5 -> BlockclockDisplay("MSTR", "BTC", "%.5f".f(data.mstrBtc), caption = "Strategy BTC per share")
             6 -> BlockclockDisplay("MSTR", "USD", "$%.0f".f(data.mstrUsd), caption = "Strategy share price")

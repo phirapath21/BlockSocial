@@ -111,7 +111,8 @@ fun DashboardContent(
 
         // Remaining metrics as a two-column grid of smaller panels.
         val visible = BlockclockMetrics.MODE_KEYS.indices.filter { index ->
-            enabledModes.getOrElse(index) { true } && BlockclockMetrics.MODE_KEYS[index] != heroMetric
+            BlockclockMetrics.isActive(index, enabledModes.getOrElse(index) { true }, currencySetting) &&
+                BlockclockMetrics.MODE_KEYS[index] != heroMetric
         }
         visible.chunked(2).forEach { pair ->
             Row(
