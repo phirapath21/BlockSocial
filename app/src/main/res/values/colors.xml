@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Blockclock palette. Mirrors BlockclockPainter (widgets) and EInk (app). -->
+    <!-- Blockface palette. Mirrors BlockclockPainter (widgets) and EInk (app). -->
     <color name="eink_background">#0E0F11</color>  <!-- app canvas -->
     <color name="eink_panel_top">#1E1F23</color>   <!-- panel gradient -->
     <color name="eink_panel_bottom">#16171A</color>

@@ -1,10 +1,12 @@
-# Satoshi Dashboard (Blockclock Widget) 🪙🕒
+# Blockface 🪙🕒
+
+*Bitcoin at a glance — a clock face for the blockchain on your home screen.*
 
 [![Android Build](https://img.shields.io/badge/Platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 
-A premium, feature-rich Android app and Home Screen widget suite inspired by the iconic hardware **E-Ink Blockclocks**. Keep track of Bitcoin spot price, mempool transaction fees, halving counts, Satoshi purchasing power, block height, and MicroStrategy (MSTR) stock statistics directly from your home screen. Designed for high visual fidelity, seamless data synchronization, and elegant custom styling.
+A premium, feature-rich Android app and Home Screen widget suite inspired by desk-top hardware Bitcoin block clocks. Keep track of Bitcoin spot price, mempool transaction fees, halving counts, Satoshi purchasing power, block height, and MicroStrategy (MSTR) stock statistics directly from your home screen. Designed for high visual fidelity, seamless data synchronization, and elegant custom styling.
 
 ---
 
@@ -13,7 +15,7 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by the
 ### 1. Resizable & Interactive Widgets
 - **Resizable Layouts**: Widgets default to a 2x1 grid size but can be resized freely (horizontally and vertically) on your launcher.
 - **Three Unique Widget Types**:
-  - 🪙 **Blockclock Widget** — Cycles through 13 active Bitcoin/MSTR price and network metrics.
+  - 🪙 **Bitcoin Metrics Widget** — Cycles through 13 active Bitcoin/MSTR price and network metrics.
   - 💬 **Quotes Widget** — Rotates classic, inspiring Cypherpunk and Bitcoin quotes (Satoshi Nakamoto, Hal Finney, Eric Hughes).
   - ⏳ **Halving Countdown Progress Bar** — Renders a block-filled ASCII progress bar (`[████████░░░░░░░]`) showing percent progress, blocks remaining, or estimated days.
 - **Tap to Cycle**: Tap the widgets to cycle through modes or quotes on the fly.
@@ -21,7 +23,7 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by the
 - **Haptic Feedback**: Soft vibration feedback on taps confirms mode selection changes. Respects global toggle.
 - **Stale Data Warning Badge**: Displays a warning icon `(!)` if the BTC price or block height could not be refreshed. Other sources fail independently and keep their last known value.
 
-### 2. The 13 Information Modes (Blockclock Widget)
+### 2. The 13 Information Modes (Bitcoin Metrics Widget)
 1. **BTC Price** — Spot price of Bitcoin (formatted as `X.xx mil` in Thai Baht or with symbol in USD).
 2. **Sats per Currency** — SATS per 1 USD/THB (Moscow Time style).
 3. **Block Height** — Current Bitcoin block height.
@@ -37,9 +39,9 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by the
 13. **Lightning Capacity** — Public Lightning Network capacity in BTC.
 
 ### 3. Active Mode Customization
-- Enable or disable specific Blockclock modes inside settings to customize your widget cycling.
+- Enable or disable specific widget modes inside settings to customize your widget cycling.
 
-### 4. Blockclock Design
+### 4. Design
 The widgets and the app share one look: a **dark grained panel** with **tall condensed type**.
 - A **stacked label** beside the value (e.g. `BTC` over `USD` with a rule between), the **value in large type**, and an optional **unit** set high on the right (e.g. `MIL`, `EH/S`).
 - A **monospace caption** underneath (e.g. `Market price of bitcoin`); a red dot marks stale data.
@@ -62,6 +64,19 @@ The widgets and the app share one look: a **dark grained panel** with **tall con
   - **Blockchain.info API** (Circulating Supply Fallback)
 
 ---
+
+## 📦 Release Build
+
+- **Application ID:** `io.github.phirapath21.btcwidget` (the Kotlin package stays `com.example.btcwidget`).
+- **Signing:** create a keystore, then add a git-ignored `keystore.properties` at the project root:
+  ```properties
+  storeFile=release.jks
+  storePassword=...
+  keyAlias=...
+  keyPassword=...
+  ```
+  Without it, `./gradlew assembleRelease` produces an unsigned APK.
+- **Shrinking:** release builds run R8 with resource shrinking; app rules live in `app/proguard-rules.pro`.
 
 ## 🚀 Getting Started
 
@@ -92,8 +107,8 @@ The widgets and the app share one look: a **dark grained panel** with **tall con
 4. **Add the Widget**:
    - Go to your home screen.
    - Long press on an empty space, tap **Widgets**.
-   - Scroll down to find **Satoshi Dashboard** (or **Blockclock**).
-   - Drag any of the resizable widgets (Blockclock, Quotes, or Halving Countdown) onto your home screen!
+   - Scroll down to find **Blockface**.
+   - Drag any of the resizable widgets (Bitcoin metrics, Halving countdown or Bitcoin quotes) onto your home screen!
 
 ---
 
@@ -116,7 +131,7 @@ btcwidget/
 │   │   │   │   │   └── MainScreenViewModel.kt# Live data updates and caching
 │   │   │   └── res/
 │   │   │       ├── layout/
-│   │   │       │   ├── btc_widget_blockclock.xml # Blockclock Widget layout (XML layout)
+│   │   │       │   ├── btc_widget_blockclock.xml # Metrics & halving widget layout (one painted image)
 │   │   │       │   ├── btc_widget_quote.xml      # Quotes Widget layout (XML layout)
 │   │   │       │   └── btc_widget_halving.xml    # Halving Widget layout (XML layout)
 │   │   │       └── drawable/                # Theme background resources

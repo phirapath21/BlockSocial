@@ -97,8 +97,8 @@ fun MainScreen(
         if (checked || activeCount > 1) {
             prefs.edit().putBoolean("mode_enabled_$index", checked).apply()
             modeStates[index] = checked
+            // Only which modes are shown changed: redraw from cached data, no network fetch.
             WidgetUpdater.updateAllWidgets(context)
-            viewModel.refreshData(context)
         }
     }
 
@@ -170,7 +170,7 @@ fun MainScreenContent(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 12.dp)
                 ) {
-                    HeaderSection(title = "SATOSHI DASHBOARD", subtitle = "Blockclock console")
+                    HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
 
                     when (val currentState = state) {
                         is MainScreenUiState.Loading -> LoadingScreen()
