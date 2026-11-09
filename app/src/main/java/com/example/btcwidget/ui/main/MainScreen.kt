@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.BlockclockMetrics
+import com.example.btcwidget.BtcWidgetProvider
 import com.example.btcwidget.WidgetRefreshScheduler
 import com.example.btcwidget.WidgetUpdater
 import com.example.btcwidget.alerts.AlertNotifier
@@ -103,6 +104,14 @@ fun MainScreen(
         hapticEnabled = enabled
     }
 
+    var modeOrder by remember {
+        mutableStateOf(BlockclockMetrics.parseOrder(prefs.getString(BtcWidgetProvider.KEY_MODE_ORDER, null)))
+    }
+    val onModeOrderChange: (List<String>) -> Unit = { newOrder ->
+        prefs.edit().putString(BtcWidgetProvider.KEY_MODE_ORDER, BlockclockMetrics.serializeOrder(newOrder)).apply()
+        modeOrder = BlockclockMetrics.sanitizeOrder(newOrder)
+    }
+
     var alerts by remember { mutableStateOf(AlertStore.load(context)) }
     var notificationsAllowed by remember { mutableStateOf(AlertNotifier.canNotify(context)) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -151,6 +160,8 @@ fun MainScreen(
         onModeToggle = onModeToggle,
         onRefresh = { viewModel.refreshData(context) },
         isRefreshing = isRefreshing,
+        modeOrder = modeOrder,
+        onModeOrderChange = onModeOrderChange,
         onItemClick = onItemClick,
         modifier = modifier,
         alerts = alerts,
@@ -178,6 +189,8 @@ fun MainScreenContent(
     onRefresh: () -> Unit,
     onItemClick: (NavKey) -> Unit,
     isRefreshing: Boolean = false,
+    modeOrder: List<String> = BlockclockMetrics.MODE_KEYS,
+    onModeOrderChange: (List<String>) -> Unit = {},
     modifier: Modifier = Modifier,
     alerts: List<AlertRule> = emptyList(),
     onAlertChange: (AlertRule) -> Unit = {},
@@ -206,7 +219,8 @@ fun MainScreenContent(
                     onHapticToggle = onHapticToggle,
                     alerts = alerts,
                     onAlertChange = onAlertChange,
-                    notificationsAllowed = notificationsAllowed
+                    notificationsAllowed = notificationsAllowed,
+                    modeOrder = modeOrder
                 )
             } else {
                 // Pull down on the dashboard to fetch fresh data now.
@@ -226,27 +240,29 @@ fun MainScreenContent(
                         )
                     }
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 12.dp)
-                    ) {
-                        HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
-
-                        when (val currentState = state) {
-                            is MainScreenUiState.Loading -> LoadingScreen()
-                            is MainScreenUiState.Success -> DashboardContent(
-                                data = currentState.data,
-                                heroMetric = heroMetric,
-                                onHeroMetricSelected = onHeroMetricSelected,
-                                enabledModes = modeStates,
-                                currencySetting = currencySetting
-                            )
-                            is MainScreenUiState.Error -> ErrorScreen(
-                                error = currentState.throwable,
-                                onRefresh = onRefresh
-                            )
+                    when (val currentState = state) {
+                        // The dashboard is its own scrolling grid (with drag-to-reorder).
+                        is MainScreenUiState.Success -> DashboardContent(
+                            data = currentState.data,
+                            heroMetric = heroMetric,
+                            onHeroMetricSelected = onHeroMetricSelected,
+                            enabledModes = modeStates,
+                            currencySetting = currencySetting,
+                            order = modeOrder,
+                            onOrderChange = onModeOrderChange
+                        )
+                        else -> Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 12.dp)
+                        ) {
+                            HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
+                            if (currentState is MainScreenUiState.Error) {
+                                ErrorScreen(error = currentState.throwable, onRefresh = onRefresh)
+                            } else {
+                                LoadingScreen()
+                            }
                         }
                     }
                 }

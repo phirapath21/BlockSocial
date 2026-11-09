@@ -45,7 +45,8 @@ fun SettingsScreen(
     onHapticToggle: (Boolean) -> Unit,
     alerts: List<AlertRule> = emptyList(),
     onAlertChange: (AlertRule) -> Unit = {},
-    notificationsAllowed: Boolean = true
+    notificationsAllowed: Boolean = true,
+    modeOrder: List<String> = BlockclockMetrics.MODE_KEYS
 ) {
     Column(
         modifier = Modifier
@@ -106,7 +107,9 @@ fun SettingsScreen(
         }
 
         EInkPanel(title = "Widget modes") {
-            BlockclockMetrics.MODE_NAMES.forEachIndexed { index, name ->
+            // Same order as the dashboard and widget cycling.
+            BlockclockMetrics.orderedModes(modeOrder).forEach { index ->
+                val name = BlockclockMetrics.MODE_NAMES[index]
                 val available = BlockclockMetrics.isAvailable(index, currencySetting)
                 val checked = available && modeStates.getOrElse(index) { true }
                 SettingRow(

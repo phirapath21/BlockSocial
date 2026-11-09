@@ -55,15 +55,70 @@ object BlockclockMetrics {
         enabled && isAvailable(mode, currency)
 
     /**
-     * The next active mode after [current] in cycling order, or [MODE_PRICE] when none
-     * is active (e.g. only Moscow Time was enabled and THB is selected).
+     * The next active mode after [current] in the user's [order] (mode keys), or
+     * [MODE_PRICE] when none is active (e.g. only Moscow Time was enabled and THB is
+     * selected).
      */
-    fun nextActiveMode(current: Int, currency: String, isEnabled: (Int) -> Boolean): Int {
-        for (i in 1..MODE_COUNT) {
-            val candidate = (current + i) % MODE_COUNT
+    fun nextActiveMode(
+        current: Int,
+        currency: String,
+        order: List<String> = MODE_KEYS,
+        isEnabled: (Int) -> Boolean
+    ): Int {
+        val modes = orderedModes(order)
+        val start = modes.indexOf(current).coerceAtLeast(0)
+        for (i in 1..modes.size) {
+            val candidate = modes[(start + i) % modes.size]
             if (isActive(candidate, isEnabled(candidate), currency)) return candidate
         }
         return MODE_PRICE
+    }
+
+    // ---- User ordering of modes (dashboard drag & drop; also widget tap order) ----
+
+    /**
+     * A complete order of all mode keys from a saved one: unknown keys are dropped,
+     * duplicates removed, and modes missing from it (e.g. added in a later version)
+     * are appended in default order.
+     */
+    fun sanitizeOrder(saved: List<String>): List<String> {
+        val known = saved.filter { it in MODE_KEYS }.distinct()
+        return known + MODE_KEYS.filter { it !in known }
+    }
+
+    fun parseOrder(saved: String?): List<String> =
+        sanitizeOrder(saved?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty())
+
+    fun serializeOrder(order: List<String>): String = sanitizeOrder(order).joinToString(",")
+
+    /** Mode indices in the order given by [order]. */
+    fun orderedModes(order: List<String>): List<Int> = sanitizeOrder(order).map { MODE_KEYS.indexOf(it) }
+
+    fun isDefaultOrder(order: List<String>): Boolean = sanitizeOrder(order) == MODE_KEYS
+
+    /**
+     * Moves [fromKey] to the position of [toKey]. Dragging down lands after [toKey],
+     * dragging up lands before it, which matches swapping neighbours in a grid. Keys
+     * hidden from the dashboard keep their relative place.
+     */
+    fun move(order: List<String>, fromKey: String, toKey: String): List<String> {
+        val list = sanitizeOrder(order).toMutableList()
+        val from = list.indexOf(fromKey)
+        val to = list.indexOf(toKey)
+        if (from < 0 || to < 0 || from == to) return list
+        list.add(to, list.removeAt(from))
+        return list
+    }
+
+    /**
+     * Moves [key] one step among [visible] keys (for accessibility "move earlier/later"
+     * actions); [step] is -1 or +1. Returns the order unchanged at either end.
+     */
+    fun moveAmongVisible(order: List<String>, visible: List<String>, key: String, step: Int): List<String> {
+        val i = visible.indexOf(key)
+        val j = i + step
+        if (i < 0 || j !in visible.indices) return sanitizeOrder(order)
+        return move(order, key, visible[j])
     }
 
     private const val HALVING_INTERVAL = 210_000

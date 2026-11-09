@@ -45,7 +45,8 @@ class WidgetConfigActivity : ComponentActivity() {
                 ModeChoice(mode, name, data?.let { BlockclockMetrics.halving(mode, it.blockHeight) })
             }
         } else {
-            (0 until BlockclockMetrics.MODE_COUNT)
+            // Listed in the user's dashboard order.
+            BlockclockMetrics.orderedModes(BtcWidgetProvider.modeOrder(prefs))
                 .filter { BlockclockMetrics.isAvailable(it, currency) }
                 .map { mode ->
                     ModeChoice(mode, BlockclockMetrics.MODE_NAMES[mode], data?.let { BlockclockMetrics.forMode(mode, it, currency) })

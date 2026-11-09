@@ -77,15 +77,67 @@ class BlockclockDisplayTest {
     @Test
     fun cyclingSkipsMoscowTimeInThb() {
         val allOn = { _: Int -> true }
-        assertEquals(3, BlockclockMetrics.nextActiveMode(2, "USD", allOn))
-        assertEquals(4, BlockclockMetrics.nextActiveMode(2, "THB", allOn))
+        assertEquals(3, BlockclockMetrics.nextActiveMode(2, "USD", isEnabled = allOn))
+        assertEquals(4, BlockclockMetrics.nextActiveMode(2, "THB", isEnabled = allOn))
     }
 
     @Test
     fun cyclingFallsBackToPriceWhenNothingIsActive() {
         // Only Moscow Time enabled, then the user switches to THB.
         val onlyMoscow = { m: Int -> m == BlockclockMetrics.MODE_MOSCOW_TIME }
-        assertEquals(BlockclockMetrics.MODE_PRICE, BlockclockMetrics.nextActiveMode(3, "THB", onlyMoscow))
-        assertEquals(3, BlockclockMetrics.nextActiveMode(3, "USD", onlyMoscow))
+        assertEquals(BlockclockMetrics.MODE_PRICE, BlockclockMetrics.nextActiveMode(3, "THB", isEnabled = onlyMoscow))
+        assertEquals(3, BlockclockMetrics.nextActiveMode(3, "USD", isEnabled = onlyMoscow))
+    }
+
+    // ---- ordering ----
+
+    private val keys = BlockclockMetrics.MODE_KEYS
+
+    @Test
+    fun sanitizeOrder_dropsUnknownAndAppendsMissing() {
+        val order = BlockclockMetrics.sanitizeOrder(listOf("FEES", "NOPE", "PRICE", "FEES"))
+        assertEquals(listOf("FEES", "PRICE"), order.take(2))
+        assertEquals(keys.size, order.size)
+        assertEquals(keys.toSet(), order.toSet())
+        assertEquals(keys, BlockclockMetrics.parseOrder(null))
+        assertEquals(keys, BlockclockMetrics.parseOrder("garbage,,"))
+    }
+
+    @Test
+    fun serializeRoundTrip() {
+        val order = BlockclockMetrics.move(keys, "LN_CAP", "PRICE")
+        assertEquals(order, BlockclockMetrics.parseOrder(BlockclockMetrics.serializeOrder(order)))
+        assertEquals(false, BlockclockMetrics.isDefaultOrder(order))
+        assertEquals(true, BlockclockMetrics.isDefaultOrder(keys))
+    }
+
+    @Test
+    fun move_swapsLikeAGrid() {
+        val abc = listOf("PRICE", "SATS", "BLOCK")
+        // Drag down onto a later item: lands after it.
+        assertEquals(listOf("SATS", "BLOCK", "PRICE"), BlockclockMetrics.move(abc, "PRICE", "BLOCK").take(3))
+        // Drag up onto an earlier item: lands before it.
+        assertEquals(listOf("BLOCK", "PRICE", "SATS"), BlockclockMetrics.move(abc, "BLOCK", "PRICE").take(3))
+    }
+
+    @Test
+    fun moveAmongVisible_skipsHiddenModes() {
+        // MSCW hidden (e.g. THB): moving BLOCK later jumps over it to MSTR_HELD.
+        val visible = keys.filter { it != "MSCW" }
+        val order = BlockclockMetrics.moveAmongVisible(keys, visible, "BLOCK", +1)
+        assertEquals(listOf("PRICE", "SATS", "MSCW", "MSTR_HELD", "BLOCK"), order.take(5))
+        // Ends are no-ops.
+        assertEquals(keys, BlockclockMetrics.moveAmongVisible(keys, visible, "PRICE", -1))
+    }
+
+    @Test
+    fun nextActiveMode_followsUserOrder() {
+        val order = listOf("FEES", "PRICE", "BLOCK") // rest appended
+        val allOn = { _: Int -> true }
+        assertEquals(0, BlockclockMetrics.nextActiveMode(9, "USD", order, allOn))  // FEES -> PRICE
+        assertEquals(2, BlockclockMetrics.nextActiveMode(0, "USD", order, allOn))  // PRICE -> BLOCK
+        assertEquals(1, BlockclockMetrics.nextActiveMode(2, "USD", order, allOn))  // BLOCK -> SATS (first appended)
+        val last = BlockclockMetrics.orderedModes(order).last()
+        assertEquals(9, BlockclockMetrics.nextActiveMode(last, "USD", order, allOn)) // wraps to FEES
     }
 }
