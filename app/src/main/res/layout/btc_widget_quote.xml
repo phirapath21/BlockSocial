@@ -1,43 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Quote widget: one large e-ink screen on the black body. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_background_dynamic"
-    android:padding="14dp">
+    android:background="@drawable/eink_frame"
+    android:padding="7dp">
 
     <LinearLayout
         android:id="@+id/quote_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
+        android:background="@drawable/eink_tile"
         android:clickable="true"
-        android:focusable="true">
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="10dp">
 
         <TextView
             android:id="@+id/txt_quote_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:autoSizeMaxTextSize="18sp"
+            android:autoSizeMinTextSize="8sp"
+            android:autoSizeStepGranularity="0.5sp"
+            android:autoSizeTextType="uniform"
+            android:fontFamily="serif"
             android:gravity="center"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif"
-            android:maxLines="4"
-            android:textColor="@color/widget_text_primary"
-            android:textSize="11sp"
-            android:textStyle="normal"
-            android:layout_marginBottom="6dp"
-            android:lineSpacingMultiplier="1.1" />
+            android:lineSpacingMultiplier="1.1"
+            android:textColor="@color/eink_ink"
+            android:textSize="11sp" />
+
+        <FrameLayout
+            android:layout_width="24dp"
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="5dp"
+            android:background="@color/eink_ink" />
 
         <TextView
             android:id="@+id/txt_quote_author"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:fontFamily="sans-serif-medium"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.1"
             android:singleLine="true"
-            android:textColor="@color/widget_text_secondary"
-            android:textSize="9.5sp"
+            android:textColor="@color/eink_ink_soft"
+            android:textSize="8sp"
             android:textStyle="bold" />
     </LinearLayout>
-</RelativeLayout>
+</FrameLayout>

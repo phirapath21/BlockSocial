@@ -20,7 +20,6 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by the
 - **Custom Refresh Intervals**: Configure background updates (15m, 30m, 60m) inside settings to optimize battery life. Powered by WorkManager: Doze-friendly, runs only when online, and survives reboots.
 - **Haptic Feedback**: Soft vibration feedback on taps confirms mode selection changes. Respects global toggle.
 - **Stale Data Warning Badge**: Displays a warning icon `(!)` if the BTC price or block height could not be refreshed. Other sources fail independently and keep their last known value.
-- **Dynamic Dashboard Previews**: Settings app preview reflects your active theme in real-time.
 
 ### 2. The 13 Information Modes (Blockclock Widget)
 1. **BTC Price** — Spot price of Bitcoin (formatted as `X.xx mil` in Thai Baht or with symbol in USD).
@@ -40,18 +39,13 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by the
 ### 3. Active Mode Customization
 - Enable or disable specific Blockclock modes inside settings to customize your widget cycling.
 
-### 4. Sleek Hardware Themes
-Seamlessly switch styles. The selected theme applies instantly to both your in-app preview and widgets:
-- 🌑 **E-Ink Dark (Default)** — Charcoal canvas with gold borders.
-- ☀️ **E-Ink Light** — White E-ink paper background with dark grey text.
-- 🍊 **Bitcoin Orange** — Energetic warm orange accents.
-- 🧪 **Matrix Green** — Emerald hacker terminal theme.
-- 👑 **Coinkite Gold** — Premium industrial gold accents.
-- 🪵 **Terminal Amber** — Vintage monochrome amber phosphorus display.
-- 🔮 **Cyberpunk** — Futuristic neon pink and cyan glow.
-- 🌌 **Midnight Blue** — Deep night sky blue accents.
-- 🩸 **Cypherpunk** — Crimson red terminal theme.
-- 💊 **Orange Pill** — Clean monochrome orange pill theme.
+### 4. E-Ink Blockclock Design
+The widgets and the app share one look, modelled on small e-ink blockclock hardware:
+- **Black device body** with a row of **individual e-ink screens**, one character per screen.
+- **Stacked label screen** on the left (e.g. `BTC` over `USD`) and an optional **unit screen** on the right (e.g. `MIL`, `EH/S`).
+- Values are padded with blank screens to a seven-screen device; decimal points ride with their digit.
+- **Moscow Time** reads like a clock face (1,029 sats → `10:29`).
+- Halving widget adds a thin e-ink **epoch progress bar**; the Quotes widget is a single large e-ink screen.
 
 ---
 
