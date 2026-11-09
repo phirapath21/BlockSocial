@@ -30,7 +30,8 @@ fun WidgetsScreen(
     onModeToggle: (Int, Boolean) -> Unit,
     currencySetting: String,
     modeOrder: List<String>,
-    data: PriceData?
+    data: PriceData?,
+    hasStack: Boolean = false
 ) {
     Column(
         modifier = Modifier
@@ -72,11 +73,15 @@ fun WidgetsScreen(
             if (modes.isEmpty()) return@forEach
             EInkPanel(title = category.title) {
                 modes.forEach { index ->
-                    val available = BlockclockMetrics.isAvailable(index, currencySetting)
+                    val available = BlockclockMetrics.isAvailable(index, currencySetting, hasStack)
                     val checked = available && modeStates.getOrElse(index) { true }
                     SettingRow(
                         label = BlockclockMetrics.MODE_NAMES[index],
-                        note = if (available) null else "USD only · off while THB is selected",
+                        note = when {
+                            available -> null
+                            index == BlockclockMetrics.MODE_STACK -> "Set your stack in Settings first"
+                            else -> "USD only · off while THB is selected"
+                        },
                         dimmed = !available,
                         modifier = if (available) Modifier.clickable { onModeToggle(index, !checked) } else Modifier
                     ) {

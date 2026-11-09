@@ -52,11 +52,15 @@ import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.BtcWidgetProvider
 import com.example.btcwidget.MetricCategory
+import com.example.btcwidget.Stack
+import com.example.btcwidget.StackStore
+import com.example.btcwidget.StackUnit
 import com.example.btcwidget.WidgetRefreshScheduler
 import com.example.btcwidget.WidgetUpdater
 import com.example.btcwidget.alerts.AlertNotifier
 import com.example.btcwidget.alerts.AlertRule
 import com.example.btcwidget.alerts.AlertStore
+import com.example.btcwidget.alerts.PriceAlerts
 
 @Composable
 fun MainScreen(
@@ -132,6 +136,15 @@ fun MainScreen(
         modeOrder = BlockclockMetrics.sanitizeOrder(newOrder)
     }
 
+    var stackSats by remember { mutableStateOf(StackStore.sats(context)) }
+    var stackUnit by remember { mutableStateOf(StackStore.unit(context)) }
+    val onStackChange: (Long, StackUnit) -> Unit = { sats, unit ->
+        StackStore.save(context, sats, unit)
+        stackSats = sats
+        stackUnit = unit
+        WidgetUpdater.updateAllWidgets(context)
+    }
+
     var alerts by remember { mutableStateOf(AlertStore.load(context)) }
     var notificationsAllowed by remember { mutableStateOf(AlertNotifier.canNotify(context)) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -154,7 +167,7 @@ fun MainScreen(
 
     val onModeToggle: (Int, Boolean) -> Unit = { index, checked ->
         val activeCount = modeStates.indices.count {
-            BlockclockMetrics.isActive(it, modeStates[it], currencySetting)
+            BlockclockMetrics.isActive(it, modeStates[it], currencySetting, hasStack = stackSats > 0)
         }
         if (checked || activeCount > 1) {
             prefs.edit().putBoolean("mode_enabled_$index", checked).apply()
@@ -180,6 +193,9 @@ fun MainScreen(
         collapsedCategories = collapsedCategories,
         onToggleCategory = onToggleCategory,
         appVersion = appVersion,
+        stackSats = stackSats,
+        stackUnit = stackUnit,
+        onStackChange = onStackChange,
         onModeToggle = onModeToggle,
         onRefresh = { viewModel.refreshData(context) },
         isRefreshing = isRefreshing,
@@ -220,9 +236,16 @@ fun MainScreenContent(
     notificationsAllowed: Boolean = true,
     collapsedCategories: Set<MetricCategory> = emptySet(),
     onToggleCategory: (MetricCategory) -> Unit = {},
-    appVersion: String? = null
+    appVersion: String? = null,
+    stackSats: Long = 0,
+    stackUnit: StackUnit = StackUnit.BTC,
+    onStackChange: (Long, StackUnit) -> Unit = { _, _ -> }
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
+    val stackValue = data?.takeIf { stackSats > 0 }?.let {
+        val btc = stackSats / Stack.SATS_PER_BTC.toDouble()
+        PriceAlerts.formatPrice(btc * PriceAlerts.price(it, currencySetting), currencySetting)
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -264,7 +287,9 @@ fun MainScreenContent(
                                 order = modeOrder,
                                 onOrderChange = onModeOrderChange,
                                 collapsedCategories = collapsedCategories,
-                                onToggleCategory = onToggleCategory
+                                onToggleCategory = onToggleCategory,
+                                stackSats = stackSats,
+                                onSetUpStack = { onTabSelected(MainTab.SETTINGS) }
                             )
                             else -> Column(
                                 modifier = Modifier
@@ -295,7 +320,8 @@ fun MainScreenContent(
                     onModeToggle = onModeToggle,
                     currencySetting = currencySetting,
                     modeOrder = modeOrder,
-                    data = data
+                    data = data,
+                    hasStack = stackSats > 0
                 )
                 MainTab.SETTINGS -> SettingsScreen(
                     currencySetting = currencySetting,
@@ -304,7 +330,11 @@ fun MainScreenContent(
                     onRefreshIntervalSelected = onRefreshIntervalSelected,
                     hapticEnabled = hapticEnabled,
                     onHapticToggle = onHapticToggle,
-                    appVersion = appVersion
+                    appVersion = appVersion,
+                    stackSats = stackSats,
+                    stackUnit = stackUnit,
+                    onStackChange = onStackChange,
+                    stackValue = stackValue
                 )
             }
         }

@@ -24,3 +24,23 @@ data class DataSources(val price: PriceSource, val thb: ThbSource) {
         }
     }
 }
+
+/** The user's holdings, stored only on this device (in satoshis). */
+object StackStore {
+    private const val KEY_SATS = "stack_sats"
+    private const val KEY_UNIT = "stack_unit"
+
+    fun sats(context: Context): Long =
+        context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE).getLong(KEY_SATS, 0L)
+
+    fun unit(context: Context): StackUnit =
+        context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE).getString(KEY_UNIT, null)
+            ?.let { name -> StackUnit.entries.firstOrNull { it.name == name } } ?: StackUnit.BTC
+
+    fun save(context: Context, sats: Long, unit: StackUnit) {
+        context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE).edit()
+            .putLong(KEY_SATS, sats.coerceAtLeast(0))
+            .putString(KEY_UNIT, unit.name)
+            .apply()
+    }
+}

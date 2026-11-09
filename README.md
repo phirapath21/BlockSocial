@@ -45,6 +45,10 @@ Four tabs along the bottom:
 - **Widgets** — how to add widgets, a live preview, and which modes the metrics widget cycles through (grouped like the dashboard, in the same order).
 - **Settings** — display currency, refresh interval, haptics and about.
 
+### 3a. Your Stack
+- Enter how much bitcoin you hold (in BTC or sats) under **Settings > Your stack**; it is stored only on the device.
+- A **STACK** panel and widget mode show what it is worth in USD or THB, with the amount and 24h change as the caption. It can also be the dashboard's hero.
+
 ### 3b. Price Alerts
 - **BTC rises above / falls below** a price (USD or THB) and **fees at or below** a sat/vB level, set in Settings.
 - Notifies once per crossing, then re-arms when the condition turns false again; stale data never triggers an alert.
