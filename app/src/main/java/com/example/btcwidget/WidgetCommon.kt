@@ -1,7 +1,9 @@
 package com.example.btcwidget
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.media.AudioAttributes
@@ -55,6 +57,28 @@ object WidgetBitmapRenderer {
         val parts = listOf(d.labelTop, d.labelBottom, d.value, d.suffix).filter { it.isNotEmpty() }
         val stale = if (scene.stale) " Data may be out of date." else ""
         return parts.joinToString(" ") + ". " + d.caption + "." + stale
+    }
+}
+
+/**
+ * What metrics and halving widgets show before the first successful fetch (fresh install
+ * while offline, say): a dashed value and "Waiting for data", instead of a blank widget.
+ * Tapping it asks for a refresh.
+ */
+object WidgetPlaceholder {
+    private val scene = BlockclockScene(
+        BlockclockDisplay(labelTop = "BTC", labelBottom = "", value = "--", caption = "Waiting for data · tap to retry")
+    )
+
+    fun show(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
+        val views = RemoteViews(context.packageName, R.layout.btc_widget_blockclock)
+        WidgetBitmapRenderer.render(context, appWidgetManager, appWidgetId, views, scene)
+        val retry = Intent(context, BtcWidgetProvider::class.java).setAction(BtcWidgetProvider.ACTION_REFRESH)
+        views.setOnClickPendingIntent(
+            R.id.widget_root,
+            PendingIntent.getBroadcast(context, 77, retry, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        )
+        appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 }
 

@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.PriceData
 import org.junit.Rule
 import org.junit.Test
@@ -33,7 +34,7 @@ class MainScreenTest {
                 state = MainScreenUiState.Success(sample),
                 selectedTab = tab,
                 heroMetric = hero,
-                modeStates = List(13) { true },
+                modeStates = List(BlockclockMetrics.MODE_COUNT) { true },
                 currencySetting = currency,
                 onCurrencySelected = {},
                 refreshInterval = 30,
@@ -112,7 +113,7 @@ class MainScreenTest {
                 state = MainScreenUiState.Success(sample),
                 selectedTab = MainTab.WIDGETS,
                 heroMetric = "PRICE",
-                modeStates = List(13) { true },
+                modeStates = List(BlockclockMetrics.MODE_COUNT) { true },
                 currencySetting = "USD",
                 onCurrencySelected = {},
                 refreshInterval = 30,

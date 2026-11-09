@@ -7,14 +7,15 @@ import android.content.Context
 object WidgetUpdater {
     fun updateAllWidgets(context: Context) {
         val appWidgetManager = AppWidgetManager.getInstance(context)
-        val data = PriceRepository.getFromPrefs(context) ?: return
+        val data = PriceRepository.getFromPrefs(context)
 
         // 1. Single Widget
         try {
             val singleWidget = ComponentName(context, BtcWidgetProvider::class.java)
             val singleIds = appWidgetManager.getAppWidgetIds(singleWidget)
             for (id in singleIds) {
-                BtcWidgetProvider.updateWidgetLayout(context, appWidgetManager, id, data)
+                if (data != null) BtcWidgetProvider.updateWidgetLayout(context, appWidgetManager, id, data)
+                else WidgetPlaceholder.show(context, appWidgetManager, id)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -37,7 +38,8 @@ object WidgetUpdater {
             val halvingWidget = ComponentName(context, BtcHalvingWidgetProvider::class.java)
             val halvingIds = appWidgetManager.getAppWidgetIds(halvingWidget)
             for (id in halvingIds) {
-                BtcHalvingWidgetProvider.updateWidgetLayout(context, appWidgetManager, id, data)
+                if (data != null) BtcHalvingWidgetProvider.updateWidgetLayout(context, appWidgetManager, id, data)
+                else WidgetPlaceholder.show(context, appWidgetManager, id)
             }
         } catch (e: Exception) {
             e.printStackTrace()

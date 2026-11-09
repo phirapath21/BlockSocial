@@ -101,11 +101,11 @@ class BtcWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        // Draw cached data immediately, then fetch fresh data in the background.
-        PriceRepository.getFromPrefs(context)?.let { data ->
-            for (id in appWidgetIds) {
-                updateWidgetLayout(context, appWidgetManager, id, data)
-            }
+        // Draw cached data immediately (or a placeholder), then fetch fresh data.
+        val data = PriceRepository.getFromPrefs(context)
+        for (id in appWidgetIds) {
+            if (data != null) updateWidgetLayout(context, appWidgetManager, id, data)
+            else WidgetPlaceholder.show(context, appWidgetManager, id)
         }
         WidgetRefreshScheduler.schedulePeriodic(context)
         WidgetRefreshScheduler.refreshNow(context)
@@ -142,7 +142,8 @@ class BtcWidgetProvider : AppWidgetProvider() {
         newOptions: Bundle
     ) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        val data = PriceRepository.getFromPrefs(context) ?: return
+        val data = PriceRepository.getFromPrefs(context)
+            ?: return WidgetPlaceholder.show(context, appWidgetManager, appWidgetId)
         updateWidgetLayout(context, appWidgetManager, appWidgetId, data)
     }
 

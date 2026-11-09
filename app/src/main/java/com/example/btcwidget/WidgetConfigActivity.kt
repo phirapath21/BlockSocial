@@ -82,7 +82,8 @@ class WidgetConfigActivity : ComponentActivity() {
         val data = PriceRepository.getFromPrefs(this)
         if (isHalving) {
             BtcHalvingWidgetProvider.saveWidgetMode(this, appWidgetId, mode)
-            data?.let { BtcHalvingWidgetProvider.updateWidgetLayout(this, manager, appWidgetId, it) }
+            if (data != null) BtcHalvingWidgetProvider.updateWidgetLayout(this, manager, appWidgetId, data)
+            else WidgetPlaceholder.show(this, manager, appWidgetId)
         } else {
             // Choosing a mode the user had switched off turns it back on, so the
             // widget shows it instead of skipping ahead.
@@ -90,7 +91,8 @@ class WidgetConfigActivity : ComponentActivity() {
                 .putBoolean("mode_enabled_$mode", true)
                 .apply()
             BtcWidgetProvider.saveWidgetMode(this, appWidgetId, mode)
-            data?.let { BtcWidgetProvider.updateWidgetLayout(this, manager, appWidgetId, it) }
+            if (data != null) BtcWidgetProvider.updateWidgetLayout(this, manager, appWidgetId, data)
+            else WidgetPlaceholder.show(this, manager, appWidgetId)
         }
         WidgetRefreshScheduler.schedulePeriodic(this)
         WidgetRefreshScheduler.refreshNow(this)

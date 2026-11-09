@@ -278,29 +278,40 @@ object PriceRepository {
         JSONObject(httpGet("https://mempool.space/api/v1/lightning/statistics/latest"))
             .getJSONObject("latest").getDouble("total_capacity") / SATS_PER_BTC
 
+    // Prices are stored as doubles (raw long bits under "<key>_d"); a Float loses
+    // precision on THB prices in the millions. Older installs stored floats under
+    // "<key>", which getDouble still reads until the next save.
+    private fun SharedPreferences.Editor.putDouble(key: String, value: Double): SharedPreferences.Editor =
+        putLong("${key}_d", java.lang.Double.doubleToRawLongBits(value))
+
+    private fun SharedPreferences.getDouble(key: String, default: Double): Double =
+        if (contains("${key}_d")) java.lang.Double.longBitsToDouble(getLong("${key}_d", 0L))
+        else if (contains(key)) getFloat(key, default.toFloat()).toDouble()
+        else default
+
     fun saveToPrefs(context: Context, data: PriceData) {
         val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().apply {
-            putFloat(KEY_BTC_USD, data.btcUsd.toFloat())
-            putFloat(KEY_BTC_THB, data.btcThb.toFloat())
+            putDouble(KEY_BTC_USD, data.btcUsd)
+            putDouble(KEY_BTC_THB, data.btcThb)
             putInt(KEY_MOSCOW_TIME, data.moscowTime)
-            putFloat(KEY_MSTR_USD, data.mstrUsd.toFloat())
-            putFloat(KEY_MSTR_BTC, data.mstrBtc.toFloat())
+            putDouble(KEY_MSTR_USD, data.mstrUsd)
+            putDouble(KEY_MSTR_BTC, data.mstrBtc)
             putInt(KEY_BLOCK_HEIGHT, data.blockHeight)
-            putFloat(KEY_MSTR_BTC_HELD, data.mstrBtcHeld.toFloat())
-            putFloat(KEY_BTC_CIRCULATION, data.btcCirculation.toFloat())
+            putDouble(KEY_MSTR_BTC_HELD, data.mstrBtcHeld)
+            putDouble(KEY_BTC_CIRCULATION, data.btcCirculation)
             putLong(KEY_TIMESTAMP, data.timestamp)
             putString(KEY_CURRENCY, data.currency)
             putBoolean(KEY_LAST_FETCH_SUCCESSFUL, data.lastFetchSuccessful)
             putInt(KEY_FEE_FASTEST, data.feeFastest)
             putInt(KEY_FEE_HALF_HOUR, data.feeHalfHour)
             putInt(KEY_FEE_HOUR, data.feeHour)
-            putFloat(KEY_DIFFICULTY_CHANGE, data.difficultyChange.toFloat())
-            putFloat(KEY_DIFFICULTY_PROGRESS, data.difficultyProgress.toFloat())
-            putFloat(KEY_HASH_RATE, data.hashRate.toFloat())
-            putFloat(KEY_LIGHTNING_CAPACITY, data.lightningCapacity.toFloat())
-            putFloat(KEY_CHANGE_24H_USD, data.change24hUsd.toFloat())
-            putFloat(KEY_CHANGE_24H_THB, data.change24hThb.toFloat())
+            putDouble(KEY_DIFFICULTY_CHANGE, data.difficultyChange)
+            putDouble(KEY_DIFFICULTY_PROGRESS, data.difficultyProgress)
+            putDouble(KEY_HASH_RATE, data.hashRate)
+            putDouble(KEY_LIGHTNING_CAPACITY, data.lightningCapacity)
+            putDouble(KEY_CHANGE_24H_USD, data.change24hUsd)
+            putDouble(KEY_CHANGE_24H_THB, data.change24hThb)
             apply()
         }
     }
@@ -310,26 +321,26 @@ object PriceRepository {
         if (!prefs.contains(KEY_TIMESTAMP)) return null
         
         return PriceData(
-            btcUsd = prefs.getFloat(KEY_BTC_USD, 0f).toDouble(),
-            btcThb = prefs.getFloat(KEY_BTC_THB, 0f).toDouble(),
+            btcUsd = prefs.getDouble(KEY_BTC_USD, 0.0),
+            btcThb = prefs.getDouble(KEY_BTC_THB, 0.0),
             moscowTime = prefs.getInt(KEY_MOSCOW_TIME, 0),
-            mstrUsd = prefs.getFloat(KEY_MSTR_USD, 0f).toDouble(),
-            mstrBtc = prefs.getFloat(KEY_MSTR_BTC, 0f).toDouble(),
+            mstrUsd = prefs.getDouble(KEY_MSTR_USD, 0.0),
+            mstrBtc = prefs.getDouble(KEY_MSTR_BTC, 0.0),
             blockHeight = prefs.getInt(KEY_BLOCK_HEIGHT, 0),
-            mstrBtcHeld = prefs.getFloat(KEY_MSTR_BTC_HELD, 0f).toDouble(),
-            btcCirculation = prefs.getFloat(KEY_BTC_CIRCULATION, 0f).toDouble(),
+            mstrBtcHeld = prefs.getDouble(KEY_MSTR_BTC_HELD, 0.0),
+            btcCirculation = prefs.getDouble(KEY_BTC_CIRCULATION, 0.0),
             timestamp = prefs.getLong(KEY_TIMESTAMP, 0L),
             currency = prefs.getString(KEY_CURRENCY, "USD") ?: "USD",
             lastFetchSuccessful = prefs.getBoolean(KEY_LAST_FETCH_SUCCESSFUL, true),
             feeFastest = prefs.getInt(KEY_FEE_FASTEST, 1),
             feeHalfHour = prefs.getInt(KEY_FEE_HALF_HOUR, 1),
             feeHour = prefs.getInt(KEY_FEE_HOUR, 1),
-            difficultyChange = prefs.getFloat(KEY_DIFFICULTY_CHANGE, 0f).toDouble(),
-            difficultyProgress = prefs.getFloat(KEY_DIFFICULTY_PROGRESS, 0f).toDouble(),
-            hashRate = prefs.getFloat(KEY_HASH_RATE, 0f).toDouble(),
-            lightningCapacity = prefs.getFloat(KEY_LIGHTNING_CAPACITY, 0f).toDouble(),
-            change24hUsd = prefs.getFloat(KEY_CHANGE_24H_USD, Float.NaN).toDouble(),
-            change24hThb = prefs.getFloat(KEY_CHANGE_24H_THB, Float.NaN).toDouble()
+            difficultyChange = prefs.getDouble(KEY_DIFFICULTY_CHANGE, 0.0),
+            difficultyProgress = prefs.getDouble(KEY_DIFFICULTY_PROGRESS, 0.0),
+            hashRate = prefs.getDouble(KEY_HASH_RATE, 0.0),
+            lightningCapacity = prefs.getDouble(KEY_LIGHTNING_CAPACITY, 0.0),
+            change24hUsd = prefs.getDouble(KEY_CHANGE_24H_USD, Double.NaN),
+            change24hThb = prefs.getDouble(KEY_CHANGE_24H_THB, Double.NaN)
         )
     }
 }
