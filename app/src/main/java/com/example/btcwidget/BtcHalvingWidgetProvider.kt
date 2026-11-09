@@ -54,12 +54,12 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
             return PendingIntent.getBroadcast(context, requestCode, intent, flags)
         }
 
-        private fun getWidgetMode(context: Context, appWidgetId: Int): Int {
+        fun getWidgetMode(context: Context, appWidgetId: Int): Int {
             val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
             return prefs.getInt("halving_mode_$appWidgetId", 0)
         }
 
-        private fun saveWidgetMode(context: Context, appWidgetId: Int, mode: Int) {
+        fun saveWidgetMode(context: Context, appWidgetId: Int, mode: Int) {
             val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
             prefs.edit().putInt("halving_mode_$appWidgetId", mode).apply()
         }

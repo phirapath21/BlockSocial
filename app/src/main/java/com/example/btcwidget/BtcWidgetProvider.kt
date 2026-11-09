@@ -71,12 +71,12 @@ class BtcWidgetProvider : AppWidgetProvider() {
             return PendingIntent.getBroadcast(context, requestCode, intent, flags)
         }
 
-        private fun getWidgetMode(context: Context, appWidgetId: Int): Int {
+        fun getWidgetMode(context: Context, appWidgetId: Int): Int {
             val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
             return prefs.getInt("mode_$appWidgetId", 0) // Default to mode 0 (BTC/USD)
         }
 
-        private fun saveWidgetMode(context: Context, appWidgetId: Int, mode: Int) {
+        fun saveWidgetMode(context: Context, appWidgetId: Int, mode: Int) {
             val prefs = context.getSharedPreferences("blockclock_prefs", Context.MODE_PRIVATE)
             prefs.edit().putInt("mode_$appWidgetId", mode).apply()
         }

@@ -21,6 +21,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Lets the user pick what a widget shows when placing it (and later via
+             long-press > reconfigure on Android 12+). -->
+        <activity
+            android:name=".WidgetConfigActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".BtcWidgetProvider"
             android:exported="true">
