@@ -17,12 +17,14 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -35,32 +37,37 @@ import com.example.btcwidget.BlockclockPainter
 import com.example.btcwidget.BlockclockScene
 import java.util.Locale
 
-/** Blockclock palette: white type on a black body. Mirrors BlockclockPainter. */
+/** App palette, matching the blockclock panels painted by BlockclockPainter. */
 object EInk {
-    val Background = Color(0xFF0B0B0B)
-    val Body = Color(0xFF050505)
-    val BodyStroke = Color(0xFF2A2A2A)
-    val Value = Color(0xFFF4F4F2)
-    val Label = Color(0xFFB4B4B0)
-    val Caption = Color(0xFF7E7E7A)
-    val Track = Color(0xFF2A2A2A)
+    val Background = Color(0xFF0E0F11)
+    val Body = Color(0xFF1A1B1F)
+    val BodyStroke = Color(0xFF2A2C31)
+    val Value = Color(0xFFD7DCDF)
+    val Label = Color(0xFFA3A8AC)
+    val Caption = Color(0xFF8C9196)
+    val Track = Color(0xFF34363B)
     val Alert = Color(0xFFE5534B)
 
-    val BodyShape = RoundedCornerShape(20.dp)
+    val BodyShape = RoundedCornerShape(16.dp)
     val ChipShape = RoundedCornerShape(50)
 }
 
 /**
- * A blockclock device drawn by [BlockclockPainter], the same code that paints the
+ * A blockclock panel drawn by [BlockclockPainter], the same code that paints the
  * home-screen widgets, so the app and widgets always match.
+ *
+ * @param aspectRatio width / height of the panel.
  */
 @Composable
 fun EInkDevice(
     display: BlockclockDisplay,
     modifier: Modifier = Modifier,
+    aspectRatio: Float = 2f,
     stale: Boolean = false,
     progress: Float? = null
 ) {
+    val context = LocalContext.current
+    val typeface = remember { AndroidDrawSurface.condensedTypeface(context) }
     val scene = BlockclockScene(display = display, stale = stale, progress = progress)
     val description = listOf(display.labelTop, display.labelBottom, display.value, display.suffix)
         .filter { it.isNotEmpty() }
@@ -68,11 +75,11 @@ fun EInkDevice(
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(BlockclockPainter.aspectRatio(scene))
+            .aspectRatio(aspectRatio)
             .semantics { contentDescription = description }
     ) {
         drawIntoCanvas { canvas ->
-            BlockclockPainter.paint(AndroidDrawSurface(canvas.nativeCanvas), size.width, size.height, scene)
+            BlockclockPainter.paint(AndroidDrawSurface(canvas.nativeCanvas, typeface), size.width, size.height, scene)
         }
     }
 }
@@ -88,7 +95,6 @@ fun EInkPanel(
         modifier = modifier
             .fillMaxWidth()
             .background(EInk.Body, EInk.BodyShape)
-            .border(1.dp, EInk.BodyStroke, EInk.BodyShape)
             .padding(16.dp)
     ) {
         SectionLabel(title)

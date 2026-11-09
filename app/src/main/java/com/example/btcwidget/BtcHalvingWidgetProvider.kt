@@ -25,9 +25,7 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
             val scene = BlockclockScene(
                 display = BlockclockMetrics.halving(mode, data.blockHeight),
                 stale = !data.lastFetchSuccessful,
-                progress = BlockclockMetrics.halvingProgress(data.blockHeight).toFloat(),
-                modeIndex = mode,
-                modeCount = 3
+                progress = BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
             )
 
             val views = RemoteViews(context.packageName, R.layout.btc_widget_blockclock)

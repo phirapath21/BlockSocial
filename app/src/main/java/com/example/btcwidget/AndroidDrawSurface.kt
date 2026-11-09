@@ -1,30 +1,32 @@
 package com.example.btcwidget
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import androidx.core.content.res.ResourcesCompat
+import kotlin.random.Random
 
 /** [DrawSurface] backed by an Android [Canvas]; used by widgets and the app. */
-class AndroidDrawSurface(private val canvas: Canvas) : DrawSurface {
+class AndroidDrawSurface(
+    private val canvas: Canvas,
+    private val condensed: Typeface
+) : DrawSurface {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG)
     private val rect = RectF()
     private val bounds = Rect()
 
-    private fun typeface(font: DrawSurface.Font): Typeface = when (font) {
-        DrawSurface.Font.DIGIT -> DIGIT_TYPEFACE
-        DrawSurface.Font.MONO -> Typeface.MONOSPACE
-        DrawSurface.Font.MONO_BOLD -> MONO_BOLD_TYPEFACE
-    }
-
     private fun prepareText(font: DrawSurface.Font, size: Float, tracking: Float): Paint =
         textPaint.apply {
-            typeface = typeface(font)
+            typeface = if (font == DrawSurface.Font.CONDENSED) condensed else Typeface.MONOSPACE
             textSize = size
             letterSpacing = tracking
         }
@@ -43,11 +45,11 @@ class AndroidDrawSurface(private val canvas: Canvas) : DrawSurface {
         fill.shader = null
     }
 
-    override fun roundRectStroke(l: Float, t: Float, r: Float, b: Float, radius: Float, color: Int, width: Float) {
-        stroke.color = color
-        stroke.strokeWidth = width
+    override fun grain(l: Float, t: Float, r: Float, b: Float, radius: Float) {
+        fill.shader = grainShader
         rect.set(l, t, r, b)
-        canvas.drawRoundRect(rect, radius, radius, stroke)
+        canvas.drawRoundRect(rect, radius, radius, fill)
+        fill.shader = null
     }
 
     override fun circle(cx: Float, cy: Float, radius: Float, color: Int) {
@@ -78,8 +80,26 @@ class AndroidDrawSurface(private val canvas: Canvas) : DrawSurface {
         return bounds.height().toFloat()
     }
 
-    private companion object {
-        val DIGIT_TYPEFACE: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        val MONO_BOLD_TYPEFACE: Typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+    companion object {
+        @Volatile private var cachedCondensed: Typeface? = null
+
+        /** Oswald Light, bundled in res/font; falls back to the system condensed face. */
+        fun condensedTypeface(context: Context): Typeface =
+            cachedCondensed ?: (
+                runCatching { ResourcesCompat.getFont(context, R.font.oswald_light) }.getOrNull()
+                    ?: Typeface.create("sans-serif-condensed-light", Typeface.NORMAL)
+                ).also { cachedCondensed = it }
+
+        /** Tileable monochrome noise, generated once. */
+        private val grainShader: BitmapShader by lazy {
+            val size = 96
+            val random = Random(7)
+            val pixels = IntArray(size * size) {
+                val v = random.nextInt(256)
+                Color.argb(random.nextInt(10, 26), v, v, v)
+            }
+            val tile = Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)
+            BitmapShader(tile, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        }
     }
 }

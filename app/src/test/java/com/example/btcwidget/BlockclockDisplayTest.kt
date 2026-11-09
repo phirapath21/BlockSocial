@@ -25,9 +25,10 @@ class BlockclockDisplayTest {
     )
 
     @Test
-    fun values_useThousandsSeparators() {
-        assertEquals("97,123", BlockclockMetrics.forMode(0, data, "USD").value)
-        assertEquals("925,000", BlockclockMetrics.forMode(2, data, "USD").value)
+    fun values_matchBlockclockStyle() {
+        // No thousands separators; USD prices carry a dollar sign.
+        assertEquals("$97123", BlockclockMetrics.forMode(0, data, "USD").value)
+        assertEquals("925000", BlockclockMetrics.forMode(2, data, "USD").value)
         assertEquals("19.912", BlockclockMetrics.forMode(7, data, "USD").value)
         assertEquals("MIL", BlockclockMetrics.forMode(7, data, "USD").suffix)
     }
@@ -41,24 +42,23 @@ class BlockclockDisplayTest {
     }
 
     @Test
-    fun moscowTime_readsLikeAClock() {
-        assertEquals("10:29", BlockclockMetrics.forMode(3, data, "USD").value)
-        assertEquals("0:05", BlockclockMetrics.moscowClock(5))
-        assertEquals("123:45", BlockclockMetrics.moscowClock(12_345))
+    fun moscowTime_isSatsPerDollar() {
+        assertEquals("1029", BlockclockMetrics.forMode(3, data, "USD").value)
+        assertEquals("TIME", BlockclockMetrics.forMode(3, data, "USD").labelBottom)
     }
 
     @Test
     fun forKey_matchesModeOrder() {
         assertEquals(13, BlockclockMetrics.MODE_COUNT)
         assertEquals(BlockclockMetrics.MODE_COUNT, BlockclockMetrics.MODE_NAMES.size)
-        assertEquals("925,000", BlockclockMetrics.forKey("BLOCK", data, "USD").value)
+        assertEquals("925000", BlockclockMetrics.forKey("BLOCK", data, "USD").value)
         assertEquals("7", BlockclockMetrics.forKey("FEES", data, "USD").value)
     }
 
     @Test
     fun halving_modes() {
         // 925,000 % 210,000 = 85,000 done; 125,000 left.
-        assertEquals("125,000", BlockclockMetrics.halving(2, 925_000).value)
+        assertEquals("125000", BlockclockMetrics.halving(2, 925_000).value)
         assertEquals("40.48%", BlockclockMetrics.halving(0, 925_000).value)
         assertEquals("868", BlockclockMetrics.halving(1, 925_000).value)
         assertEquals(0.40476, BlockclockMetrics.halvingProgress(925_000), 1e-4)

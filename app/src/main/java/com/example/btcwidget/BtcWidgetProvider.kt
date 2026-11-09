@@ -26,17 +26,14 @@ class BtcWidgetProvider : AppWidgetProvider() {
             val currency = prefs.getString("currency", "USD") ?: "USD"
             val mode = getWidgetMode(context, appWidgetId)
             val display = BlockclockMetrics.forMode(mode, data, currency)
-            val enabledModes = (0 until BlockclockMetrics.MODE_COUNT).filter { prefs.getBoolean("mode_enabled_$it", true) }
             val scene = BlockclockScene(
                 display = display,
                 stale = !data.lastFetchSuccessful,
-                progress = if (BlockclockMetrics.MODE_KEYS[mode.coerceIn(0, BlockclockMetrics.MODE_COUNT - 1)] == "HALVING") {
+                progress = if (BlockclockMetrics.MODE_KEYS.getOrNull(mode) == "HALVING") {
                     BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
                 } else {
                     null
-                },
-                modeIndex = enabledModes.indexOf(mode),
-                modeCount = enabledModes.size
+                }
             )
 
             val views = RemoteViews(context.packageName, R.layout.btc_widget_blockclock)

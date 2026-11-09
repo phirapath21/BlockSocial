@@ -16,8 +16,8 @@ internal const val WIDGET_PREFS = "blockclock_prefs"
 
 /** Paints a blockclock into a bitmap sized for one widget instance. */
 object WidgetBitmapRenderer {
-    /** Stays well under the binder limit for RemoteViews bitmaps (~720 KB ARGB). */
-    private const val MAX_PIXELS = 180_000f
+    /** Stays well under the binder limit for RemoteViews bitmaps (~800 KB ARGB). */
+    private const val MAX_PIXELS = 200_000f
 
     fun render(
         context: Context,
@@ -32,11 +32,9 @@ object WidgetBitmapRenderer {
         val heightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).takeIf { it > 0 } ?: 110
         val density = context.resources.displayMetrics.density
 
-        // Bitmap with the device's own aspect ratio, as large as the widget allows.
-        val aspect = BlockclockPainter.aspectRatio(scene)
+        // The panel fills the widget, like the launcher's own widget background.
         var w = widthDp * density
         var h = heightDp * density
-        if (w / h > aspect) w = h * aspect else h = w / aspect
         val pixels = w * h
         if (pixels > MAX_PIXELS) {
             val scale = sqrt(MAX_PIXELS / pixels)
@@ -45,7 +43,8 @@ object WidgetBitmapRenderer {
         }
 
         val bitmap = Bitmap.createBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
-        BlockclockPainter.paint(AndroidDrawSurface(Canvas(bitmap)), bitmap.width.toFloat(), bitmap.height.toFloat(), scene)
+        val surface = AndroidDrawSurface(Canvas(bitmap), AndroidDrawSurface.condensedTypeface(context))
+        BlockclockPainter.paint(surface, bitmap.width.toFloat(), bitmap.height.toFloat(), scene)
         views.setImageViewBitmap(R.id.widget_image, bitmap)
         views.setContentDescription(R.id.widget_image, describe(scene))
     }

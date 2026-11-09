@@ -40,12 +40,11 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by the
 - Enable or disable specific Blockclock modes inside settings to customize your widget cycling.
 
 ### 4. Blockclock Design
-The widgets and the app share one minimal look: **white type on a black device body**.
-- A **stacked label** on the left (e.g. `BTC` over `USD`), the **value in large type**, and an optional **unit** after it (e.g. `MIL`, `EH/S`).
-- The device keeps the same proportions in every mode, so tapping to cycle modes never resizes it.
-- **Moscow Time** reads like a clock face (1,351 sats → `13:51`).
-- Dots under the value show which mode you are on; the halving widget adds a thin epoch progress bar.
-- The device is painted as one image, so it stays crisp and correctly proportioned at every widget size; the app uses the same painter.
+The widgets and the app share one look: a **dark grained panel** with **tall condensed type**.
+- A **stacked label** beside the value (e.g. `BTC` over `USD` with a rule between), the **value in large type**, and an optional **unit** set high on the right (e.g. `MIL`, `EH/S`).
+- A **monospace caption** underneath (e.g. `Market price of bitcoin`); a red dot marks stale data.
+- The panel fills the widget and is painted as one image, so it stays crisp at every size; the app uses the same painter.
+- Display face: [Oswald](https://github.com/googlefonts/OswaldFont) Light, bundled under the SIL Open Font License (see `licenses/Oswald-OFL.txt`).
 
 ---
 
