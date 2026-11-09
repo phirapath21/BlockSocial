@@ -60,8 +60,8 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
             Quote("A specter is haunting the modern world, the specter of crypto anarchy.", "Timothy C. May"),
             // Essay title (2001)
             Quote("Trusted third parties are security holes.", "Nick Szabo"),
-            // Asia Property Awards interview with the Bitkub founder
-            Quote("I believe in Bitcoin and the tokenisation concept.", "Jirayut Srupsrisopa, Bitkub"),
+            // Added at the app owner's request
+            Quote("เงินเฟ้อแม่งเหี้ย", "Wichi Saiklao"),
             Quote("Don't trust. Verify.", "Bitcoin proverb"),
             Quote("Fix the money, fix the world.", "Bitcoin proverb")
         )
