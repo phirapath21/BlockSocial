@@ -1,6 +1,10 @@
 package com.example.btcwidget.ui.main
 
+import android.Manifest
 import android.content.Context
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +42,9 @@ import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.WidgetRefreshScheduler
 import com.example.btcwidget.WidgetUpdater
+import com.example.btcwidget.alerts.AlertNotifier
+import com.example.btcwidget.alerts.AlertRule
+import com.example.btcwidget.alerts.AlertStore
 
 @Composable
 fun MainScreen(
@@ -90,6 +97,26 @@ fun MainScreen(
         hapticEnabled = enabled
     }
 
+    var alerts by remember { mutableStateOf(AlertStore.load(context)) }
+    var notificationsAllowed by remember { mutableStateOf(AlertNotifier.canNotify(context)) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notificationsAllowed = AlertNotifier.canNotify(context)
+    }
+    val onAlertChange: (AlertRule) -> Unit = { rule ->
+        val current = (state as? MainScreenUiState.Success)?.data
+        AlertStore.save(context, rule, current)
+        alerts = AlertStore.load(context)
+        if (rule.enabled) {
+            // Alerts need the background refresh even with no widget placed.
+            WidgetRefreshScheduler.schedulePeriodic(context)
+            if (!AlertNotifier.canNotify(context) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } else {
+            WidgetRefreshScheduler.cancelIfUnused(context)
+        }
+    }
+
     val onModeToggle: (Int, Boolean) -> Unit = { index, checked ->
         val activeCount = modeStates.indices.count {
             BlockclockMetrics.isActive(it, modeStates[it], currencySetting)
@@ -118,7 +145,10 @@ fun MainScreen(
         onModeToggle = onModeToggle,
         onRefresh = { viewModel.refreshData(context) },
         onItemClick = onItemClick,
-        modifier = modifier
+        modifier = modifier,
+        alerts = alerts,
+        onAlertChange = onAlertChange,
+        notificationsAllowed = notificationsAllowed
     )
 }
 
@@ -139,7 +169,10 @@ fun MainScreenContent(
     onModeToggle: (Int, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onItemClick: (NavKey) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    alerts: List<AlertRule> = emptyList(),
+    onAlertChange: (AlertRule) -> Unit = {},
+    notificationsAllowed: Boolean = true
 ) {
     Column(
         modifier = modifier
@@ -161,7 +194,10 @@ fun MainScreenContent(
                     refreshInterval = refreshInterval,
                     onRefreshIntervalSelected = onRefreshIntervalSelected,
                     hapticEnabled = hapticEnabled,
-                    onHapticToggle = onHapticToggle
+                    onHapticToggle = onHapticToggle,
+                    alerts = alerts,
+                    onAlertChange = onAlertChange,
+                    notificationsAllowed = notificationsAllowed
                 )
             } else {
                 Column(

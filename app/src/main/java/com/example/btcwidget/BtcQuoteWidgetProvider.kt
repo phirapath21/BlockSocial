@@ -131,6 +131,6 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        WidgetRefreshScheduler.cancelIfNoWidgets(context)
+        WidgetRefreshScheduler.cancelIfUnused(context)
     }
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.btcwidget.WidgetUpdater
+import com.example.btcwidget.alerts.AlertNotifier
 import com.example.btcwidget.PriceData
 import com.example.btcwidget.PriceRepository
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,7 @@ class MainScreenViewModel : ViewModel() {
                 PriceRepository.saveToPrefs(appContext, data)
                 _uiState.value = MainScreenUiState.Success(data)
                 WidgetUpdater.updateAllWidgets(appContext)
+                AlertNotifier.checkAndNotify(appContext, data)
             } else if (_uiState.value !is MainScreenUiState.Success) {
                 _uiState.value = MainScreenUiState.Error(
                     Exception("Failed to fetch price data. Please verify your internet connection.")
