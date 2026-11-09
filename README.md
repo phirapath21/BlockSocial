@@ -82,6 +82,8 @@ The widgets and the app share one look: a **dark grained panel** with **tall con
 
 ## 📦 Release Build
 
+Step-by-step guide: [`docs/RELEASE.md`](docs/RELEASE.md). Store listing text, graphics and policy-form answers: [`docs/play-store/`](docs/play-store/). Privacy policy: [`docs/privacy-policy.md`](docs/privacy-policy.md).
+
 - **Application ID:** `io.github.phirapath21.btcwidget` (the Kotlin package stays `com.example.btcwidget`).
 - **Signing:** create a keystore, then add a git-ignored `keystore.properties` at the project root:
   ```properties
