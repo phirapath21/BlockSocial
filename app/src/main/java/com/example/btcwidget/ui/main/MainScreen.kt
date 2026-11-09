@@ -97,8 +97,8 @@ fun MainScreen(
         if (checked || activeCount > 1) {
             prefs.edit().putBoolean("mode_enabled_$index", checked).apply()
             modeStates[index] = checked
+            // Only which modes are shown changed: redraw from cached data, no network fetch.
             WidgetUpdater.updateAllWidgets(context)
-            viewModel.refreshData(context)
         }
     }
 
