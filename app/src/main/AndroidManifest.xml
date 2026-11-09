@@ -59,6 +59,13 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/btc_halving_widget_info" />
         </receiver>
+        <receiver
+            android:name=".AppUpdateReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

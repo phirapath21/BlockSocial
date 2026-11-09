@@ -69,6 +69,8 @@ fun MainScreen(
     LaunchedEffect(Unit) {
         viewModel.loadInitialData(context)
         WidgetRefreshScheduler.schedulePeriodic(context)
+        // Redraw placed widgets with the current layout and cached data.
+        WidgetUpdater.updateAllWidgets(context)
     }
 
     val onCurrencySelected: (String) -> Unit = { newCurrency ->
