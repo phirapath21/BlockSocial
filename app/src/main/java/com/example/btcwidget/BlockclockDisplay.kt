@@ -3,8 +3,8 @@ package com.example.btcwidget
 import java.util.Locale
 
 /**
- * What one blockclock shows: a stacked two-line label tile, a value spread across
- * one e-ink tile per character, an optional unit tile, and a caption underneath.
+ * What one blockclock shows: a stacked two-line label, a value with an optional
+ * unit, and a caption underneath.
  */
 data class BlockclockDisplay(
     val labelTop: String,
@@ -12,43 +12,7 @@ data class BlockclockDisplay(
     val value: String,
     val suffix: String = "",
     val caption: String = ""
-) {
-    /** The value split into tiles, left-padded with blank tiles to [minTiles]. */
-    fun valueTiles(minTiles: Int = DEFAULT_MIN_TILES): List<String> {
-        val tiles = BlockclockTiles.split(value)
-        val target = minTiles - (if (suffix.isNotEmpty()) 1 else 0)
-        return BlockclockTiles.padStart(tiles, target)
-    }
-
-    companion object {
-        /** Value + unit tiles; with the label tile this gives a seven-screen device. */
-        const val DEFAULT_MIN_TILES = 6
-    }
-}
-
-object BlockclockTiles {
-    private val DROPPED = setOf(',', ' ', '$', '฿')
-
-    /**
-     * Splits a value into one tile per character. Thousands separators and currency
-     * symbols are dropped (the label tile names the unit) and a decimal point rides
-     * along with the digit before it, so "19.912" becomes [1, 9., 9, 1, 2].
-     */
-    fun split(value: String): List<String> {
-        val tiles = mutableListOf<String>()
-        for (c in value) {
-            when {
-                c in DROPPED -> Unit
-                c == '.' && tiles.isNotEmpty() -> tiles[tiles.lastIndex] = tiles.last() + c
-                else -> tiles += c.toString()
-            }
-        }
-        return tiles
-    }
-
-    fun padStart(tiles: List<String>, minCount: Int): List<String> =
-        if (tiles.size >= minCount) tiles else List(minCount - tiles.size) { "" } + tiles
-}
+)
 
 object BlockclockMetrics {
     /** Stable keys for the 13 modes, in widget mode order. */
@@ -91,23 +55,23 @@ object BlockclockMetrics {
         return when (mode) {
             1 -> BlockclockDisplay(
                 "SATS", if (isThb) "1THB" else "1USD",
-                "%d".f(satsPerUnit),
+                "%,d".f(satsPerUnit),
                 caption = if (isThb) "Sats per 1 baht" else "Sats per 1 dollar"
             )
-            2 -> BlockclockDisplay("BLOCK", "HGHT", "%d".f(data.blockHeight), caption = "Bitcoin block height")
+            2 -> BlockclockDisplay("BLOCK", "HGHT", "%,d".f(data.blockHeight), caption = "Bitcoin block height")
             3 -> BlockclockDisplay(
                 "MSCW", "TIME", moscowClock(satsPerUnit),
                 caption = if (isThb) "Moscow time (THB)" else "Moscow time"
             )
-            4 -> BlockclockDisplay("MSTR", "BTC", "%.0f".f(data.mstrBtcHeld), caption = "Strategy BTC holdings")
+            4 -> BlockclockDisplay("MSTR", "BTC", "%,.0f".f(data.mstrBtcHeld), caption = "Strategy BTC holdings")
             5 -> BlockclockDisplay("MSTR", "BTC", "%.5f".f(data.mstrBtc), caption = "Strategy BTC per share")
-            6 -> BlockclockDisplay("MSTR", "USD", "%.0f".f(data.mstrUsd), caption = "Strategy share price")
+            6 -> BlockclockDisplay("MSTR", "USD", "%,.0f".f(data.mstrUsd), caption = "Strategy share price")
             7 -> BlockclockDisplay(
                 "BTC", "CIRC", "%.3f".f(data.btcCirculation / 1_000_000.0), "MIL",
                 caption = "Bitcoin in circulation"
             )
             8 -> BlockclockDisplay(
-                "HALV", "BLKS", "%d".f(blocksToHalving(data.blockHeight)),
+                "HALV", "BLKS", "%,d".f(blocksToHalving(data.blockHeight)),
                 caption = "Blocks to next halving"
             )
             9 -> BlockclockDisplay(
@@ -119,11 +83,11 @@ object BlockclockMetrics {
                 "DIFF", "ADJ", "%+.1f%%".f(data.difficultyChange),
                 caption = "Epoch progress %.1f%%".f(data.difficultyProgress)
             )
-            12 -> BlockclockDisplay("LN", "CAP", "%.0f".f(data.lightningCapacity), "BTC", caption = "Lightning capacity")
+            12 -> BlockclockDisplay("LN", "CAP", "%,.0f".f(data.lightningCapacity), "BTC", caption = "Lightning capacity")
             else -> if (isThb) {
                 BlockclockDisplay("BTC", "THB", "%.2f".f(data.btcThb / 1_000_000.0), "MIL", caption = "Market price of bitcoin")
             } else {
-                BlockclockDisplay("BTC", "USD", "%.0f".f(data.btcUsd), caption = "Market price of bitcoin")
+                BlockclockDisplay("BTC", "USD", "%,.0f".f(data.btcUsd), caption = "Market price of bitcoin")
             }
         }
     }
@@ -134,9 +98,9 @@ object BlockclockMetrics {
         val percent = halvingProgress(blockHeight) * 100.0
         val days = blocksLeft / BLOCKS_PER_DAY
         return when (mode) {
-            1 -> BlockclockDisplay("HALV", "ETA", "%.0f".f(days), "DAYS", caption = "%.1f%% of epoch done".f(percent))
-            2 -> BlockclockDisplay("HALV", "BLKS", "%d".f(blocksLeft), caption = "≈ %.0f days to halving".f(days))
-            else -> BlockclockDisplay("HALV", "PCT", "%.2f%%".f(percent), caption = "%d blocks to halving".f(blocksLeft))
+            1 -> BlockclockDisplay("HALV", "ETA", "%,.0f".f(days), "DAYS", caption = "%.1f%% of epoch done".f(percent))
+            2 -> BlockclockDisplay("HALV", "BLKS", "%,d".f(blocksLeft), caption = "≈ %.0f days to halving".f(days))
+            else -> BlockclockDisplay("HALV", "PCT", "%.2f%%".f(percent), caption = "%,d blocks to halving".f(blocksLeft))
         }
     }
 

@@ -1,22 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Quote widget: one large e-ink screen on the black body. -->
+<!-- Quote widget: white type on the black body. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/eink_frame"
-    android:padding="7dp">
+    android:background="@drawable/eink_frame">
 
     <LinearLayout
         android:id="@+id/quote_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/eink_tile"
         android:clickable="true"
         android:focusable="true"
         android:gravity="center"
         android:orientation="vertical"
-        android:padding="10dp">
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="10dp">
 
         <TextView
             android:id="@+id/txt_quote_text"
@@ -24,21 +25,21 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:autoSizeMaxTextSize="18sp"
-            android:autoSizeMinTextSize="8sp"
+            android:autoSizeMinTextSize="9sp"
             android:autoSizeStepGranularity="0.5sp"
             android:autoSizeTextType="uniform"
             android:fontFamily="serif"
             android:gravity="center"
             android:lineSpacingMultiplier="1.1"
-            android:textColor="@color/eink_ink"
-            android:textSize="11sp" />
+            android:textColor="@color/eink_value"
+            android:textSize="12sp" />
 
         <FrameLayout
             android:layout_width="24dp"
             android:layout_height="1dp"
-            android:layout_marginTop="6dp"
-            android:layout_marginBottom="5dp"
-            android:background="@color/eink_ink" />
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="6dp"
+            android:background="@color/eink_rule" />
 
         <TextView
             android:id="@+id/txt_quote_author"
@@ -47,8 +48,7 @@
             android:fontFamily="monospace"
             android:letterSpacing="0.1"
             android:singleLine="true"
-            android:textColor="@color/eink_ink_soft"
-            android:textSize="8sp"
-            android:textStyle="bold" />
+            android:textColor="@color/eink_caption"
+            android:textSize="9sp" />
     </LinearLayout>
 </FrameLayout>

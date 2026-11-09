@@ -25,32 +25,11 @@ class BlockclockDisplayTest {
     )
 
     @Test
-    fun split_dropsSeparatorsAndSymbols() {
-        assertEquals(listOf("9", "7", "1", "2", "3"), BlockclockTiles.split("$97,123"))
-    }
-
-    @Test
-    fun split_attachesDecimalPointToPreviousDigit() {
-        assertEquals(listOf("1", "9.", "9", "1", "2"), BlockclockTiles.split("19.912"))
-        assertEquals(listOf("+", "1.", "5", "%"), BlockclockTiles.split("+1.5%"))
-        assertEquals(listOf("."), BlockclockTiles.split("."))
-    }
-
-    @Test
-    fun valueTiles_padsToSevenScreenDevice() {
-        val price = BlockclockMetrics.forMode(0, data, "USD")
-        assertEquals(listOf("", "9", "7", "1", "2", "3"), price.valueTiles())
-
-        // A unit tile takes one of the six slots.
-        val circ = BlockclockMetrics.forMode(7, data, "USD")
-        assertEquals("MIL", circ.suffix)
-        assertEquals(listOf("1", "9.", "9", "1", "2"), circ.valueTiles())
-    }
-
-    @Test
-    fun valueTiles_neverTruncatesLongValues() {
-        val long = BlockclockDisplay("A", "B", "12345678")
-        assertEquals(8, long.valueTiles().size)
+    fun values_useThousandsSeparators() {
+        assertEquals("97,123", BlockclockMetrics.forMode(0, data, "USD").value)
+        assertEquals("925,000", BlockclockMetrics.forMode(2, data, "USD").value)
+        assertEquals("19.912", BlockclockMetrics.forMode(7, data, "USD").value)
+        assertEquals("MIL", BlockclockMetrics.forMode(7, data, "USD").suffix)
     }
 
     @Test
@@ -72,14 +51,14 @@ class BlockclockDisplayTest {
     fun forKey_matchesModeOrder() {
         assertEquals(13, BlockclockMetrics.MODE_COUNT)
         assertEquals(BlockclockMetrics.MODE_COUNT, BlockclockMetrics.MODE_NAMES.size)
-        assertEquals("925000", BlockclockMetrics.forKey("BLOCK", data, "USD").value)
+        assertEquals("925,000", BlockclockMetrics.forKey("BLOCK", data, "USD").value)
         assertEquals("7", BlockclockMetrics.forKey("FEES", data, "USD").value)
     }
 
     @Test
     fun halving_modes() {
         // 925,000 % 210,000 = 85,000 done; 125,000 left.
-        assertEquals("125000", BlockclockMetrics.halving(2, 925_000).value)
+        assertEquals("125,000", BlockclockMetrics.halving(2, 925_000).value)
         assertEquals("40.48%", BlockclockMetrics.halving(0, 925_000).value)
         assertEquals("868", BlockclockMetrics.halving(1, 925_000).value)
         assertEquals(0.40476, BlockclockMetrics.halvingProgress(925_000), 1e-4)

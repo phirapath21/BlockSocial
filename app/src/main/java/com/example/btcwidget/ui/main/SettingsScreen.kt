@@ -99,7 +99,7 @@ private fun SettingRow(
     ) {
         Text(
             text = label,
-            color = EInk.Paper,
+            color = EInk.Value,
             fontSize = 13.sp,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.weight(1f)

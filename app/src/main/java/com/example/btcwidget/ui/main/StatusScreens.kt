@@ -27,7 +27,7 @@ fun LoadingScreen() {
         verticalArrangement = Arrangement.Center
     ) {
         CircularProgressIndicator(
-            color = EInk.Paper,
+            color = EInk.Value,
             trackColor = EInk.Track,
             strokeWidth = 2.dp,
             modifier = Modifier.size(32.dp)
@@ -50,7 +50,7 @@ fun ErrorScreen(error: Throwable, onRefresh: () -> Unit) {
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = error.message ?: "An unexpected error occurred",
-            color = EInk.Paper,
+            color = EInk.Value,
             fontSize = 13.sp,
             fontFamily = FontFamily.Monospace,
             textAlign = TextAlign.Center,

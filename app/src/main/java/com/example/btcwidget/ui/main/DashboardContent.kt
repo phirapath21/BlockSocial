@@ -35,7 +35,7 @@ fun HeaderSection(title: String, subtitle: String) {
     ) {
         Text(
             text = title,
-            color = EInk.Paper,
+            color = EInk.Value,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,

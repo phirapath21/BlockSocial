@@ -5,8 +5,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Draws every mode with fake font metrics and checks that each glyph stays inside
- * the e-ink screen it belongs to and everything stays inside the device body.
+ * Draws every mode with fake font metrics and checks that all text stays inside the
+ * device body and the value never runs into the label column.
  */
 class BlockclockPainterTest {
 
@@ -14,13 +14,12 @@ class BlockclockPainterTest {
 
     /** Fixed metrics: glyphs are 0.62em wide (bold) / 0.6em (mono), digits 0.72em tall. */
     private class RecordingSurface : DrawSurface {
-        val screens = mutableListOf<Box>()
         val texts = mutableListOf<Pair<String, Box>>()
         var body: Box? = null
 
         override fun roundRect(l: Float, t: Float, r: Float, b: Float, radius: Float, color: Int) = Unit
         override fun roundRectGradient(l: Float, t: Float, r: Float, b: Float, radius: Float, top: Int, bottom: Int) {
-            if (body == null) body = Box(l, t, r, b) else screens += Box(l, t, r, b)
+            if (body == null) body = Box(l, t, r, b)
         }
         override fun roundRectStroke(l: Float, t: Float, r: Float, b: Float, radius: Float, color: Int, width: Float) = Unit
         override fun circle(cx: Float, cy: Float, radius: Float, color: Int) = Unit
@@ -67,21 +66,30 @@ class BlockclockPainterTest {
     }
 
     @Test
-    fun glyphsStayInsideTheirScreens() {
+    fun textStaysInsideBodyAndValueClearsLabel() {
         for (scene in allScenes()) {
             for ((w, h) in listOf(400f to 110f, 1000f to 200f, 300f to 300f)) {
                 val s = RecordingSurface()
                 BlockclockPainter.paint(s, w, h, scene)
                 val body = s.body!!
-
                 for ((text, box) in s.texts) {
-                    val screen = s.screens.firstOrNull { box.l >= it.l - 0.5f && box.r <= it.r + 0.5f && box.t >= it.t - 0.5f && box.b <= it.b + 0.5f }
-                    val inBody = box.l >= body.l && box.r <= body.r && box.t >= body.t && box.b <= body.b
-                    val isCaption = s.screens.none { box.t < it.b && box.b > it.t }
-                    assertTrue("'$text' of ${scene.display} overflows at ${w}x$h", screen != null || (isCaption && inBody))
+                    assertTrue(
+                        "'$text' of ${scene.display} leaves the body at ${w}x$h",
+                        box.l >= body.l && box.r <= body.r && box.t >= body.t && box.b <= body.b
+                    )
                 }
+                val label = s.texts.first { it.first == scene.display.labelTop }.second
+                val value = s.texts.first { it.first == scene.display.value }.second
+                assertTrue("value overlaps label for ${scene.display}", value.l > label.r)
             }
         }
+    }
+
+    @Test
+    fun sameSizeInEveryMode() {
+        // Cycling modes on the widget must not resize the device.
+        val ratios = allScenes().filter { it.progress == null }.map { BlockclockPainter.aspectRatio(it) }.toSet()
+        assertEquals(1, ratios.size)
     }
 
     @Test
@@ -93,12 +101,5 @@ class BlockclockPainterTest {
         assertEquals(BlockclockPainter.aspectRatio(scene), (body.r - body.l) / (body.b - body.t), 0.01f)
         assertEquals(1000f, body.r - body.l, 0.5f) // width-limited, centered vertically
         assertEquals(500f, (body.t + body.b) / 2, 0.5f)
-    }
-
-    @Test
-    fun sevenScreensForStandardModes() {
-        val s = RecordingSurface()
-        BlockclockPainter.paint(s, 700f, 200f, BlockclockScene(BlockclockMetrics.forMode(0, data, "USD")))
-        assertEquals(7, s.screens.size)
     }
 }

@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -36,23 +35,19 @@ import com.example.btcwidget.BlockclockPainter
 import com.example.btcwidget.BlockclockScene
 import java.util.Locale
 
-/** E-ink blockclock palette; mirrors res/values/colors.xml used by the widgets. */
+/** Blockclock palette: white type on a black body. Mirrors BlockclockPainter. */
 object EInk {
     val Background = Color(0xFF0B0B0B)
     val Body = Color(0xFF050505)
-    val BodyStroke = Color(0xFF262626)
-    val Paper = Color(0xFFE7E4DB)
-    val PaperShade = Color(0xFFD6D2C6)
-    val Ink = Color(0xFF141414)
-    val InkSoft = Color(0xFF5C5A54)
-    val Caption = Color(0xFF8A877F)
+    val BodyStroke = Color(0xFF2A2A2A)
+    val Value = Color(0xFFF4F4F2)
+    val Label = Color(0xFFB4B4B0)
+    val Caption = Color(0xFF7E7E7A)
     val Track = Color(0xFF2A2A2A)
-    val Alert = Color(0xFFD9534F)
+    val Alert = Color(0xFFE5534B)
 
-    val BodyShape = RoundedCornerShape(16.dp)
-    val TileShape = RoundedCornerShape(3.dp)
-    val ChipShape = RoundedCornerShape(4.dp)
-    val PaperBrush = Brush.verticalGradient(listOf(Paper, PaperShade))
+    val BodyShape = RoundedCornerShape(20.dp)
+    val ChipShape = RoundedCornerShape(50)
 }
 
 /**
@@ -115,7 +110,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Selectable chip: a lit e-ink screen when selected, a dark outline otherwise. */
+/** Selectable chip: white outline and type when selected, dim otherwise. */
 @Composable
 fun EInkChip(
     text: String,
@@ -123,22 +118,17 @@ fun EInkChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val surface = if (selected) {
-        Modifier.background(EInk.PaperBrush, EInk.ChipShape)
-    } else {
-        Modifier.border(1.dp, EInk.BodyStroke, EInk.ChipShape)
-    }
     Box(
         modifier = modifier
-            .then(surface)
+            .border(1.dp, if (selected) EInk.Value else EInk.BodyStroke, EInk.ChipShape)
             .clip(EInk.ChipShape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 14.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = if (selected) EInk.Ink else EInk.Caption,
+            color = if (selected) EInk.Value else EInk.Caption,
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
@@ -152,9 +142,9 @@ fun EInkSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
         checked = checked,
         onCheckedChange = onCheckedChange,
         colors = SwitchDefaults.colors(
-            checkedThumbColor = EInk.Ink,
-            checkedTrackColor = EInk.Paper,
-            checkedBorderColor = EInk.Paper,
+            checkedThumbColor = EInk.Body,
+            checkedTrackColor = EInk.Value,
+            checkedBorderColor = EInk.Value,
             uncheckedThumbColor = EInk.Caption,
             uncheckedTrackColor = EInk.Body,
             uncheckedBorderColor = EInk.BodyStroke
