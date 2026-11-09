@@ -33,18 +33,13 @@ class MainScreenViewModel : ViewModel() {
             if (data != null) {
                 PriceRepository.saveToPrefs(context, data)
                 _uiState.value = MainScreenUiState.Success(data)
-                
+
                 // Trigger widget update directly
                 WidgetUpdater.updateAllWidgets(context)
             } else {
-                val cached = PriceRepository.getFromPrefs(context)
-                if (cached != null) {
-                    _uiState.value = MainScreenUiState.Success(cached)
-                } else {
-                    _uiState.value = MainScreenUiState.Error(
-                        Exception("Failed to fetch price data. Please verify your internet connection.")
-                    )
-                }
+                _uiState.value = MainScreenUiState.Error(
+                    Exception("Failed to fetch price data. Please verify your internet connection.")
+                )
             }
         }
     }

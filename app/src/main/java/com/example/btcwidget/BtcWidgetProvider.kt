@@ -14,9 +14,6 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.View
 import android.widget.RemoteViews
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.util.Locale
 
 class BtcWidgetProvider : AppWidgetProvider() {
@@ -381,7 +378,14 @@ class BtcWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        triggerRefresh(context)
+        // Draw cached data immediately, then fetch fresh data in the background.
+        PriceRepository.getFromPrefs(context)?.let { data ->
+            for (id in appWidgetIds) {
+                updateWidgetLayout(context, appWidgetManager, id, data)
+            }
+        }
+        WidgetRefreshScheduler.schedulePeriodic(context)
+        WidgetRefreshScheduler.refreshNow(context)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -404,18 +408,7 @@ class BtcWidgetProvider : AppWidgetProvider() {
                 }
             }
         } else if (action == ACTION_REFRESH) {
-            val pendingResult = goAsync()
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    val data = PriceRepository.fetchPriceData(context)
-                    if (data != null) {
-                        PriceRepository.saveToPrefs(context, data)
-                        WidgetUpdater.updateAllWidgets(context)
-                    }
-                } finally {
-                    pendingResult.finish()
-                }
-            }
+            WidgetRefreshScheduler.refreshNow(context)
         }
     }
 
@@ -430,20 +423,13 @@ class BtcWidgetProvider : AppWidgetProvider() {
         updateWidgetLayout(context, appWidgetManager, appWidgetId, data)
     }
 
-    private fun triggerRefresh(context: Context) {
-        val intent = Intent(context, BtcWidgetProvider::class.java).apply {
-            action = ACTION_REFRESH
-        }
-        context.sendBroadcast(intent)
-    }
-
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        WidgetAlarmManager.scheduleAlarm(context)
+        WidgetRefreshScheduler.schedulePeriodic(context)
     }
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        WidgetAlarmManager.checkAndCancelAlarmIfNeeded(context)
+        WidgetRefreshScheduler.cancelIfNoWidgets(context)
     }
 }

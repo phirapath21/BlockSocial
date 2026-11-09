@@ -206,11 +206,11 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
 
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        WidgetAlarmManager.scheduleAlarm(context)
+        WidgetRefreshScheduler.schedulePeriodic(context)
     }
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        WidgetAlarmManager.checkAndCancelAlarmIfNeeded(context)
+        WidgetRefreshScheduler.cancelIfNoWidgets(context)
     }
 }

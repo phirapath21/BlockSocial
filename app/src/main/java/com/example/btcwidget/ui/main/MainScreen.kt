@@ -6,7 +6,7 @@ import android.content.SharedPreferences
 import com.example.btcwidget.BtcWidgetProvider
 import com.example.btcwidget.R
 import com.example.btcwidget.WidgetUpdater
-import com.example.btcwidget.WidgetAlarmManager
+import com.example.btcwidget.WidgetRefreshScheduler
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -95,7 +95,7 @@ fun MainScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadInitialData(context)
-        WidgetAlarmManager.scheduleAlarm(context)
+        WidgetRefreshScheduler.schedulePeriodic(context)
     }
 
     val onThemeSelected: (Int) -> Unit = { newTheme ->
@@ -113,7 +113,7 @@ fun MainScreen(
     val onRefreshIntervalSelected: (Int) -> Unit = { newInterval ->
         prefs.edit().putInt("refresh_interval", newInterval).apply()
         refreshInterval = newInterval
-        WidgetAlarmManager.scheduleAlarm(context)
+        WidgetRefreshScheduler.schedulePeriodic(context, intervalChanged = true)
     }
 
     val onHapticToggle: (Boolean) -> Unit = { enabled ->

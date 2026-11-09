@@ -4,7 +4,7 @@
     android:minHeight="40dp"
     android:targetCellWidth="2"
     android:targetCellHeight="1"
-    android:updatePeriodMillis="1800000"
+    android:updatePeriodMillis="0"
     android:initialLayout="@layout/btc_widget_quote"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen">
