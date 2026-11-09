@@ -301,12 +301,7 @@ fun MainScreenContent(
                                 data = currentState.data,
                                 heroMetric = heroMetric,
                                 onHeroMetricSelected = onHeroMetricSelected,
-                                enabledModes = modeStates,
                                 currencySetting = currencySetting,
-                                order = modeOrder,
-                                onOrderChange = onModeOrderChange,
-                                collapsedCategories = collapsedCategories,
-                                onToggleCategory = onToggleCategory,
                                 stackSats = stackSats,
                                 onSetUpStack = { onTabSelected(MainTab.SETTINGS) },
                                 history = history
@@ -335,21 +330,18 @@ fun MainScreenContent(
                     notificationsAllowed = notificationsAllowed,
                     data = data
                 )
-                MainTab.WIDGETS -> {
-                    val hasStack = stackSats > 0
-                    val available = (0 until BlockclockMetrics.MODE_COUNT)
-                        .filter { BlockclockMetrics.isAvailable(it, currencySetting, hasStack) }
-                    WidgetsScreen(
-                        currencySetting = currencySetting,
-                        data = data,
-                        modeStates = modeStates,
-                        onModeToggle = onModeToggle,
-                        modeOrder = modeOrder,
-                        stackSats = stackSats,
-                        onWidgetCount = available.count { modeStates.getOrElse(it) { true } },
-                        availableCount = available.size
-                    )
-                }
+                MainTab.WIDGETS -> WidgetsScreen(
+                    data = data,
+                    currencySetting = currencySetting,
+                    modeStates = modeStates,
+                    onModeToggle = onModeToggle,
+                    order = modeOrder,
+                    onOrderChange = onModeOrderChange,
+                    collapsedCategories = collapsedCategories,
+                    onToggleCategory = onToggleCategory,
+                    stackSats = stackSats,
+                    onSetUpStack = { onTabSelected(MainTab.SETTINGS) }
+                )
                 MainTab.SETTINGS -> SettingsScreen(
                     currencySetting = currencySetting,
                     onCurrencySelected = onCurrencySelected,
