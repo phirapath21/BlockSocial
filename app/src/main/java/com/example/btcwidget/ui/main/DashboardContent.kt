@@ -35,7 +35,7 @@ fun HeaderSection(title: String, subtitle: String) {
     ) {
         Text(
             text = title,
-            color = EInk.Paper,
+            color = EInk.Value,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
@@ -80,10 +80,10 @@ fun DashboardContent(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        // Hero device: taller screens than the list below.
+        // Hero panel, same proportions as a 2x1 widget.
         EInkDevice(
             display = BlockclockMetrics.forKey(heroMetric, data, currencySetting),
-            tileAspect = 0.62f,
+            aspectRatio = 2f,
             stale = !data.lastFetchSuccessful
         )
 
@@ -109,20 +109,30 @@ fun DashboardContent(
                 .padding(start = 4.dp, bottom = 10.dp)
         )
 
-        BlockclockMetrics.MODE_KEYS.forEachIndexed { index, key ->
-            val enabled = enabledModes.getOrElse(index) { true }
-            if (enabled && key != heroMetric) {
-                EInkDevice(
-                    display = BlockclockMetrics.forMode(index, data, currencySetting),
-                    tileAspect = 0.9f,
-                    progress = if (key == "HALVING") {
-                        BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
-                    } else {
-                        null
-                    }
-                )
-                Spacer(modifier = Modifier.height(10.dp))
+        // Remaining metrics as a two-column grid of smaller panels.
+        val visible = BlockclockMetrics.MODE_KEYS.indices.filter { index ->
+            enabledModes.getOrElse(index) { true } && BlockclockMetrics.MODE_KEYS[index] != heroMetric
+        }
+        visible.chunked(2).forEach { pair ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                pair.forEach { index ->
+                    EInkDevice(
+                        display = BlockclockMetrics.forMode(index, data, currencySetting),
+                        modifier = Modifier.weight(1f),
+                        aspectRatio = 1.7f,
+                        progress = if (BlockclockMetrics.MODE_KEYS[index] == "HALVING") {
+                            BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
+                        } else {
+                            null
+                        }
+                    )
+                }
+                if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
+            Spacer(modifier = Modifier.height(10.dp))
         }
 
         val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())

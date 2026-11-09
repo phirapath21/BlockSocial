@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.View
 import android.widget.RemoteViews
 
 class BtcHalvingWidgetProvider : AppWidgetProvider() {
@@ -22,17 +21,15 @@ class BtcHalvingWidgetProvider : AppWidgetProvider() {
             appWidgetId: Int,
             data: PriceData
         ) {
-            val display = BlockclockMetrics.halving(getWidgetMode(context, appWidgetId), data.blockHeight)
+            val mode = getWidgetMode(context, appWidgetId)
+            val scene = BlockclockScene(
+                display = BlockclockMetrics.halving(mode, data.blockHeight),
+                stale = !data.lastFetchSuccessful,
+                progress = BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
+            )
 
             val views = RemoteViews(context.packageName, R.layout.btc_widget_blockclock)
-            TileRenderer.render(context, views, display, stale = !data.lastFetchSuccessful)
-
-            // E-ink progress bar for the current halving epoch.
-            views.setViewVisibility(R.id.progress_bar, View.VISIBLE)
-            views.setProgressBar(
-                R.id.progress_bar, 1000,
-                (BlockclockMetrics.halvingProgress(data.blockHeight) * 1000).toInt(), false
-            )
+            WidgetBitmapRenderer.render(context, appWidgetManager, appWidgetId, views, scene)
 
             // Tap to cycle display mode
             views.setOnClickPendingIntent(R.id.widget_root, getPendingSelfIntent(context, appWidgetId, ACTION_NEXT_MODE))

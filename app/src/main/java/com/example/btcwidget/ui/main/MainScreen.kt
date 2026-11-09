@@ -194,8 +194,8 @@ fun MainScreenContent(
             tonalElevation = 0.dp
         ) {
             val itemColors = NavigationBarItemDefaults.colors(
-                selectedIconColor = EInk.Paper,
-                selectedTextColor = EInk.Paper,
+                selectedIconColor = EInk.Value,
+                selectedTextColor = EInk.Value,
                 indicatorColor = Color.Transparent,
                 unselectedIconColor = EInk.Caption,
                 unselectedTextColor = EInk.Caption

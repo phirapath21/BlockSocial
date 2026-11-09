@@ -25,32 +25,12 @@ class BlockclockDisplayTest {
     )
 
     @Test
-    fun split_dropsSeparatorsAndSymbols() {
-        assertEquals(listOf("9", "7", "1", "2", "3"), BlockclockTiles.split("$97,123"))
-    }
-
-    @Test
-    fun split_attachesDecimalPointToPreviousDigit() {
-        assertEquals(listOf("1", "9.", "9", "1", "2"), BlockclockTiles.split("19.912"))
-        assertEquals(listOf("+", "1.", "5", "%"), BlockclockTiles.split("+1.5%"))
-        assertEquals(listOf("."), BlockclockTiles.split("."))
-    }
-
-    @Test
-    fun valueTiles_padsToSevenScreenDevice() {
-        val price = BlockclockMetrics.forMode(0, data, "USD")
-        assertEquals(listOf("", "9", "7", "1", "2", "3"), price.valueTiles())
-
-        // A unit tile takes one of the six slots.
-        val circ = BlockclockMetrics.forMode(7, data, "USD")
-        assertEquals("MIL", circ.suffix)
-        assertEquals(listOf("1", "9.", "9", "1", "2"), circ.valueTiles())
-    }
-
-    @Test
-    fun valueTiles_neverTruncatesLongValues() {
-        val long = BlockclockDisplay("A", "B", "12345678")
-        assertEquals(8, long.valueTiles().size)
+    fun values_matchBlockclockStyle() {
+        // No thousands separators; USD prices carry a dollar sign.
+        assertEquals("$97123", BlockclockMetrics.forMode(0, data, "USD").value)
+        assertEquals("925000", BlockclockMetrics.forMode(2, data, "USD").value)
+        assertEquals("19.912", BlockclockMetrics.forMode(7, data, "USD").value)
+        assertEquals("MIL", BlockclockMetrics.forMode(7, data, "USD").suffix)
     }
 
     @Test
@@ -62,10 +42,9 @@ class BlockclockDisplayTest {
     }
 
     @Test
-    fun moscowTime_readsLikeAClock() {
-        assertEquals("10:29", BlockclockMetrics.forMode(3, data, "USD").value)
-        assertEquals("0:05", BlockclockMetrics.moscowClock(5))
-        assertEquals("123:45", BlockclockMetrics.moscowClock(12_345))
+    fun moscowTime_isSatsPerDollar() {
+        assertEquals("1029", BlockclockMetrics.forMode(3, data, "USD").value)
+        assertEquals("TIME", BlockclockMetrics.forMode(3, data, "USD").labelBottom)
     }
 
     @Test

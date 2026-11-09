@@ -1,4 +1,3 @@
 <resources>
     <string name="app_name">BTCWidget</string>
-    <string name="widget_stale_badge">STALE</string>
 </resources>

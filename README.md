@@ -39,13 +39,12 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by the
 ### 3. Active Mode Customization
 - Enable or disable specific Blockclock modes inside settings to customize your widget cycling.
 
-### 4. E-Ink Blockclock Design
-The widgets and the app share one look, modelled on small e-ink blockclock hardware:
-- **Black device body** with a row of **individual e-ink screens**, one character per screen.
-- **Stacked label screen** on the left (e.g. `BTC` over `USD`) and an optional **unit screen** on the right (e.g. `MIL`, `EH/S`).
-- Values are padded with blank screens to a seven-screen device; decimal points ride with their digit.
-- **Moscow Time** reads like a clock face (1,029 sats → `10:29`).
-- Halving widget adds a thin e-ink **epoch progress bar**; the Quotes widget is a single large e-ink screen.
+### 4. Blockclock Design
+The widgets and the app share one look: a **dark grained panel** with **tall condensed type**.
+- A **stacked label** beside the value (e.g. `BTC` over `USD` with a rule between), the **value in large type**, and an optional **unit** set high on the right (e.g. `MIL`, `EH/S`).
+- A **monospace caption** underneath (e.g. `Market price of bitcoin`); a red dot marks stale data.
+- The panel fills the widget and is painted as one image, so it stays crisp at every size; the app uses the same painter.
+- Display face: [Oswald](https://github.com/googlefonts/OswaldFont) Light, bundled under the SIL Open Font License (see `licenses/Oswald-OFL.txt`).
 
 ---
 

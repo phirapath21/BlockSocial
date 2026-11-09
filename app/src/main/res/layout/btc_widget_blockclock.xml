@@ -1,67 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Blockclock device: a row of e-ink tiles on a black body, caption below.
-     Used by both the metrics widget and the halving widget. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- The whole blockclock device is painted into one bitmap (BlockclockPainter),
+     so its proportions stay correct at every widget size. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/eink_frame"
     android:clickable="true"
-    android:focusable="true"
-    android:orientation="vertical"
-    android:paddingStart="7dp"
-    android:paddingTop="7dp"
-    android:paddingEnd="7dp"
-    android:paddingBottom="4dp">
+    android:focusable="true">
 
-    <LinearLayout
-        android:id="@+id/tile_row"
+    <ImageView
+        android:id="@+id/widget_image"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="horizontal" />
-
-    <ProgressBar
-        android:id="@+id/progress_bar"
-        style="@android:style/Widget.ProgressBar.Horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="3dp"
-        android:layout_marginStart="1.5dp"
-        android:layout_marginTop="5dp"
-        android:layout_marginEnd="1.5dp"
-        android:max="1000"
-        android:progressDrawable="@drawable/widget_progress_drawable"
-        android:visibility="gone" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:gravity="center"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/txt_warning"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="4dp"
-            android:fontFamily="monospace"
-            android:text="@string/widget_stale_badge"
-            android:textColor="@color/eink_alert"
-            android:textSize="8sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/txt_caption"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:fontFamily="monospace"
-            android:letterSpacing="0.08"
-            android:singleLine="true"
-            android:textAllCaps="true"
-            android:textColor="@color/eink_caption"
-            android:textSize="8sp" />
-    </LinearLayout>
-</LinearLayout>
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter" />
+</FrameLayout>

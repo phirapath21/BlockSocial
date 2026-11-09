@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Black device body around the e-ink screens -->
+<!-- Dark panel behind the quote widget, matching the painted blockclock panels -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="@color/eink_body" />
-    <stroke android:width="1dp" android:color="@color/eink_body_stroke" />
+    <gradient
+        android:angle="270"
+        android:endColor="@color/eink_panel_bottom"
+        android:startColor="@color/eink_panel_top" />
     <corners android:radius="16dp" />
 </shape>

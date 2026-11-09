@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- E-ink blockclock palette, shared by widgets and the app -->
-    <color name="eink_background">#0B0B0B</color>   <!-- app canvas -->
-    <color name="eink_body">#050505</color>         <!-- device body / frame -->
-    <color name="eink_body_stroke">#262626</color>  <!-- bezel edge -->
-    <color name="eink_paper">#E7E4DB</color>        <!-- e-ink screen -->
-    <color name="eink_paper_shade">#D6D2C6</color>  <!-- screen lower edge -->
-    <color name="eink_ink">#141414</color>          <!-- e-ink pixels -->
-    <color name="eink_ink_soft">#5C5A54</color>     <!-- secondary ink -->
-    <color name="eink_caption">#8A877F</color>      <!-- captions on the body -->
-    <color name="eink_track">#2A2A2A</color>        <!-- empty progress -->
-    <color name="eink_alert">#D9534F</color>
+    <!-- Blockclock palette. Mirrors BlockclockPainter (widgets) and EInk (app). -->
+    <color name="eink_background">#0E0F11</color>  <!-- app canvas -->
+    <color name="eink_panel_top">#1E1F23</color>   <!-- panel gradient -->
+    <color name="eink_panel_bottom">#16171A</color>
+    <color name="eink_value">#D7DCDF</color>       <!-- primary type -->
+    <color name="eink_caption">#E3E5E7</color>     <!-- monospace captions -->
+    <color name="eink_rule">#5A5E63</color>        <!-- divider lines -->
 </resources>
