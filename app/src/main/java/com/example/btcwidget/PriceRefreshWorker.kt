@@ -1,5 +1,7 @@
 package com.example.btcwidget
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -18,6 +20,7 @@ class PriceRefreshWorker(
         PriceRepository.saveToPrefs(applicationContext, data)
         WidgetUpdater.updateAllWidgets(applicationContext)
         AlertNotifier.checkAndNotify(applicationContext, data)
+        refreshHistoryForChartWidgets()
 
         // Core sources failed: try again sooner than the next periodic run.
         return if (!data.lastFetchSuccessful && runAttemptCount < MAX_RETRIES) {
@@ -27,7 +30,21 @@ class PriceRefreshWorker(
         }
     }
 
+    /** Hourly candles change slowly: refetch at most once an hour, and only for chart widgets. */
+    private fun refreshHistoryForChartWidgets() {
+        val manager = AppWidgetManager.getInstance(applicationContext)
+        val ids = manager.getAppWidgetIds(ComponentName(applicationContext, BtcChartWidgetProvider::class.java))
+        if (ids.isEmpty()) return
+        if (System.currentTimeMillis() - HistoryStore.fetchedAt(applicationContext) < HISTORY_MAX_AGE_MS) return
+        val fresh = runCatching { PriceRepository.fetchHistory(ChartRange.WEEK.hours) }.getOrNull()
+        if (fresh != null && fresh.size >= 2) {
+            HistoryStore.save(applicationContext, fresh)
+            for (id in ids) BtcChartWidgetProvider.updateWidgetLayout(applicationContext, manager, id)
+        }
+    }
+
     private companion object {
         const val MAX_RETRIES = 3
+        const val HISTORY_MAX_AGE_MS = 55 * 60_000L
     }
 }

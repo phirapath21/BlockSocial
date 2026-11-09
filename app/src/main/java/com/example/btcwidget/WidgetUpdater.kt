@@ -44,5 +44,15 @@ object WidgetUpdater {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+
+        // 5. Price chart widget
+        try {
+            val chartWidget = ComponentName(context, BtcChartWidgetProvider::class.java)
+            for (id in appWidgetManager.getAppWidgetIds(chartWidget)) {
+                BtcChartWidgetProvider.updateWidgetLayout(context, appWidgetManager, id)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

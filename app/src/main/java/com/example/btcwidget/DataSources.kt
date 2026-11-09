@@ -48,6 +48,11 @@ object StackStore {
 /** Last fetched price history, kept so the chart has something to show offline. */
 object HistoryStore {
     private const val KEY = "history_cache"
+    private const val KEY_AT = "history_fetched_at"
+
+    /** When the cached history was fetched (epoch ms), 0 if never. */
+    fun fetchedAt(context: Context): Long =
+        context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE).getLong(KEY_AT, 0L)
 
     fun load(context: Context): List<PricePoint> =
         ChartMath.decode(context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE).getString(KEY, null))
@@ -55,6 +60,7 @@ object HistoryStore {
     fun save(context: Context, points: List<PricePoint>) {
         context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY, ChartMath.encode(points))
+            .putLong(KEY_AT, System.currentTimeMillis())
             .apply()
     }
 }

@@ -49,6 +49,19 @@
 
 
         <receiver
+            android:name=".BtcChartWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_chart_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.btcwidget.ACTION_NEXT_RANGE_CHART" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/btc_chart_widget_info" />
+        </receiver>
+
+        <receiver
             android:name=".BtcQuoteWidgetProvider"
             android:exported="true"
             android:label="@string/widget_quote_label">

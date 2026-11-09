@@ -101,8 +101,8 @@ fun WidgetsScreen(
             EInkPanel(title = "Add a widget") {
                 Step(1, "Long-press an empty spot on your home screen.")
                 Step(2, "Open Widgets and find Blockface.")
-                Step(3, "Drag Bitcoin metrics, Halving countdown or Bitcoin quotes onto the screen, then pick what it shows.")
-                Step(4, "Tap a widget to cycle modes. On Android 12+, long-press it to choose again.")
+                Step(3, "Drag Bitcoin metrics, Price chart, Halving countdown or Bitcoin quotes onto the screen.")
+                Step(4, "Tap Bitcoin metrics to cycle modes, or the chart to switch 24H / 7D.")
             }
         }
 

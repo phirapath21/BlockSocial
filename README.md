@@ -16,6 +16,7 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 - **Resizable Layouts**: Widgets default to a 2x1 grid size but can be resized freely (horizontally and vertically) on your launcher.
 - **Three Unique Widget Types**:
   - 🪙 **Bitcoin Metrics Widget** — Cycles through 13 active Bitcoin/MSTR price and network metrics.
+  - 📈 **Price Chart Widget** — BTC price, change and a 24H / 7D sparkline; tap to switch range.
   - 💬 **Quotes Widget** — Rotates classic, inspiring Cypherpunk and Bitcoin quotes (Satoshi Nakamoto, Hal Finney, Eric Hughes).
   - ⏳ **Halving Countdown Progress Bar** — Renders a block-filled ASCII progress bar (`[████████░░░░░░░]`) showing percent progress, blocks remaining, or estimated days.
 - **Tap to Cycle**: Tap the widgets to cycle through modes or quotes on the fly.

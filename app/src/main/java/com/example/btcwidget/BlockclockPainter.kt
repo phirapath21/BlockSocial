@@ -26,6 +26,12 @@ interface DrawSurface {
 
     /** Height of a capital/digit glyph ("8") at [size]. */
     fun capHeight(font: Font, size: Float): Float
+
+    /** Open line through the points, round joins and caps. */
+    fun polyline(xs: FloatArray, ys: FloatArray, color: Int, width: Float) {}
+
+    /** Filled closed shape through the points. */
+    fun polygon(xs: FloatArray, ys: FloatArray, color: Int) {}
 }
 
 /** Everything one blockclock shows. */

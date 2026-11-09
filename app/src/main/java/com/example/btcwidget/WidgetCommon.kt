@@ -27,6 +27,18 @@ object WidgetBitmapRenderer {
         appWidgetId: Int,
         views: RemoteViews,
         scene: BlockclockScene
+    ) = renderWith(context, appWidgetManager, appWidgetId, views, describe(scene)) { surface, w, h ->
+        BlockclockPainter.paint(surface, w, h, scene)
+    }
+
+    /** Sizes a bitmap to the widget, lets [paint] draw it, and sets it on the ImageView. */
+    fun renderWith(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        views: RemoteViews,
+        description: String,
+        paint: (DrawSurface, Float, Float) -> Unit
     ) {
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
         // Portrait size: min width x max height (dp). Fall back to a 2x1 cell.
@@ -46,9 +58,9 @@ object WidgetBitmapRenderer {
 
         val bitmap = Bitmap.createBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val surface = AndroidDrawSurface(Canvas(bitmap), AndroidDrawSurface.condensedTypeface(context))
-        BlockclockPainter.paint(surface, bitmap.width.toFloat(), bitmap.height.toFloat(), scene)
+        paint(surface, bitmap.width.toFloat(), bitmap.height.toFloat())
         views.setImageViewBitmap(R.id.widget_image, bitmap)
-        views.setContentDescription(R.id.widget_image, describe(scene))
+        views.setContentDescription(R.id.widget_image, description)
     }
 
     /** Spoken description for TalkBack, e.g. "BTC USD 74020. Market price of bitcoin". */
