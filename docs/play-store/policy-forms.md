@@ -4,15 +4,26 @@ These match what the app does today (see `docs/privacy-policy.md`). Re-check the
 
 ## Data safety (App content > Data safety)
 
-- **Does your app collect or share any of the required user data types?** No.
-  - The app sends no personal or device data off the device. Settings, the user's stack, alerts and cached data stay in local app storage.
-  - Requests to public market-data APIs carry no user data; the IP address those services see is part of any network connection, which Google's guidance does not count as collection by the app when it is not used or stored by the developer.
-- **Is all of the user data collected by your app encrypted in transit?** Not applicable (no data collected). All requests use HTTPS.
-- **Do you provide a way for users to request that their data is deleted?** Not applicable; uninstalling or clearing storage removes everything.
+With Nostr, the app sends what the user posts to Nostr relays (third parties the user picks). Google counts data an app transmits off the device as "collected", even when the developer never receives it, so declare it. Suggested answers (re-check against the current form):
+
+- **Does your app collect or share any of the required user data types?** Yes.
+- **Data types, all "Collected", not "Shared"** (sent at the user's request to services they choose; the user-initiated-transfer exemption covers "sharing"):
+  - **Personal info › User IDs:** the Nostr public key. Purpose: App functionality. Optional (only with a Nostr account).
+  - **Personal info › Name:** the profile name the user sets. App functionality. Optional.
+  - **Messages › Other in-app messages** and **App activity › Other user-generated content:** notes, replies, reposts, likes, follows, mutes, reports, zap comments. App functionality. Optional.
+  - **App activity › Other actions** is not needed beyond the above.
+- **Is data processed ephemerally?** No (relays store public notes).
+- **Is all of the user data collected by your app encrypted in transit?** Yes: relays use wss:// (TLS), APIs use HTTPS. (Users can add a plain ws:// relay themselves; mention this if the form asks.)
+- **Can users request deletion?** The app sends NIP-09 deletion requests for the user's own notes, and logging out deletes the key from the phone. Relays are third parties; the developer can't delete data from them. Answer per the form's options and point to the privacy policy.
+- Settings, the stack amount, alerts and cached market data stay on the device and are not collected. The private key (nsec) never leaves the device.
+
+## User-generated content (Google Play UGC policy)
+
+Apps where users post content must, in the app: let users **report** objectionable content (Report on each note → NIP-56 report), let users **block** abusive users (Mute account → NIP-51 mute list, hides them everywhere in the app), and publish **terms that forbid objectionable content**. Still to do before release: add a short "Community rules" page (link in Settings › About and at sign-up) stating that illegal content, harassment and spam are not allowed and that reported accounts may be muted by default.
 
 ## App access
 
-- **All functionality is available without special access** (no login).
+- **All functionality is available without special access.** A Nostr account is optional and self-created in the app (no developer server, no credentials for reviewers needed). Reviewers can tap "Create account" to try posting.
 
 ## Ads
 
@@ -23,7 +34,8 @@ These match what the app does today (see `docs/privacy-policy.md`). Re-check the
 - Category: **Reference, News, or Educational** — or **All Other App Types** if that fits the form better.
 - Violence, sexuality, language, controlled substances, gambling: **No**.
   - Note: one quote in the quote widget contains Thai profanity ("เงินเฟ้อแม่งเหี้ย"). If the questionnaire asks about crude language or profanity, answer **Yes (mild)**, or remove that quote before submitting.
-- User interaction / sharing content / location sharing / digital purchases: **No**.
+- **Users can interact / share content: Yes** (Nostr posts, replies, follows). Location sharing / digital purchases: **No**.
+- Zaps pay through the user's own Lightning wallet app; Blockface sells nothing.
 
 ## Target audience and content
 
@@ -32,7 +44,7 @@ These match what the app does today (see `docs/privacy-policy.md`). Re-check the
 
 ## Financial features declaration
 
-- Blockface shows market data only. It does not hold funds, trade, lend, transfer money or act as a wallet or exchange.
+- Blockface shows market data and lets users "zap" (tip) via their own external Lightning wallet: it fetches an invoice and opens the wallet app. It does not hold funds, trade, lend, transfer money itself or act as a wallet or exchange.
 - Choose the option for apps that provide **no financial features** / information only. If the form requires a cryptocurrency choice, pick the one for **price information or market data only**, not wallets or exchanges.
 
 ## Government apps, news apps, health apps

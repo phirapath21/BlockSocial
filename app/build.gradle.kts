@@ -114,6 +114,14 @@ dependencies {
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
 
+  // Nostr: relays over WebSocket, BIP-340 signatures, images (avatars, note pictures)
+  implementation(libs.okhttp)
+  implementation(libs.secp256k1.kmp)
+  implementation(libs.secp256k1.kmp.jni.android)
+  testImplementation(libs.secp256k1.kmp.jni.jvm)
+  implementation(libs.coil.compose)
+  implementation(libs.coil.network.okhttp)
+
   // Navigation
   implementation(libs.androidx.navigation3.ui)
   implementation(libs.androidx.navigation3.runtime)

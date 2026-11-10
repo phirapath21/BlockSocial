@@ -1,8 +1,8 @@
 # Blockface Privacy Policy
 
-**Effective date:** 9 November 2026
+**Effective date:** 10 November 2026
 
-Blockface ("the app") shows Bitcoin market and network data in an Android app and home-screen widgets. This policy explains what the app does with information. In short: **the app has no accounts, no ads, no analytics and no tracking, and it does not collect personal data.**
+Blockface ("the app") is a client for Nostr, an open social network, with Bitcoin market and network data, home-screen widgets and alerts. This policy explains what the app does with information. In short: **the developer runs no servers and collects no personal data; there are no ads, analytics or tracking.** What you post on Nostr is public, and it goes to the Nostr relays you use, not to the developer.
 
 ## Information stored on your device
 
@@ -13,12 +13,29 @@ The app keeps the following only on your device, in its private app storage:
 - **Alerts** — the price, fee and network-event alerts you set.
 - **Cached market data** — the latest prices, network figures and hourly price history, so widgets and charts work offline.
 - **Widget state** — the mode, range or quote each placed widget shows.
+- **Your Nostr account** — your public key and, depending on how you log in:
+  - **with a signer app** (such as Amber): which signer app to use. Your private key stays in that app and is never seen by Blockface.
+  - **with an nsec or a new account**: your private key, encrypted with a key held in the phone's Android Keystore that cannot be exported. It is never sent anywhere, is excluded from Android backup and device transfer, and is deleted when you log out.
+- **Your relay list**, if you edit it.
+- **A temporary cache** of notes and profiles you have viewed, in memory only while the app runs.
 
 Uninstalling the app or clearing its storage deletes all of this.
 
 **Sharing:** when you tap Share on the dashboard, the app saves an image of that metric in its cache and hands it, with a line of text, to the app you choose in Android's share sheet (for example a Nostr client). Blockface sends nothing itself; what happens next is up to the app you picked. Your stack is never offered for sharing.
 
-**Android backup:** if you have Android backup turned on, Android may include the app's storage (including the items above) in your device backup to your own Google account, under your control. The developer cannot access these backups.
+**Android backup:** if you have Android backup turned on, Android may include the app's storage (except the Nostr account file) in your device backup to your own Google account, under your control. The developer cannot access these backups.
+
+## Nostr: what you publish is public
+
+When you post, reply, quote, repost, like, follow, mute, report, zap or edit your profile, the app signs an event with your key and sends it to your Nostr relays (by default relay.damus.io, nos.lol and relay.primal.net, or the list you set). These events are **public**, are signed by your public key, and may be copied by other relays and apps. Deleting a note sends a deletion request; relays and people who already have a copy may keep it. The developer does not operate these relays and cannot remove content from them.
+
+To show your timeline, profiles, threads and notifications, the app requests public events from your relays. Relays see your IP address and which events you ask for (for example, whose notes you load). Each relay's own policy applies.
+
+**Zaps:** when you zap, the app asks the recipient's Lightning address provider (the domain in their Lightning address, for example getalby.com) for an invoice and passes it to your Lightning wallet app. That provider sees your IP address, the amount and your signed zap request (who you zapped, and any comment, which become public in the zap receipt). Payment happens in your wallet app; Blockface never holds funds.
+
+**Images:** pictures in notes and profiles are loaded from the addresses they point to, which can see your IP address.
+
+**Moderation:** you can mute accounts (published as your mute list) and report notes (published as a NIP-56 report to your relays).
 
 ## Network requests
 
@@ -35,6 +52,8 @@ To show market and network data, the app requests public data directly from thes
 | query1.finance.yahoo.com | Strategy (MSTR) share price | Always |
 | api.coingecko.com | Strategy (MSTR) bitcoin holdings | Always |
 
+The table covers market data. Nostr relays, Lightning address providers and image hosts are described above; they are chosen by you or by the people you follow.
+
 Requests run when you open or refresh the app and in the background at the interval you choose (15, 30 or 60 minutes) while a widget is placed or an alert is on.
 
 ## Permissions
@@ -45,10 +64,10 @@ Requests run when you open or refresh the app and in the background at the inter
 
 ## What the app does not do
 
-- No sign-in or accounts.
+- No accounts on any developer server: your Nostr key is yours, and the developer cannot see, recover or reset it.
 - No advertising or advertising identifiers.
 - No analytics, crash-reporting or tracking SDKs.
-- No selling or sharing of personal data — the app does not collect any.
+- No selling or sharing of personal data — the developer does not collect any.
 - No access to your contacts, location, camera, microphone, files or other apps.
 
 ## Children

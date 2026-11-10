@@ -16,3 +16,6 @@
 # Keep readable stack traces in crash reports.
 -keepattributes SourceFile, LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# BIP-340 signatures: the JNI binding's classes are looked up from native code.
+-keep class fr.acinq.secp256k1.** { *; }
