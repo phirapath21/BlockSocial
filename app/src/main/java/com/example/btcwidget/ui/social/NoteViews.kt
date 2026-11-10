@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -73,6 +74,7 @@ class NoteActions(
     val isFollowing: (String) -> Boolean,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
+    val linkPreview: suspend (String) -> com.example.btcwidget.nostr.core.LinkPreview?,
     val me: String?
 )
 
@@ -262,9 +264,41 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 .clickable(onClickLabel = "View image") { actions.openImage(img.url, note) }
         )
     }
+    // A card for the first web link (not for posts that already show photos or a quote).
+    if (depth == 0 && segments.none { it is Content.Segment.Image || it is Content.Segment.NoteRef }) {
+        segments.filterIsInstance<Content.Segment.Link>().firstOrNull()?.let { LinkCard(it.url, actions) }
+    }
     if (depth == 0) {
         segments.filterIsInstance<Content.Segment.NoteRef>().distinctBy { it.id }.take(2).forEach { ref ->
             QuotedNote(ref.id, actions)
+        }
+    }
+}
+
+/** Link preview: image, site and title, boxed like X's cards. Nothing shows until it loads. */
+@Composable
+private fun LinkCard(url: String, actions: NoteActions) {
+    val uriHandler = LocalUriHandler.current
+    val preview by produceState<com.example.btcwidget.nostr.core.LinkPreview?>(null, url) { value = actions.linkPreview(url) }
+    val p = preview ?: return
+    Column(
+        Modifier
+            .padding(top = 8.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
+            .clickable(onClickLabel = "Open link") { uriHandler.openUri(url) }
+    ) {
+        p.image?.let {
+            AsyncImage(
+                model = it, contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1.91f).background(EInk.Track)
+            )
+        }
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(p.site, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(p.title, color = EInk.Value, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            p.description?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
         }
     }
 }

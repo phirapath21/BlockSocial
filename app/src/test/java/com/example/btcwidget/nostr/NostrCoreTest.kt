@@ -334,3 +334,32 @@ class ThaiTextTest {
         org.junit.Assert.assertEquals(listOf("บิตคอยน์", "Bitcoin"), tags)
     }
 }
+
+class LinkPreviewTest {
+    @org.junit.Test
+    fun openGraphTagsInAnyAttributeOrder() {
+        val html = """<html><head><title>Fallback</title>
+            <meta content="Bitcoin &amp; you" property="og:title">
+            <meta property='og:description' content='A peer-to-peer &quot;cash&quot; system'/>
+            <meta property="og:image" content="/img/card.png">
+            <meta name="og:site_name" content="Example">
+            </head><body><meta property="og:title" content="ignored"></body></html>"""
+        val p = com.example.btcwidget.nostr.core.LinkPreview.parse(html, "https://www.example.com/a/b")!!
+        org.junit.Assert.assertEquals("Bitcoin & you", p.title)
+        org.junit.Assert.assertEquals("A peer-to-peer \"cash\" system", p.description)
+        org.junit.Assert.assertEquals("https://www.example.com/img/card.png", p.image)
+        org.junit.Assert.assertEquals("Example", p.site)
+    }
+
+    @org.junit.Test
+    fun titleFallbackAndRejections() {
+        val p = com.example.btcwidget.nostr.core.LinkPreview.parse("<head><title>Just a page &#8212; ok</title></head>", "https://news.example.org/x")!!
+        org.junit.Assert.assertEquals("Just a page — ok", p.title)
+        org.junit.Assert.assertEquals("news.example.org", p.site)
+        org.junit.Assert.assertNull(p.image)
+        org.junit.Assert.assertNull(com.example.btcwidget.nostr.core.LinkPreview.parse("<head></head>", "https://x.example"))
+        // Plain-http images aren't loaded.
+        val q = com.example.btcwidget.nostr.core.LinkPreview.parse("<head><meta property=\"og:title\" content=\"T\"><meta property=\"og:image\" content=\"http://x/i.png\"></head>", "https://x.example")!!
+        org.junit.Assert.assertNull(q.image)
+    }
+}

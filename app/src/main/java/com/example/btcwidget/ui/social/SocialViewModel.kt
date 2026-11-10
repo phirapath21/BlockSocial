@@ -291,6 +291,8 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun unlockDms() = act("Couldn't open messages") { repo.dms.unlock() }
     fun setUpDmInbox() = act("Couldn't set up your inbox") { repo.dms.setUpInbox(); say("Inbox ready: people can message you") }
 
+    suspend fun linkPreview(url: String) = repo.linkPreview(url)
+
     suspend fun engagement(noteId: String) = runCatching { repo.engagement(noteId) }.getOrNull()
 
     // ---- Follow lists ----

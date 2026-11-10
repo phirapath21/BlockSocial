@@ -19,6 +19,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -405,6 +406,38 @@ class NostrRepository private constructor(private val context: Context) {
     /** Notes matching [query] (NIP-50). */
     suspend fun searchNotes(query: String): List<FeedItem> =
         timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), search = query.trim(), limit = 40), source = searchPool)
+
+    // ---- Link previews ----
+
+    /** url → preview (null = page has none); newest 300 kept. */
+    private val previews = object : LinkedHashMap<String, com.example.btcwidget.nostr.core.LinkPreview?>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, com.example.btcwidget.nostr.core.LinkPreview?>?) = size > 300
+    }
+    private val previewLock = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * The card for [url], fetched once: only HTML pages, only the first 256 KB, and only
+     * https. Null if the page has no title or can't be read.
+     */
+    suspend fun linkPreview(url: String): com.example.btcwidget.nostr.core.LinkPreview? {
+        if (!url.startsWith("https://")) return null
+        previewLock.withLock { if (previews.containsKey(url)) return previews[url] }
+        val preview = withContext(Dispatchers.IO) {
+            runCatching {
+                val request = Request.Builder().url(url).header("Accept", "text/html").header("User-Agent", "Mozilla/5.0 (Linux; Android) Blockface").build()
+                RelayPool.defaultClient.newCall(request).execute().use { r ->
+                    val type = r.header("Content-Type").orEmpty()
+                    if (!r.isSuccessful || !type.contains("html", ignoreCase = true)) return@use null
+                    val source = r.body.source()
+                    source.request(256 * 1024L)
+                    val html = source.buffer.readUtf8(minOf(source.buffer.size, 256 * 1024L))
+                    com.example.btcwidget.nostr.core.LinkPreview.parse(html, r.request.url.toString())
+                }
+            }.getOrNull()
+        }
+        previewLock.withLock { previews[url] = preview }
+        return preview
+    }
 
     // ---- Who engaged with a note ----
 

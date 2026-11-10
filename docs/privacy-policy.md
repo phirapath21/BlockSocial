@@ -45,6 +45,10 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Images:** pictures in notes and profiles are loaded from the addresses they point to, which can see your IP address.
 
+**Link previews:** to show a card for a web link in a note, the app reads the start of that page (title, description and image) from the linked site, which can see your IP address. Nothing about you is sent beyond a normal web request.
+
+**Verified addresses (NIP-05):** to show a ✓ next to a name@domain address, the app asks that domain whether the address belongs to the account.
+
 **Moderation:** you can mute accounts (published as your mute list) and report notes (published as a NIP-56 report to your relays). The Community rules (in the app, and at docs/community-rules.md) say what isn't allowed.
 
 ## Network requests
