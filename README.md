@@ -40,7 +40,8 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 
 ### 3. App Layout
 Four tabs along the bottom:
-- **Dashboard** — a hero panel (STACK / BLOCK / PRICE / SATS / FEES) and a BTC price chart (24H / 7D, drag to read any hour). Pull down to refresh.
+- **Dashboard** — a hero panel (STACK / BLOCK / PRICE / HALVING / SATS / FEES) and a BTC price chart (24H / 7D, drag to read any hour). Pull down to refresh.
+- **Share** — under the hero panel: sends the panel as an image (in the current theme) plus a one-line post, such as `Bitcoin: $74,455 (+1.2% in 24h) · block 925,000 #bitcoin`, to any app through the share sheet. Pick a Nostr client (Amethyst, Primal, …) to post it as a note others can quote or repost. The app holds no Nostr keys and sends nothing itself; your stack is never shareable.
 - **Widgets** — how to add widgets, then every metric as a panel in four collapsible sections (**Market**, **Network**, **Supply & Lightning**, **Strategy (MSTR)**, plus **Your stack**). Each panel has an **On widget** switch; hold and drag a panel to reorder it within its section — that order is the order widget taps cycle through.
 - **Settings** — your stack, display currency, refresh interval, **data sources** (BTC price from Coinbase or Kraken; THB converted or from Bitkub) and about.
 
