@@ -152,8 +152,6 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val home by vm.home.collectAsState()
     val stats by vm.stats.collectAsState()
     val newPosts by vm.newPosts.collectAsState()
-    // Like Amethyst's "New threads" / "Conversations": hide replies unless asked.
-    var withReplies by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     LaunchedEffect(account) { vm.start() }
@@ -163,12 +161,8 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
             if (account == null) {
                 WelcomeScreen(vm, actions, onLogin = { navigate(LoginKey) })
             } else {
-                val shown = remember(home.items, withReplies) {
-                    if (withReplies) home.items
-                    else home.items.filter { it.repostedBy != null || !com.example.btcwidget.nostr.core.ThreadRef.of(it.note).isReply }
-                }
+                val shown = home.items
                 Column(Modifier.fillMaxSize()) {
-                    FeedTabs(listOf("Posts", "Posts & replies"), selected = if (withReplies) 1 else 0) { withReplies = it == 1 }
                     PullToRefreshBox(isRefreshing = home.refreshing, onRefresh = vm::refreshHome, modifier = Modifier.fillMaxSize()) {
                         when {
                             home.loading && home.items.isEmpty() -> Spinner(Modifier.padding(top = 40.dp))
@@ -188,7 +182,7 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .padding(top = 56.dp)
+                            .padding(top = 12.dp)
                             .clip(RoundedCornerShape(50))
                             .background(EInk.Value)
                             .clickable(onClickLabel = "Show new posts") {

@@ -65,7 +65,10 @@ class NoteActions(
     val share: (Event) -> Unit,
     val bookmark: (Event) -> Unit,
     val isBookmarked: (String) -> Boolean,
-    val openImage: (String) -> Unit,
+    /** Opens an image full screen, with its note's author and actions. */
+    val openImage: (url: String, note: Event) -> Unit,
+    val follow: (pubkey: String, follow: Boolean) -> Unit,
+    val isFollowing: (String) -> Boolean,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
     val me: String?
@@ -245,7 +248,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 .heightIn(max = 320.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
-                .clickable(onClickLabel = "View image") { actions.openImage(img.url) }
+                .clickable(onClickLabel = "View image") { actions.openImage(img.url, note) }
         )
     }
     if (depth == 0) {
