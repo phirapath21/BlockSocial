@@ -14,11 +14,16 @@ object CrashLog {
     private const val FILE = "last_crash.txt"
 
     fun install(context: Context) {
-        val file = File(context.applicationContext.filesDir, FILE)
-        val previous = Thread.getDefaultUncaughtExceptionHandler()
-        // Only wrap once (the Activity can be recreated).
-        if (previous is Handler) return
-        Thread.setDefaultUncaughtExceptionHandler(Handler(file, previous, versionOf(context)))
+        // The crash log itself must never crash the app.
+        runCatching {
+            val previous = Thread.getDefaultUncaughtExceptionHandler()
+            // Only wrap once (the Activity can be recreated).
+            if (previous is Handler) return
+            // In Application.attachBaseContext the application context is still null; the
+            // context itself already resolves files.
+            val ctx = context.applicationContext ?: context
+            Thread.setDefaultUncaughtExceptionHandler(Handler(File(ctx.filesDir, FILE), previous, versionOf(ctx)))
+        }
     }
 
     private class Handler(
@@ -40,11 +45,12 @@ object CrashLog {
     }
 
     /** The saved crash report, or null. */
-    fun read(context: Context): String? =
-        File(context.filesDir, FILE).takeIf { it.exists() }?.let { runCatching { it.readText() }.getOrNull() }
+    fun read(context: Context): String? = runCatching {
+        File(context.filesDir, FILE).takeIf { it.exists() }?.readText()
+    }.getOrNull()
 
     fun clear(context: Context) {
-        File(context.filesDir, FILE).delete()
+        runCatching { File(context.filesDir, FILE).delete() }
     }
 
     private fun versionOf(context: Context): String = runCatching {
