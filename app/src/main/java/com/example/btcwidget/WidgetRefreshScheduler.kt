@@ -74,10 +74,11 @@ object WidgetRefreshScheduler {
 
     /**
      * Cancels background refreshes once nothing needs them: no widget of any type is
-     * placed and no price alert is enabled.
+     * placed, no price alert is enabled, and Nostr notifications are off.
      */
     fun cancelIfUnused(context: Context) {
         if (AlertStore.anyEnabled(context)) return
+        if (com.example.btcwidget.nostr.NostrBackground.wanted(context)) return
         val manager = AppWidgetManager.getInstance(context)
         val providers = listOf(
             BtcWidgetProvider::class.java,

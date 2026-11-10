@@ -112,6 +112,8 @@ class NostrRepository private constructor(private val context: Context) {
 
     val pubkey: String? get() = _account.value?.pubkey
 
+    internal val appContext: Context get() = context
+
     /** Completes once the disk cache (profiles, the account's lists) is loaded. */
     val cacheReady: Job
 
@@ -424,6 +426,17 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun followingOf(pubkey: String): Set<String> =
         queryEverywhere(listOf(Filter(authors = listOf(pubkey), kinds = listOf(Kind.CONTACTS), limit = 1)))
             .maxByOrNull { it.createdAt }?.tagValues("p")?.toSet().orEmpty()
+
+    /**
+     * Who follows [pubkey]: authors whose latest contact list includes them, from the
+     * user's relays and the indexers. Capped by what relays return ([limit] lists), so
+     * for popular accounts this is a lower bound.
+     */
+    suspend fun followersOf(pubkey: String, limit: Int = 500): List<String> =
+        queryEverywhere(listOf(Filter(kinds = listOf(Kind.CONTACTS), tags = mapOf("p" to listOf(pubkey)), limit = limit)), timeoutMs = 6_000)
+            .groupBy { it.pubkey }
+            .mapNotNull { (author, lists) -> author.takeIf { lists.maxBy { it.createdAt }.tagValues("p").contains(pubkey) } }
+            .filter { it !in _muted.value }
 
     /** Counts likes, reposts, replies and zaps for [noteIds]; marks the user's own. */
     suspend fun loadStats(noteIds: List<String>) {

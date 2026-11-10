@@ -19,6 +19,11 @@ import androidx.compose.ui.Modifier
 import com.example.btcwidget.theme.BTCWidgetTheme
 import com.example.btcwidget.ui.main.EInk
 
+/** A tab to open, set from a tapped notification and consumed by the main screen. */
+object OpenTabRequest {
+  val tab = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+}
+
 class MainActivity : ComponentActivity() {
   /** Results from Nostr signer apps (NIP-55), handed to the waiting signer. */
   private val signerLauncher =
@@ -28,6 +33,7 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     CrashLog.install(this)
     SignerBridge.launch = { signerLauncher.launch(it) }
+    intent?.getStringExtra(com.example.btcwidget.nostr.NostrBackground.EXTRA_OPEN_TAB)?.let { OpenTabRequest.tab.value = it }
     EInk.theme = AppPrefs.theme(this)
 
     // The e-ink UI is always dark, so keep light system bar icons regardless of system theme.
@@ -49,6 +55,11 @@ class MainActivity : ComponentActivity() {
         }
       }
     }
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    intent.getStringExtra(com.example.btcwidget.nostr.NostrBackground.EXTRA_OPEN_TAB)?.let { OpenTabRequest.tab.value = it }
   }
 
   override fun onDestroy() {

@@ -14,6 +14,11 @@ class PriceRefreshWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        // Nostr replies, zaps and messages first: it doesn't depend on the price sources.
+        if (runAttemptCount == 0) {
+            runCatching { com.example.btcwidget.nostr.NostrBackground.check(applicationContext) }
+                .onFailure { android.util.Log.w("PriceRefreshWorker", "Nostr check failed", it) }
+        }
         val data = PriceRepository.fetchPriceData(applicationContext)
             ?: return if (runAttemptCount < MAX_RETRIES) Result.retry() else Result.failure()
 

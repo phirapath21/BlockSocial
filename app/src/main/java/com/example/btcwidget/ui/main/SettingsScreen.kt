@@ -203,7 +203,9 @@ fun NostrSettingsPanel(
     onLogin: () -> Unit,
     onLogout: () -> Unit,
     onRelaysChange: (List<String>?) -> Unit,
-    onOpenRules: () -> Unit = {}
+    onOpenRules: () -> Unit = {},
+    pushEnabled: Boolean = true,
+    onPushChange: (Boolean) -> Unit = {}
 ) {
     var confirmLogout by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
@@ -229,6 +231,11 @@ fun NostrSettingsPanel(
                     color = EInk.Alert, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
+            }
+        }
+        if (account != null) {
+            SettingRow("Phone notifications", note = "Replies, zaps and messages, checked every refresh interval") {
+                EInkSwitch(checked = pushEnabled, onCheckedChange = onPushChange)
             }
         }
         SettingRow("Community rules", note = "What isn't allowed; mute and report") {

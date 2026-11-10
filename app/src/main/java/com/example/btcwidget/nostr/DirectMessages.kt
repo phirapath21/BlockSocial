@@ -67,6 +67,7 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
                 .maxByOrNull { it.createdAt }
             val inboxRelays = Nip17.relaysFrom(myList)
             _inbox.value = inboxRelays
+            NostrAccountStore.setDmInbox(repo.appContext, inboxRelays)
             // Read from the inbox relays and the usual ones (some clients still deliver there).
             val pool = RelayPool().also { it.setRelays((inboxRelays + repo.pool.urls).distinct().take(10)) }
             inboxPool = pool
@@ -176,6 +177,7 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
     suspend fun setUpInbox(relays: List<String> = DEFAULT_INBOX) {
         repo.publish(Nip17.dmRelayList(repo.pubkey ?: error("Log in first"), relays))
         _inbox.value = relays
+        NostrAccountStore.setDmInbox(repo.appContext, relays)
     }
 
     fun reset() {

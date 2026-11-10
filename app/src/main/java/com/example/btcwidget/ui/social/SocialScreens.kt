@@ -372,6 +372,8 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         onFollow = { if (account == null) navigate(LoginKey) else vm.follow(pubkey, pubkey !in following) },
                         onEdit = { navigate(EditProfileKey) },
                         onMessage = { if (account == null) navigate(LoginKey) else navigate(com.example.btcwidget.ChatKey(pubkey)) },
+                        onOpenFollowing = { navigate(com.example.btcwidget.FollowsKey(pubkey, followers = false)) },
+                        onOpenFollowers = { navigate(com.example.btcwidget.FollowsKey(pubkey, followers = true)) },
                         onUnmute = { vm.mute(pubkey, false) },
                         actions = actions
                     )
@@ -395,6 +397,8 @@ private fun ProfileHeader(
     onFollow: () -> Unit,
     onEdit: () -> Unit,
     onMessage: () -> Unit,
+    onOpenFollowing: () -> Unit,
+    onOpenFollowers: () -> Unit,
     onUnmute: () -> Unit,
     actions: NoteActions
 ) {
@@ -443,10 +447,16 @@ private fun ProfileHeader(
             profile?.about?.let { Text(it, color = EInk.Value, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp)) }
             profile?.website?.let { Text("🔗 " + it.removePrefix("https://"), color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp)) }
             profile?.lud16?.let { Text("⚡ $it", color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp)) }
-            followingCount?.let {
+            Row(Modifier.padding(top = 8.dp)) {
                 Text(
-                    "${compactCount(it)} Following", color = EInk.Caption, fontSize = 14.sp,
-                    modifier = Modifier.padding(top = 8.dp)
+                    (followingCount?.let { compactCount(it) } ?: "…") + " Following",
+                    color = EInk.Label, fontSize = 14.sp,
+                    modifier = Modifier.clickable(onClickLabel = "Show who they follow", onClick = onOpenFollowing).padding(end = 18.dp, top = 2.dp, bottom = 2.dp)
+                )
+                Text(
+                    "Followers",
+                    color = EInk.Label, fontSize = 14.sp,
+                    modifier = Modifier.clickable(onClickLabel = "Show their followers", onClick = onOpenFollowers).padding(vertical = 2.dp)
                 )
             }
             Text(

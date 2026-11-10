@@ -91,6 +91,46 @@ object NostrAccountStore {
         prefs(context).edit().apply { if (relays == null) remove(RELAYS) else putString(RELAYS, relays.joinToString("\n")) }.apply()
     }
 
+    // ---- Read state and notifications (per account: cleared on login/logout with the rest) ----
+
+    private const val NOTIF_SEEN = "notif_seen"
+    private const val NOTIF_NOTIFIED = "notif_notified"
+    private const val DM_READ = "dm_read"
+    private const val DM_NOTIFIED = "dm_notified"
+    private const val PUSH = "push_enabled"
+    private const val DM_INBOX = "dm_inbox"
+
+    /** Newest notification time the user has seen in the app (seconds). */
+    fun notificationsSeen(context: Context): Long = prefs(context).getLong(NOTIF_SEEN, 0)
+    fun setNotificationsSeen(context: Context, at: Long) = prefs(context).edit().putLong(NOTIF_SEEN, at).apply()
+
+    /** Newest notification time already shown as a phone notification. */
+    fun notificationsNotified(context: Context): Long = prefs(context).getLong(NOTIF_NOTIFIED, 0)
+    fun setNotificationsNotified(context: Context, at: Long) = prefs(context).edit().putLong(NOTIF_NOTIFIED, at).apply()
+
+    /** Newest message time read, per conversation key. */
+    fun dmRead(context: Context): Map<String, Long> = runCatching {
+        val o = org.json.JSONObject(prefs(context).getString(DM_READ, null) ?: return emptyMap())
+        o.keys().asSequence().associateWith { o.getLong(it) }
+    }.getOrDefault(emptyMap())
+
+    fun setDmRead(context: Context, read: Map<String, Long>) =
+        prefs(context).edit().putString(DM_READ, org.json.JSONObject(read).toString()).apply()
+
+    fun dmNotified(context: Context): Long = prefs(context).getLong(DM_NOTIFIED, 0)
+    fun setDmNotified(context: Context, at: Long) = prefs(context).edit().putLong(DM_NOTIFIED, at).apply()
+
+    /** Phone notifications for replies, mentions, zaps and messages (on by default). */
+    fun pushEnabled(context: Context): Boolean = prefs(context).getBoolean(PUSH, true)
+    fun setPushEnabled(context: Context, on: Boolean) = prefs(context).edit().putBoolean(PUSH, on).apply()
+
+    /** The user's DM inbox relays, remembered for the background check. */
+    fun dmInbox(context: Context): List<String> =
+        prefs(context).getString(DM_INBOX, null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+
+    fun setDmInbox(context: Context, relays: List<String>) =
+        prefs(context).edit().putString(DM_INBOX, relays.joinToString("\n")).apply()
+
     private fun keystoreKey(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (ks.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }

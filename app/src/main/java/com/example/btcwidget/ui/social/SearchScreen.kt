@@ -163,7 +163,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
 }
 
 @Composable
-private fun PersonRow(profile: Profile, isFollowing: Boolean, onClick: () -> Unit) {
+internal fun PersonRow(profile: Profile, isFollowing: Boolean, onClick: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Top
@@ -180,6 +180,10 @@ private fun PersonRow(profile: Profile, isFollowing: Boolean, onClick: () -> Uni
                 Spacer(Modifier.height(2.dp))
                 Text(it, color = EInk.Label, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
+        }
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            trailing()
         }
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
