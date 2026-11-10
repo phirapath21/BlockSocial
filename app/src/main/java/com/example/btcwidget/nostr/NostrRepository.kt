@@ -473,8 +473,31 @@ class NostrRepository private constructor(private val context: Context) {
     }
 
     /** Notes tagged with [hashtag]. */
-    suspend fun hashtagFeed(hashtag: String, until: Long? = null): List<FeedItem> =
-        timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("t" to listOf(hashtag.lowercase())), until = until, limit = 40))
+    /**
+     * Notes with #[hashtag]: from our relays and the search relays (which index far more),
+     * matching the "t" tag in any common casing (not every app lowercases it), plus notes
+     * that write the hashtag in their text without tagging it.
+     */
+    suspend fun hashtagFeed(hashtag: String, until: Long? = null): List<FeedItem> {
+        val tag = hashtag.trim().removePrefix("#")
+        if (tag.isEmpty()) return emptyList()
+        val variants = listOf(tag, tag.lowercase(), tag.uppercase(), tag.lowercase().replaceFirstChar { it.uppercase() }).distinct()
+        val byTag = Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("t" to variants), until = until, limit = 50)
+        val byText = Filter(kinds = listOf(Kind.TEXT_NOTE), search = "#$tag", until = until, limit = 30)
+        val events = coroutineScope {
+            val ours = async { pool.query(listOf(byTag)) }
+            val indexed = async { runCatching { searchPool.query(listOf(byTag), 6_000) }.getOrDefault(emptyList()) }
+            val text = async { runCatching { searchPool.query(listOf(byText), 6_000) }.getOrDefault(emptyList()) }
+            (ours.await() + indexed.await() + text.await()).distinctBy { it.id }
+        }
+        // Full-text search is loose: keep only notes that really carry the hashtag.
+        val needle = "#" + tag.lowercase()
+        val matching = events.filter { e ->
+            e.tagValues("t").any { it.equals(tag, ignoreCase = true) } ||
+                Regex(Regex.escape(needle) + "(?![\\p{L}\\p{M}\\p{N}_])").containsMatchIn(e.content.lowercase())
+        }
+        return buildTimeline(matching)
+    }
 
     /**
      * Notes for a timeline. Returns as soon as the notes are in; names, avatars and counts
