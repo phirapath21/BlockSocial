@@ -4,13 +4,15 @@ import android.content.Context
 
 /**
  * Unsent posts, kept on the phone so leaving the composer loses nothing. One draft per
- * target: a new post, or a reply to / quote of a given note. Not backed up; cleared on logout.
+ * account and target: a new post, or a reply to / quote of a given note. Not backed up;
+ * cleared on logout.
  */
 object Drafts {
     private const val FILE = "nostr_drafts"
     private const val MAX = 50
 
-    fun key(replyTo: String?, quote: String?): String = when {
+    /** Drafts belong to the account that wrote them ([pubkey]). */
+    fun key(pubkey: String?, replyTo: String?, quote: String?): String = (pubkey ?: "") + "/" + when {
         replyTo != null -> "reply:$replyTo"
         quote != null -> "quote:$quote"
         else -> "new"
@@ -34,5 +36,11 @@ object Drafts {
 
     fun remove(context: Context, key: String) = put(context, key, "")
 
-    fun clear(context: Context) = prefs(context).edit().clear().apply()
+    /** Deletes [pubkey]'s drafts (on logout or removing the account). */
+    fun clear(context: Context, pubkey: String) {
+        val p = prefs(context)
+        val e = p.edit()
+        p.all.keys.filter { it.startsWith("$pubkey/") }.forEach { e.remove(it) }
+        e.apply()
+    }
 }

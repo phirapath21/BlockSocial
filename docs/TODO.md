@@ -33,11 +33,11 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Emoji reactions and custom emoji (NIP-30), beyond ♥
 
 ### Account and settings
-- [ ] Multiple accounts and switching
+- [x] Multiple accounts and switching
 - [ ] NIP-46 remote signer (bunker), for people not using Amber
-- [ ] Export nsec, with a warning, for accounts using an nsec or created in the app
-- [ ] Settings for media servers (Blossom list) and DM inbox relays
-- [ ] Notification settings by type (e.g. turn off likes)
+- [x] Export nsec, with a warning, for accounts using an nsec or created in the app
+- [x] Settings for media servers (Blossom list) and DM inbox relays
+- [x] Notification settings by type (e.g. turn off likes)
 - [ ] Thai translation of the UI
 
 ### Direct messages

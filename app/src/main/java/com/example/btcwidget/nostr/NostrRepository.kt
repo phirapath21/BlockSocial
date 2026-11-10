@@ -193,15 +193,55 @@ class NostrRepository private constructor(private val context: Context) {
     }
 
     private fun onLoggedIn() {
-        _account.value = NostrAccountStore.account(context)
+        val account = NostrAccountStore.account(context)
+        // Another account was active: drop everything loaded for it first.
+        if (_account.value != null && _account.value?.pubkey != account?.pubkey) resetSession()
+        _account.value = account
         signer = NostrAccountStore.signer(context)
+        _nwc.value = NostrAccountStore.nwc(context)?.let { com.example.btcwidget.nostr.core.Nwc.parse(it) }
+        _savedAccounts.value = NostrAccountStore.savedAccounts(context)
+    }
+
+    private val _savedAccounts = MutableStateFlow(NostrAccountStore.savedAccounts(context))
+    /** Other accounts on this phone that the user can switch to. */
+    val savedAccounts: StateFlow<List<NostrAccount>> = _savedAccounts.asStateFlow()
+
+    /** Switches to a saved account; the current one is saved aside. */
+    fun switchAccount(pubkey: String) {
+        NostrAccountStore.switchTo(context, pubkey)
+        resetSession()
+        onLoggedIn()
+    }
+
+    /** Saves the current account aside so another can log in (Add account). */
+    fun stashForNewLogin() {
+        if (_account.value == null) return
+        NostrAccountStore.stashActive(context)
+        resetSession()
+        _savedAccounts.value = NostrAccountStore.savedAccounts(context)
+    }
+
+    fun removeSavedAccount(pubkey: String) {
+        NostrAccountStore.removeSaved(context, pubkey)
+        Drafts.clear(context, pubkey)
+        _savedAccounts.value = NostrAccountStore.savedAccounts(context)
     }
 
     fun logout() {
+        pubkey?.let { Drafts.clear(context, it) }
+        NostrAccountStore.clear(context)
+        resetSession()
+        _savedAccounts.value = NostrAccountStore.savedAccounts(context)
+    }
+
+    /** Forgets everything loaded for the active account (not what's stored for it). */
+    private fun resetSession() {
         dms.reset()
         _nwc.value = null
-        NostrAccountStore.clear(context)
-        Drafts.clear(context)
+        pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)
+        relayList = null
+        mediaServerList = null
+        mediaServers = emptyList()
         cache.clear()
         accountFresh = false
         _account.value = null
@@ -796,6 +836,21 @@ class NostrRepository private constructor(private val context: Context) {
         publish(Events.reply(requireMe(), content, parent, relayHint(), extraTags))
     suspend fun quote(content: String, quoted: Event, extraTags: List<List<String>> = emptyList()): Event =
         publish(Events.quote(requireMe(), content, quoted, relayHint(), extraTags))
+
+    // ---- Media servers (Blossom, kind 10063) ----
+
+    /** The user's media servers, or empty when they use the default. */
+    fun mediaServerUrls(): List<String> = mediaServers
+
+    /** Publishes the media server list; empty goes back to the default server. */
+    suspend fun setMediaServers(urls: List<String>) {
+        val me = requireMe()
+        val clean = urls.map { it.trim().trimEnd('/') }.filter { it.startsWith("https://") }.distinct()
+        val event = publish(UnsignedEvent(me, Events.now(), MEDIA_SERVER_LIST, clean.map { listOf("server", it) }, ""))
+        mediaServerList = event
+        mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(event)
+        saveAccount()
+    }
 
     // ---- Polls (NIP-88) ----
 

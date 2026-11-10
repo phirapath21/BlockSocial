@@ -16,6 +16,7 @@ The app keeps the following only on your device, in its private app storage:
 - **Your Nostr account** — your public key and, depending on how you log in:
   - **with a signer app** (such as Amber): which signer app to use. Your private key stays in that app and is never seen by Blockface.
   - **with an nsec or a new account**: your private key, encrypted with a key held in the phone's Android Keystore that cannot be exported. It is never sent anywhere, is excluded from Android backup and device transfer, and is deleted when you log out.
+- **Other accounts you add** — if you add more than one Nostr account, the inactive ones are kept the same way (keys still encrypted with the Keystore key), excluded from backup and device transfer, until you remove them from the phone.
 - **Your relay list**, if you edit it.
 - **Drafts** — text you typed in the composer but didn't post (one per new post, reply or quote, up to 50), so you can pick up where you left off. Excluded from Android backup and device transfer, and deleted when you post or log out.
 - **A temporary cache** of notes and profiles you have viewed, in memory only while the app runs.
@@ -24,7 +25,9 @@ Uninstalling the app or clearing its storage deletes all of this.
 
 **Sharing:** when you tap Share on the dashboard, the app saves an image of that metric in its cache and hands it, with a line of text, to the app you choose in Android's share sheet (for example a Nostr client). Blockface sends nothing itself; what happens next is up to the app you picked. Your stack is never offered for sharing.
 
-**Android backup:** if you have Android backup turned on, Android may include the app's storage (except the Nostr account file and drafts) in your device backup to your own Google account, under your control. The developer cannot access these backups.
+**Showing your key:** for an account whose key is on the phone, Settings › Nostr › More can show your nsec so you can back it up. It is shown only after a warning, with screenshots blocked, and copying marks it as sensitive so Android hides it from clipboard previews.
+
+**Android backup:** if you have Android backup turned on, Android may include the app's storage (except the Nostr account files and drafts) in your device backup to your own Google account, under your control. The developer cannot access these backups.
 
 ## Nostr: what you publish is public
 
@@ -41,6 +44,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 **Notifications while the app is closed:** if you're logged in and "Phone notifications" is on (Settings › Nostr), the background refresh (every 15, 30 or 60 minutes) also asks your relays for new replies, mentions, reposts, likes, zaps and private messages addressed to you, decrypts messages on the phone, and shows a notification. Message text is hidden on the lock screen. Turn it off at any time in Settings.
 
 **Search:** words you search for (anything that isn't an npub, note id, #hashtag or name@domain) are sent to public search relays, relay.nostr.band and search.nos.today, which see the search and your IP address. A name@domain lookup asks that domain's server.
+
+**Your lists:** if you change your media servers or message inbox relays in the app, the new list is published as a public event (kind 10063 or 10050).
 
 **Photos you post:** when you attach a photo, the app first re-encodes it on your phone, which removes EXIF metadata such as GPS location, camera model and time. It then uploads the photo to a Blossom media server: by default blossom.primal.net, or the servers in your own media server list (kind 10063). The upload is signed with your key. The photo becomes public at its address, and the server's own policy applies. Only photos you pick are read; the app asks for no storage or photo permission (it uses Android's photo picker).
 

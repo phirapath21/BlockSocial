@@ -42,6 +42,7 @@ object NostrAccountStore {
     }
 
     fun saveAmber(context: Context, pubkey: String, signerPackage: String) {
+        stashIfOther(context, pubkey)
         prefs(context).edit().clear()
             .putString(PUBKEY, pubkey).putString(TYPE, SignerType.AMBER.name).putString(PACKAGE, signerPackage)
             .apply()
@@ -51,6 +52,7 @@ object NostrAccountStore {
     fun saveLocal(context: Context, seckey: String): NostrAccount {
         require(Schnorr.isValidSecretKey(seckey)) { "Not a valid private key" }
         val pubkey = Schnorr.publicKey(seckey)
+        stashIfOther(context, pubkey)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, keystoreKey()) }
         val sealed = cipher.iv + cipher.doFinal(Hex.decode(seckey))
         prefs(context).edit().clear()
@@ -95,10 +97,86 @@ object NostrAccountStore {
         }
     }
 
-    /** Logs out: deletes the account, including the encrypted key and the Keystore key. */
+    /**
+     * Logs out of the active account: deletes it, including its encrypted key. The Keystore
+     * key is deleted too unless a saved account still needs it.
+     */
     fun clear(context: Context) {
         prefs(context).edit().clear().commit()
-        runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KEY_ALIAS) }
+        if (savedAccounts(context).none { it.type == SignerType.LOCAL }) {
+            runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KEY_ALIAS) }
+        }
+    }
+
+    // ---- Other accounts on this phone ----
+    // Inactive accounts are kept in "nostr_accounts" (excluded from backup) as a snapshot of
+    // everything in the account file: keys stay encrypted with the same Keystore key.
+
+    private const val SAVED_FILE = "nostr_accounts"
+    private fun saved(context: Context) = context.getSharedPreferences(SAVED_FILE, Context.MODE_PRIVATE)
+
+    /** Accounts saved on this phone besides the active one. */
+    fun savedAccounts(context: Context): List<NostrAccount> = saved(context).all.mapNotNull { (pubkey, json) ->
+        runCatching {
+            val o = org.json.JSONObject(json as String)
+            NostrAccount(pubkey, SignerType.valueOf(o.getJSONObject(TYPE).getString("v")), o.optJSONObject(PACKAGE)?.getString("v"))
+        }.getOrNull()
+    }.sortedBy { it.pubkey }
+
+    /** Saves the active account aside (when it isn't [pubkey]) so another can log in. */
+    private fun stashIfOther(context: Context, pubkey: String) {
+        val active = account(context) ?: return
+        if (active.pubkey != pubkey) stashActive(context)
+    }
+
+    /** Moves the active account into the saved accounts; nothing is active afterwards. */
+    fun stashActive(context: Context) {
+        val active = account(context) ?: return
+        val o = org.json.JSONObject()
+        prefs(context).all.forEach { (k, v) ->
+            val entry = org.json.JSONObject()
+            when (v) {
+                is String -> entry.put("t", "s").put("v", v)
+                is Boolean -> entry.put("t", "b").put("v", v)
+                is Int -> entry.put("t", "i").put("v", v)
+                is Long -> entry.put("t", "l").put("v", v)
+                is Float -> entry.put("t", "f").put("v", v.toDouble())
+                is Set<*> -> entry.put("t", "set").put("v", org.json.JSONArray(v.map { it.toString() }))
+                else -> return@forEach
+            }
+            o.put(k, entry)
+        }
+        saved(context).edit().putString(active.pubkey, o.toString()).commit()
+        prefs(context).edit().clear().commit()
+    }
+
+    /** Makes the saved account [pubkey] active, saving the current one aside. */
+    fun switchTo(context: Context, pubkey: String) {
+        val json = saved(context).getString(pubkey, null) ?: error("That account isn't saved on this phone")
+        stashActive(context)
+        val o = org.json.JSONObject(json)
+        val e = prefs(context).edit().clear()
+        o.keys().forEach { k ->
+            val entry = o.getJSONObject(k)
+            when (entry.getString("t")) {
+                "s" -> e.putString(k, entry.getString("v"))
+                "b" -> e.putBoolean(k, entry.getBoolean("v"))
+                "i" -> e.putInt(k, entry.getInt("v"))
+                "l" -> e.putLong(k, entry.getLong("v"))
+                "f" -> e.putFloat(k, entry.getDouble("v").toFloat())
+                "set" -> e.putStringSet(k, entry.getJSONArray("v").let { a -> (0 until a.length()).map { a.getString(it) }.toSet() })
+            }
+        }
+        e.commit()
+        saved(context).edit().remove(pubkey).commit()
+    }
+
+    /** Removes a saved (inactive) account from this phone, including its encrypted key. */
+    fun removeSaved(context: Context, pubkey: String) {
+        saved(context).edit().remove(pubkey).commit()
+        if (account(context)?.type != SignerType.LOCAL && savedAccounts(context).none { it.type == SignerType.LOCAL }) {
+            runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KEY_ALIAS) }
+        }
     }
 
     /** The user's relays, or null to use the defaults / their NIP-65 list. */
@@ -116,6 +194,7 @@ object NostrAccountStore {
     private const val DM_READ = "dm_read"
     private const val DM_NOTIFIED = "dm_notified"
     private const val PUSH = "push_enabled"
+    private const val NOTIF_OFF = "notif_off"
     private const val DM_INBOX = "dm_inbox"
 
     /** Newest notification time the user has seen in the app (seconds). */
@@ -139,6 +218,10 @@ object NostrAccountStore {
     fun setDmNotified(context: Context, at: Long) = prefs(context).edit().putLong(DM_NOTIFIED, at).apply()
 
     /** Phone notifications for replies, mentions, zaps and messages (on by default). */
+    /** Phone notification types the user turned off: "reply", "mention", "repost", "like", "zap", "dm". */
+    fun notificationsOff(context: Context): Set<String> = prefs(context).getStringSet(NOTIF_OFF, null)?.toSet().orEmpty()
+    fun setNotificationsOff(context: Context, off: Set<String>) = prefs(context).edit().putStringSet(NOTIF_OFF, off).apply()
+
     fun pushEnabled(context: Context): Boolean = prefs(context).getBoolean(PUSH, true)
     fun setPushEnabled(context: Context, on: Boolean) = prefs(context).edit().putBoolean(PUSH, on).apply()
 

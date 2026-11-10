@@ -111,6 +111,18 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                         "Your Nostr account is a key pair. Keep the private key (nsec) safe: whoever has it can post as you, and it can't be reset.",
                         color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
                     )
+                    // Accounts already on this phone (after Add account, or a logout of one of several).
+                    val saved by vm.savedAccounts.collectAsState()
+                    val profiles by vm.profiles.collectAsState()
+                    if (saved.isNotEmpty()) {
+                        Text("On this phone", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        saved.forEach { a ->
+                            AccountRow(profiles[a.pubkey], a.pubkey, if (a.type == com.example.btcwidget.nostr.SignerType.AMBER) "Signer app" else "Key on this phone") {
+                                com.example.btcwidget.ui.main.EInkChip(text = "USE", selected = true, onClick = { vm.switchAccount(a.pubkey); onDone() })
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
                     Option(
                         title = "Connect a signer app",
                         body = if (hasSigner) "Recommended. Your key stays in the signer (such as Amber); Blockface never sees it."
@@ -213,7 +225,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     val account by vm.account.collectAsState()
     val target by produceState<Event?>(null, replyTo, quote) { value = (replyTo ?: quote)?.let { vm.note(it) } }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val draftKey = remember(replyTo, quote) { com.example.btcwidget.nostr.Drafts.key(replyTo, quote) }
+    val draftKey = remember(replyTo, quote, account?.pubkey) { com.example.btcwidget.nostr.Drafts.key(account?.pubkey, replyTo, quote) }
     // Picks up where you left off; every change is saved, and posting removes the draft.
     var text by remember { mutableStateOf(com.example.btcwidget.nostr.Drafts.get(context, draftKey).orEmpty()) }
     LaunchedEffect(text) { com.example.btcwidget.nostr.Drafts.put(context, draftKey, text) }

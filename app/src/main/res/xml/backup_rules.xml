@@ -4,4 +4,5 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="nostr_account.xml" />
     <exclude domain="sharedpref" path="nostr_drafts.xml" />
+    <exclude domain="sharedpref" path="nostr_accounts.xml" />
 </full-backup-content>

@@ -71,7 +71,8 @@ object NostrBackground {
             timeoutMs = 10_000
         ).filter { it.pubkey != me && it.createdAt > since }
         if (events.isEmpty()) return
-        val lines = events.sortedByDescending { it.createdAt }.mapNotNull { describe(it, names) }
+        val off = NostrAccountStore.notificationsOff(context)
+        val lines = events.sortedByDescending { it.createdAt }.filter { typeOf(it) !in off }.mapNotNull { describe(it, names) }
         NostrAccountStore.setNotificationsNotified(context, events.maxOf { it.createdAt })
         if (lines.isEmpty()) return
         post(
@@ -84,6 +85,15 @@ object NostrBackground {
         )
     }
 
+    /** The notification type name used in settings. */
+    private fun typeOf(e: Event): String = when (e.kind) {
+        Kind.TEXT_NOTE -> if (ThreadRef.of(e).isReply) "reply" else "mention"
+        Kind.REPOST -> "repost"
+        Kind.REACTION -> "like"
+        Kind.ZAP_RECEIPT -> "zap"
+        else -> "other"
+    }
+
     private fun describe(e: Event, names: Map<String, String>): String? = when (e.kind) {
         Kind.TEXT_NOTE -> {
             val who = name(names, e.pubkey)
@@ -91,7 +101,8 @@ object NostrBackground {
             "$who $verb: ${e.content.take(80).replace('\n', ' ')}"
         }
         Kind.REPOST -> "${name(names, e.pubkey)} reposted your note"
-        Kind.REACTION -> if (e.content == "-") null else "${name(names, e.pubkey)} liked your note"
+        Kind.REACTION -> if (e.content == "-") null
+            else "${name(names, e.pubkey)} " + (if (e.content == "+" || e.content.isBlank()) "liked your note" else "reacted ${e.content} to your note")
         Kind.ZAP_RECEIPT -> Zaps.parseReceipt(e)?.let { r ->
             "⚡ ${r.sender?.let { name(names, it) } ?: "Someone"} zapped ${r.amountMsat / 1000} sats"
         }
@@ -99,6 +110,7 @@ object NostrBackground {
     }
 
     private suspend fun checkMessages(context: Context, pool: RelayPool, me: String, names: Map<String, String>) {
+        if ("dm" in NostrAccountStore.notificationsOff(context)) return
         val signer = NostrAccountStore.signer(context) ?: return
         val now = System.currentTimeMillis() / 1000
         val notified = NostrAccountStore.dmNotified(context).takeIf { it > 0 } ?: (now - 3600)

@@ -207,6 +207,7 @@ fun NostrSettingsPanel(
     onLogout: () -> Unit,
     onRelaysChange: (List<String>?) -> Unit,
     onOpenRules: () -> Unit = {},
+    onOpenNostrSettings: () -> Unit = {},
     pushEnabled: Boolean = true,
     onPushChange: (Boolean) -> Unit = {},
     walletConnected: Boolean = false,
@@ -244,6 +245,11 @@ fun NostrSettingsPanel(
         if (account != null) {
             SettingRow("Phone notifications", note = "Replies, zaps and messages, checked every refresh interval") {
                 EInkSwitch(checked = pushEnabled, onCheckedChange = onPushChange)
+            }
+        }
+        if (account != null) {
+            SettingRow("More Nostr settings", note = "Accounts, notification types, media servers, inbox, your key") {
+                EInkChip(text = "OPEN", selected = false, onClick = onOpenNostrSettings)
             }
         }
         if (account != null) {

@@ -192,7 +192,7 @@ class AmberSigner(
 
     companion object {
         /** Kinds this app signs; asked for up front so the signer can remember the choice. */
-        private val KINDS = listOf(0, 1, 3, 5, 6, 7, 13, 1018, 1068, 1984, 9734, 10000, 10001, 10002, 10003, 10030, 10050, 24242)
+        private val KINDS = listOf(0, 1, 3, 5, 6, 7, 13, 1018, 1068, 1984, 9734, 10000, 10001, 10002, 10003, 10030, 10050, 10063, 24242)
 
         fun isInstalled(context: Context): Boolean =
             Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:")).resolveActivity(context.packageManager) != null

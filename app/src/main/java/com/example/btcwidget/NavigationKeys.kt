@@ -40,3 +40,6 @@ import kotlinx.serialization.Serializable
 
 /** A long-form article (NIP-23), by its naddr. */
 @Serializable data class ArticleKey(val naddr: String) : NavKey
+
+/** Account, notification, media server and inbox settings for Nostr. */
+@Serializable data object NostrSettingsKey : NavKey

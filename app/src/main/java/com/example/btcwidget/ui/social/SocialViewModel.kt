@@ -175,6 +175,28 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     /** Phone notifications for replies, zaps and messages while the app is closed. */
     val pushEnabled: StateFlow<Boolean> = _push.asStateFlow()
 
+    // ---- Account settings ----
+
+    private val _notifOff = MutableStateFlow(store.notificationsOff(application))
+    /** Phone notification types turned off ("reply", "mention", "repost", "like", "zap", "dm"). */
+    val notificationsOff: StateFlow<Set<String>> = _notifOff.asStateFlow()
+
+    fun setNotificationType(type: String, on: Boolean) {
+        val next = if (on) _notifOff.value - type else _notifOff.value + type
+        store.setNotificationsOff(getApplication(), next)
+        _notifOff.value = next
+    }
+
+    /** The nsec of an account whose key is on this phone; null for signer-app accounts. */
+    fun exportNsec(): String? = store.secretKey(getApplication())?.let { com.example.btcwidget.nostr.core.Nip19.nsec(it) }
+
+    fun mediaServers(): List<String> = repo.mediaServerUrls()
+    fun setMediaServers(urls: List<String>, onDone: () -> Unit) =
+        act("Couldn't save media servers") { repo.setMediaServers(urls); say("Media servers saved"); onDone() }
+
+    fun setDmInbox(urls: List<String>, onDone: () -> Unit) =
+        act("Couldn't save inbox relays") { repo.dms.setUpInbox(urls); say("Inbox relays saved"); onDone() }
+
     /** Notifications newer than the last time the tab was open. */
     val unreadNotifications: StateFlow<Int> = combine(_notifications, _notifSeen) { n, seen ->
         n.items.count { it.event.createdAt > seen }
@@ -221,6 +243,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         _notifSeen.value = store.notificationsSeen(app)
         _dmRead.value = store.dmRead(app)
         _push.value = store.pushEnabled(app)
+        _notifOff.value = store.notificationsOff(app)
     }
 
     private fun afterLogin() {
@@ -231,8 +254,36 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         refreshHome()
     }
 
-    fun logout() {
-        repo.logout()
+    // ---- Multiple accounts ----
+
+    val savedAccounts get() = repo.savedAccounts
+
+    fun switchAccount(pubkey: String) {
+        try {
+            stopLive?.invoke(); stopLive = null
+            _newPosts.value = emptyList()
+            repo.switchAccount(pubkey)
+            afterLogin()
+            repo.pubkey?.let { me -> viewModelScope.launch { runCatching { repo.refreshProfile(me) } } }
+            say("Switched account")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.w("SocialViewModel", "switch failed", e)
+            say("Couldn't switch account")
+        }
+    }
+
+    /** Keeps the current account on the phone and logs out of it, so another can log in. */
+    fun prepareAddAccount() {
+        stopLive?.invoke(); stopLive = null
+        repo.stashForNewLogin()
+        logout(keepAccount = true)
+    }
+
+    fun removeSavedAccount(pubkey: String) = repo.removeSavedAccount(pubkey)
+
+    fun logout(keepAccount: Boolean = false) {
+        if (!keepAccount) repo.logout()
         reloadReadState()
         stopLive?.invoke(); stopLive = null
         _newPosts.value = emptyList()

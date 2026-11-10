@@ -5,9 +5,11 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="nostr_account.xml" />
         <exclude domain="sharedpref" path="nostr_drafts.xml" />
+        <exclude domain="sharedpref" path="nostr_accounts.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="nostr_account.xml" />
         <exclude domain="sharedpref" path="nostr_drafts.xml" />
+        <exclude domain="sharedpref" path="nostr_accounts.xml" />
     </device-transfer>
 </data-extraction-rules>
