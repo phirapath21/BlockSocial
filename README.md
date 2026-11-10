@@ -27,10 +27,12 @@ Blockface is also a Nostr client with a familiar timeline layout.
 - **Profiles:** banner, avatar, bio, NIP-05, Lightning address, follow/unfollow (kind 3, keeps your other follows), edit your own (kind 0).
 - **Notifications:** replies, mentions, reposts, likes and zaps.
 - **Timeline basics:**
-  - Home has *Posts* and *Posts & replies* tabs.
   - New notes wait behind a "↑ N new posts" pill instead of shifting what you're reading.
   - Profiles have *Posts*, *Replies* and *Media* tabs.
-  - Images open full screen with pinch and double-tap zoom.
+  - Images open full screen, laid out like X:
+    - top: back, and ⋮ with *Save image* (to Pictures/Blockface) and *Open in browser*;
+    - bottom: the author with Follow, the note's text, and Reply · Repost · Like · Bookmark · Share;
+    - pinch or double-tap to zoom.
   - Bookmarks are a public NIP-51 list, from ⋯ › Bookmark, listed in the side bar.
   - Typing `@` suggests people and links them as `nostr:npub`.
   - Content warnings (NIP-36) hide notes behind "Show", and ⚠ in compose marks your own.

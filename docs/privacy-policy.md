@@ -69,6 +69,7 @@ Requests run when you open or refresh the app and in the background at the inter
 ## Permissions
 
 - **Internet** — to fetch the data above.
+- **Storage (Android 9 and below only)** — asked only when you choose "Save image", to save that picture to Pictures/Blockface. Android 10 and later need no permission for this.
 - **Notifications** (Android 13 and later) — to show the alerts you switch on. Asked for only when you turn on an alert; you can revoke it in system settings at any time.
 - The background-work library the app uses (Android WorkManager) also declares permissions to check network status, keep scheduled updates after a restart, and run briefly in the background. They are used only to refresh the data above.
 
