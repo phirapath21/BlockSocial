@@ -26,8 +26,8 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Polls (NIP-88)
 
 ### Writing
-- [ ] Drafts (NIP-37)
-- [ ] #hashtag autocomplete
+- [x] Drafts, saved on the phone (NIP-37 relay sync not done)
+- [x] #hashtag autocomplete
 - [ ] Video upload
 - [ ] GIF picker (needs Tenor or GIPHY and an API key)
 - [ ] Emoji reactions and custom emoji (NIP-30), beyond ♥

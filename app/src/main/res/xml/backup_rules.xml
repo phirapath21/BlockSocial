@@ -3,4 +3,5 @@
      private key whose Keystore key never leaves the device, so it is never backed up. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="nostr_account.xml" />
+    <exclude domain="sharedpref" path="nostr_drafts.xml" />
 </full-backup-content>

@@ -212,7 +212,11 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     val profiles by vm.profiles.collectAsState()
     val account by vm.account.collectAsState()
     val target by produceState<Event?>(null, replyTo, quote) { value = (replyTo ?: quote)?.let { vm.note(it) } }
-    var text by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val draftKey = remember(replyTo, quote) { com.example.btcwidget.nostr.Drafts.key(replyTo, quote) }
+    // Picks up where you left off; every change is saved, and posting removes the draft.
+    var text by remember { mutableStateOf(com.example.btcwidget.nostr.Drafts.get(context, draftKey).orEmpty()) }
+    LaunchedEffect(text) { com.example.btcwidget.nostr.Drafts.put(context, draftKey, text) }
     var sending by remember { mutableStateOf(false) }
     var images by remember { mutableStateOf<List<SocialViewModel.Attachment>>(emptyList()) }
     var uploading by remember { mutableStateOf(0) }
@@ -233,6 +237,8 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
             .sortedWith(compareBy({ it.pubkey !in following }, { !(it.name ?: it.bestName).lowercase().startsWith(q) }))
             .take(5)
     }
+    val hashtagQuery = remember(text) { HASHTAG_AT_END.find(text)?.groupValues?.get(2) }
+    val tagSuggestions = remember(hashtagQuery) { hashtagQuery?.let { vm.hashtagSuggestions(it) }.orEmpty() }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     // System photo picker: no storage permission needed.
@@ -295,6 +301,18 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     Avatar(p, p.pubkey, size = 28)
                     Text(p.bestName, color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
                     Text(" @$handle", color = EInk.Caption, fontSize = 13.sp, maxLines = 1)
+                }
+            }
+            if (tagSuggestions.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)
+                ) {
+                    tagSuggestions.forEach { tag ->
+                        com.example.btcwidget.ui.main.EInkChip(text = "#$tag", selected = false, onClick = {
+                            text = text.replace(HASHTAG_AT_END, "\$1#" + Regex.escapeReplacement(tag) + " ")
+                        })
+                    }
                 }
             }
             if (quote != null) {
@@ -400,12 +418,14 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                         acc.replace(Regex("@" + Regex.escape(handle) + "(?![\\p{L}\\p{M}\\p{N}_])"), "nostr:" + com.example.btcwidget.nostr.core.Nip19.npub(pk))
                     }
                     if (poll) {
-                        vm.createPoll(body, pollOptions, pollMulti, pollDays * 86_400L) { ok -> if (ok) onBack() else sending = false }
+                        vm.createPoll(body, pollOptions, pollMulti, pollDays * 86_400L) { ok ->
+                            if (ok) { com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack() } else sending = false
+                        }
                         return@PillButton
                     }
                     vm.send(body, replyTo?.let { target }, quote?.let { target }, images, if (sensitive) "Sensitive content" else null) { ok ->
                         // Success closes the screen; a failure re-enables the button.
-                        if (ok) onBack() else sending = false
+                        if (ok) { com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack() } else sending = false
                     }
                 }
             }
@@ -424,6 +444,9 @@ private fun UploadBadge(text: String?) {
         else Text(text, color = Color.White, fontSize = 12.sp)
     }
 }
+
+/** A "#tag" being typed at the end of the text. */
+private val HASHTAG_AT_END = Regex("""(^|\s)#([\p{L}\p{M}\p{N}_]{1,40})$""")
 
 /** An "@name" being typed at the end of the text. */
 private val MENTION_AT_END = Regex("""(^|\s)@([\p{L}\p{M}\p{N}_.]{1,30})$""")

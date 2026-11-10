@@ -249,6 +249,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun thread(id: String) = runCatching { repo.thread(id) }.getOrNull()
     suspend fun note(id: String) = runCatching { repo.note(id) }.getOrNull()
+    fun hashtagSuggestions(prefix: String) = repo.hashtagSuggestions(prefix)
     suspend fun article(address: com.example.btcwidget.nostr.core.Nip19.Address) = runCatching { repo.article(address) }.getOrNull()
     suspend fun articlesBy(pubkey: String) = runCatching { repo.articlesBy(pubkey) }.getOrDefault(emptyList())
     suspend fun profileFeed(pubkey: String, until: Long? = null) = runCatching { repo.profileFeed(pubkey, until) }.getOrDefault(emptyList())

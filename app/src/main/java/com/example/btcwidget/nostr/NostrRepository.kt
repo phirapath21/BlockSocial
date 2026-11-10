@@ -194,6 +194,7 @@ class NostrRepository private constructor(private val context: Context) {
         dms.reset()
         _nwc.value = null
         NostrAccountStore.clear(context)
+        Drafts.clear(context)
         cache.clear()
         accountFresh = false
         _account.value = null
@@ -421,6 +422,19 @@ class NostrRepository private constructor(private val context: Context) {
     }
 
     fun cachedNote(id: String): Event? = notes[id]
+
+    /** Hashtags starting with [prefix] in notes seen so far, most used first (for autocomplete). */
+    fun hashtagSuggestions(prefix: String, limit: Int = 5): List<String> {
+        val p = prefix.lowercase()
+        return notes.values.asSequence()
+            .flatMap { it.tagValues("t").asSequence() }
+            .map { it.lowercase() }
+            .filter { it.startsWith(p) && it != p && it.length <= 40 }
+            .groupingBy { it }.eachCount()
+            .entries.sortedByDescending { it.value }
+            .take(limit).map { it.key }
+            .ifEmpty { DEFAULT_TAGS.filter { it.startsWith(p) && it != p }.take(limit) }
+    }
 
     /** A thread around [noteId]: ancestors (oldest first), the note, and direct and nested replies. */
     suspend fun thread(noteId: String): Thread? {
@@ -1026,3 +1040,6 @@ class NostrRepository private constructor(private val context: Context) {
             }
     }
 }
+
+/** Suggested when no seen note has a matching hashtag yet. */
+private val DEFAULT_TAGS = listOf("bitcoin", "nostr", "lightning", "zap", "photography", "art", "music", "news", "plebchain", "grownostr", "thailand", "food", "travel", "memes", "introductions")

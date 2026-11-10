@@ -17,13 +17,14 @@ The app keeps the following only on your device, in its private app storage:
   - **with a signer app** (such as Amber): which signer app to use. Your private key stays in that app and is never seen by Blockface.
   - **with an nsec or a new account**: your private key, encrypted with a key held in the phone's Android Keystore that cannot be exported. It is never sent anywhere, is excluded from Android backup and device transfer, and is deleted when you log out.
 - **Your relay list**, if you edit it.
+- **Drafts** — text you typed in the composer but didn't post (one per new post, reply or quote, up to 50), so you can pick up where you left off. Excluded from Android backup and device transfer, and deleted when you post or log out.
 - **A temporary cache** of notes and profiles you have viewed, in memory only while the app runs.
 
 Uninstalling the app or clearing its storage deletes all of this.
 
 **Sharing:** when you tap Share on the dashboard, the app saves an image of that metric in its cache and hands it, with a line of text, to the app you choose in Android's share sheet (for example a Nostr client). Blockface sends nothing itself; what happens next is up to the app you picked. Your stack is never offered for sharing.
 
-**Android backup:** if you have Android backup turned on, Android may include the app's storage (except the Nostr account file) in your device backup to your own Google account, under your control. The developer cannot access these backups.
+**Android backup:** if you have Android backup turned on, Android may include the app's storage (except the Nostr account file and drafts) in your device backup to your own Google account, under your control. The developer cannot access these backups.
 
 ## Nostr: what you publish is public
 
