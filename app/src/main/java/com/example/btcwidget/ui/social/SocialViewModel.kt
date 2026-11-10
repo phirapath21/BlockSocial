@@ -117,14 +117,28 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         null
     } catch (e: IllegalArgumentException) {
         e.message ?: "That isn't a valid nsec"
+    } catch (e: Exception) {
+        // Keystore or crypto failure on this device.
+        Log.w("SocialViewModel", "login failed", e)
+        "Couldn't store the key on this phone: ${e.javaClass.simpleName}"
+    } catch (e: LinkageError) {
+        "This phone can't load the signing library"
     }
 
-    /** Creates a new key; returns the nsec to show once. */
-    fun createAccount(name: String): String {
-        val nsec = repo.createAccount()
+    /** Creates a new key; returns the nsec to show once, or null (with a message) on failure. */
+    fun createAccount(name: String): String? {
+        val nsec = try {
+            repo.createAccount()
+        } catch (e: Throwable) {
+            if (e is CancellationException) throw e
+            Log.w("SocialViewModel", "create account failed", e)
+            say("Couldn't create the account on this phone: ${e.javaClass.simpleName}")
+            return null
+        }
         afterLogin()
-        if (name.isNotBlank()) act("Couldn't publish your profile") {
-            repo.updateProfile(Profile(repo.pubkey!!, name = name.trim()))
+        val me = repo.pubkey
+        if (name.isNotBlank() && me != null) act("Couldn't publish your profile") {
+            repo.updateProfile(Profile(me, name = name.trim()))
         }
         return nsec
     }

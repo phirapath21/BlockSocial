@@ -139,7 +139,13 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
 
         fun connect() {
             if (closed) return
-            socket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
+            // A malformed address (e.g. typed into Settings) must not crash the app.
+            val request = runCatching { Request.Builder().url(url).build() }.getOrElse {
+                Log.d(TAG, "$url: bad address")
+                closed = true
+                return
+            }
+            socket = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     open = true
                     attempts = 0
@@ -148,7 +154,10 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
                     while (true) webSocket.send(queue.poll() ?: break)
                 }
 
-                override fun onMessage(webSocket: WebSocket, text: String) = handle(url, text)
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    // Never let one bad frame take the connection (or the app) down.
+                    try { handle(url, text) } catch (e: Exception) { Log.d(TAG, "$url: ${e.message}") }
+                }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     Log.d(TAG, "$url failed: ${t.message}")
@@ -166,7 +175,7 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
             if (closed) return
             attempts++
             val wait = (1_000L shl attempts.coerceAtMost(6)).coerceAtMost(60_000)
-            scope.launch { delay(wait); connect() }
+            scope.launch { delay(wait); runCatching { connect() } }
         }
 
         fun send(message: String) {

@@ -375,7 +375,8 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         onUnmute = { vm.mute(pubkey, false) },
                         actions = actions
                     )
-                    if (items == null) Spinner() else if (items!!.isEmpty()) EmptyNote("No notes yet.")
+                    val loaded = items
+                    if (loaded == null) Spinner() else if (loaded.isEmpty()) EmptyNote("No notes yet.")
                 }
             )
         }

@@ -141,8 +141,7 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit) {
                     )
                     Spacer(Modifier.height(16.dp))
                     PillButton("Create") {
-                        newNsec = vm.createAccount(name)
-                        mode = "backup"
+                        vm.createAccount(name)?.let { newNsec = it; mode = "backup" }
                     }
                 }
                 "backup" -> {
