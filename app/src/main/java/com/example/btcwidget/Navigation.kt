@@ -34,6 +34,7 @@ fun MainNavigation() {
         entry<ComposeKey> { key -> ComposeScreen(social, key.replyTo, key.quote, back) }
         entry<LoginKey> { LoginScreen(social, onBack = back, onDone = back, onOpenRules = { navigate(RulesKey) }) }
         entry<EditProfileKey> { EditProfileScreen(social, back) }
+        entry<ChatKey> { key -> com.example.btcwidget.ui.social.ChatScreen(social, key.peers.split(','), navigate, back) }
         entry<RulesKey> { com.example.btcwidget.ui.social.CommunityRulesScreen(back) }
         entry<SearchKey> { com.example.btcwidget.ui.social.SearchScreen(social, navigate, back) }
       },

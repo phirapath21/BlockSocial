@@ -68,11 +68,14 @@ class NostrRepository private constructor(private val context: Context) {
      * Indexer relays that collect profiles, follow lists and relay lists from everyone
      * (as Amethyst uses): profiles load even when people post to relays we don't use.
      */
-    private val indexers = RelayPool().also { it.setRelays(INDEXER_RELAYS) }
+    internal val indexers = RelayPool().also { it.setRelays(INDEXER_RELAYS) }
 
     /** Background work (profiles, counts, cache writes) that screens don't wait for. */
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val cache = NostrCache(java.io.File(context.cacheDir, "nostr"))
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    internal val cache = NostrCache(java.io.File(context.cacheDir, "nostr"))
+
+    /** Private messages (NIP-17). */
+    val dms: DirectMessages by lazy { DirectMessages(this) }
     private var saveProfilesJob: Job? = null
 
     /** True once the account's lists were read from relays this session (not just the cache). */
@@ -122,7 +125,7 @@ class NostrRepository private constructor(private val context: Context) {
     }
 
     /** Both the user's relays and the indexers, merged (for profiles and lists). */
-    private suspend fun queryEverywhere(filters: List<Filter>, timeoutMs: Long = 4_000): List<Event> = coroutineScope {
+    internal suspend fun queryEverywhere(filters: List<Filter>, timeoutMs: Long = 4_000): List<Event> = coroutineScope {
         val a = async { pool.query(filters, timeoutMs, graceMs = 700) }
         val b = async { indexers.query(filters, timeoutMs, graceMs = 700) }
         (a.await() + b.await()).distinctBy { it.id }
@@ -162,6 +165,7 @@ class NostrRepository private constructor(private val context: Context) {
     }
 
     fun logout() {
+        dms.reset()
         NostrAccountStore.clear(context)
         cache.clear()
         accountFresh = false
@@ -483,7 +487,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     // ---- Writing ----
 
-    private fun requireSigner(): NostrSigner = signer ?: throw IllegalStateException("Log in to Nostr first")
+    internal fun requireSigner(): NostrSigner = signer ?: throw IllegalStateException("Log in to Nostr first")
 
     /** Signs and publishes; succeeds if at least one relay accepted it. */
     suspend fun publish(unsigned: UnsignedEvent): Event {

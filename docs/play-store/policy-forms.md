@@ -11,6 +11,7 @@ With Nostr, the app sends what the user posts to Nostr relays (third parties the
   - **Personal info › User IDs:** the Nostr public key. Purpose: App functionality. Optional (only with a Nostr account).
   - **Personal info › Name:** the profile name the user sets. App functionality. Optional.
   - **Messages › Other in-app messages** and **App activity › Other user-generated content:** notes, replies, reposts, likes, follows, mutes, reports, zap comments. App functionality. Optional.
+  - **Messages › Other in-app messages (private):** NIP-17 direct messages, end-to-end encrypted on the device and sent to the recipients' relays at the user's request. App functionality. Optional. Encrypted in transit and at rest on relays; the developer can't read them.
   - **Photos and videos › Photos:** images the user attaches to a post, uploaded to a Blossom media server. App functionality. Optional. EXIF metadata (including location) is removed before upload.
   - **App activity › Other actions** is not needed beyond the above.
   - **App activity › In-app search history:** search words are sent to NIP-50 search relays when the user searches. App functionality. Optional. Not stored by the developer.

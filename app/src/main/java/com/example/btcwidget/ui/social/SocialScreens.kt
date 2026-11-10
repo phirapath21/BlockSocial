@@ -371,6 +371,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         isMuted = pubkey in muted,
                         onFollow = { if (account == null) navigate(LoginKey) else vm.follow(pubkey, pubkey !in following) },
                         onEdit = { navigate(EditProfileKey) },
+                        onMessage = { if (account == null) navigate(LoginKey) else navigate(com.example.btcwidget.ChatKey(pubkey)) },
                         onUnmute = { vm.mute(pubkey, false) },
                         actions = actions
                     )
@@ -393,6 +394,7 @@ private fun ProfileHeader(
     isMuted: Boolean,
     onFollow: () -> Unit,
     onEdit: () -> Unit,
+    onMessage: () -> Unit,
     onUnmute: () -> Unit,
     actions: NoteActions
 ) {
@@ -415,6 +417,7 @@ private fun ProfileHeader(
                 isMe -> PillButton("Edit profile", filled = false, onClick = onEdit)
                 isMuted -> PillButton("Unmute", filled = false, onClick = onUnmute)
                 else -> {
+                    PillButton("✉", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onMessage)
                     if (profile?.lud16 != null || profile?.lud06 != null) {
                         PillButton("⚡", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = { actions.zap(fakeProfileNote(pubkey)) })
                     }

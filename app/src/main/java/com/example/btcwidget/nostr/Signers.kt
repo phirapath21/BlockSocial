@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.activity.result.ActivityResult
 import com.example.btcwidget.nostr.core.Event
 import com.example.btcwidget.nostr.core.Nip19
+import com.example.btcwidget.nostr.core.Nip44
 import com.example.btcwidget.nostr.core.Schnorr
 import com.example.btcwidget.nostr.core.UnsignedEvent
 import kotlinx.coroutines.CompletableDeferred
@@ -22,6 +23,15 @@ interface NostrSigner {
     /** Hex public key. */
     val pubkey: String
     suspend fun sign(event: UnsignedEvent): Event
+
+    /** NIP-44 encryption to [peer] with the user's key (for private messages). */
+    suspend fun nip44Encrypt(plaintext: String, peer: String): String
+
+    /**
+     * NIP-44 decryption from [peer]. With [interactive] false (loading many messages) a
+     * signer app that would have to ask the user returns null instead of prompting.
+     */
+    suspend fun nip44Decrypt(ciphertext: String, peer: String, interactive: Boolean = false): String?
 }
 
 /** The user declined in the signer app. */
@@ -38,6 +48,16 @@ class LocalSigner(private val seckey: String) : NostrSigner {
         require(event.pubkey == pubkey) { "event is not from this account" }
         event.signed(Schnorr.sign(event.id, seckey))
     }
+
+    /** Conversation keys by peer: ECDH is the slow part, and a chat reuses the same peer. */
+    private val keys = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
+    private fun key(peer: String) = keys.getOrPut(peer) { Nip44.conversationKey(seckey, peer) }
+
+    override suspend fun nip44Encrypt(plaintext: String, peer: String): String =
+        withContext(Dispatchers.Default) { Nip44.encrypt(plaintext, key(peer)) }
+
+    override suspend fun nip44Decrypt(ciphertext: String, peer: String, interactive: Boolean): String? =
+        withContext(Dispatchers.Default) { runCatching { Nip44.decrypt(ciphertext, key(peer)) }.getOrNull() }
 }
 
 /**
@@ -119,6 +139,42 @@ class AmberSigner(
         return signed
     }
 
+    override suspend fun nip44Encrypt(plaintext: String, peer: String): String =
+        crypt("nip44_encrypt", "NIP44_ENCRYPT", plaintext, peer, interactive = true)
+            ?: throw SignerUnavailable("The signer didn't encrypt the message")
+
+    override suspend fun nip44Decrypt(ciphertext: String, peer: String, interactive: Boolean): String? =
+        crypt("nip44_decrypt", "NIP44_DECRYPT", ciphertext, peer, interactive)
+
+    /**
+     * Encrypts or decrypts through the signer: in the background when the user allowed it,
+     * else (if [interactive]) with an intent the user confirms.
+     */
+    private suspend fun crypt(type: String, provider: String, data: String, peer: String, interactive: Boolean): String? {
+        val npub = Nip19.npub(pubkey)
+        val background = withContext(Dispatchers.IO) {
+            runCatching {
+                context.contentResolver.query(Uri.parse("content://$signerPackage.$provider"), arrayOf(data, peer, npub), null, null, null)?.use { c ->
+                    if (c.getColumnIndex("rejected") >= 0) return@use null
+                    if (!c.moveToFirst()) return@use null
+                    (c.getColumnIndex("result").takeIf { it >= 0 } ?: c.getColumnIndex("signature").takeIf { it >= 0 })?.let { c.getString(it) }
+                }
+            }.getOrNull()
+        }
+        if (background != null || !interactive) return background
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:" + Uri.encode(data))).apply {
+            `package` = signerPackage
+            putExtra("type", type)
+            putExtra("pubkey", peer)
+            putExtra("current_user", npub)
+            putExtra("id", type + data.hashCode())
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val result = SignerBridge.request(intent)
+        if (result.resultCode != android.app.Activity.RESULT_OK) throw SignerRejected()
+        return result.data?.let { it.getStringExtra("result") ?: it.getStringExtra("signature") }
+    }
+
     /** Null when the signer needs to ask the user (or has no content provider). */
     private suspend fun signInBackground(json: String, npub: String): SignerAnswer? = withContext(Dispatchers.IO) {
         runCatching {
@@ -136,7 +192,7 @@ class AmberSigner(
 
     companion object {
         /** Kinds this app signs; asked for up front so the signer can remember the choice. */
-        private val KINDS = listOf(0, 1, 3, 5, 6, 7, 1984, 9734, 10000, 10002, 24242)
+        private val KINDS = listOf(0, 1, 3, 5, 6, 7, 13, 1984, 9734, 10000, 10002, 10050, 24242)
 
         fun isInstalled(context: Context): Boolean =
             Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:")).resolveActivity(context.packageManager) != null
@@ -145,6 +201,9 @@ class AmberSigner(
         suspend fun connect(): Pair<String, String> {
             val permissions = JSONArray().apply {
                 KINDS.forEach { put(JSONObject().put("type", "sign_event").put("kind", it)) }
+                // Private messages (NIP-17) need the user's key to seal and open them.
+                put(JSONObject().put("type", "nip44_encrypt"))
+                put(JSONObject().put("type", "nip44_decrypt"))
             }
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:")).apply {
                 putExtra("type", "get_public_key")

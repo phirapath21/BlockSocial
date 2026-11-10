@@ -204,6 +204,25 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    // ---- Direct messages (NIP-17) ----
+
+    val dmConversations get() = repo.dms.conversations
+    val dmMessages get() = repo.dms.messages
+    val dmLoading get() = repo.dms.loading
+    val dmLocked get() = repo.dms.locked
+    val dmInbox get() = repo.dms.inbox
+
+    fun startDms() { if (repo.pubkey != null) viewModelScope.launch { runCatching { repo.dms.start() } } }
+
+    /** Sends a private message; [onResult] gets whether it was delivered. */
+    fun sendDm(peers: List<String>, text: String, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't send the message", finally = { onResult(ok) }) { repo.dms.send(peers, text); ok = true }
+    }
+
+    fun unlockDms() = act("Couldn't open messages") { repo.dms.unlock() }
+    fun setUpDmInbox() = act("Couldn't set up your inbox") { repo.dms.setUpInbox(); say("Inbox ready: people can message you") }
+
     // ---- Search ----
 
     suspend fun resolve(query: String) = runCatching { repo.resolve(query) }.getOrNull()
