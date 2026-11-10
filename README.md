@@ -31,8 +31,9 @@ Blockface is also a Nostr client with a familiar timeline layout.
   - Profiles have *Posts*, *Replies* and *Media* tabs.
   - Images open full screen, laid out like X:
     - top: back, and ⋮ with *Save image* (to Pictures/Blockface) and *Open in browser*;
-    - bottom: the author with Follow, the note's text, and Reply · Repost · Like · Bookmark · Share;
+    - bottom: the author with Follow, the note's text, Reply · Repost · Like · Bookmark · Share, and a "Post your reply" bar;
     - pinch or double-tap to zoom.
+  - The post screen has X's pinned "Post your reply" bar: type in place, add a photo, or ⤢ for the full composer.
   - Bookmarks are a public NIP-51 list, from ⋯ › Bookmark, listed in the side bar.
   - Typing `@` suggests people and links them as `nostr:npub`.
   - Content warnings (NIP-36) hide notes behind "Show", and ⚠ in compose marks your own.

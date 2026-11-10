@@ -120,6 +120,14 @@ fun NoteCard(
                     }
                 }
                 NoteBody(note, actions, fontSize = if (large) 17 else 15)
+                // The opened post shows its full time, as X does under a post.
+                if (large) {
+                    Text(
+                        fullTimestamp(note.createdAt),
+                        color = EInk.Caption, fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                }
                 ActionRow(note, stats, actions)
             }
         }
@@ -353,6 +361,12 @@ fun Avatar(profile: Profile?, pubkey: String, size: Int, onClick: (() -> Unit)? 
         }
     }
 }
+
+/** "Tue, Nov 10, 2026 - 2:10 PM" in the phone's time zone (English, 12-hour). */
+fun fullTimestamp(createdAt: Long, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): String =
+    java.text.SimpleDateFormat("EEE, MMM d, yyyy - h:mm a", java.util.Locale.US)
+        .apply { timeZone = zone }
+        .format(java.util.Date(createdAt * 1000))
 
 /** "now", "5m", "3h", "2d", then "12 Mar" / "12 Mar 2025". */
 fun relativeTime(createdAt: Long, now: Long = System.currentTimeMillis() / 1000): String {

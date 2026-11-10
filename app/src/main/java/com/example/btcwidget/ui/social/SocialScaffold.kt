@@ -90,7 +90,17 @@ fun SocialScaffold(
     content(actions)
 
     viewImage?.let { (url, note) ->
-        ImageViewer(url, note, stats[note.id] ?: com.example.btcwidget.nostr.NoteStats(), actions, onDismiss = { viewImage = null })
+        ImageViewer(
+            url, note, stats[note.id] ?: com.example.btcwidget.nostr.NoteStats(), actions,
+            onDismiss = { viewImage = null },
+            replyBar = {
+                ReplyBar(
+                    vm, note, dark = true,
+                    onLogin = { viewImage = null; navigate(com.example.btcwidget.LoginKey) },
+                    onExpand = { viewImage = null; navigate(com.example.btcwidget.ComposeKey(replyTo = note.id)) }
+                )
+            }
+        )
     }
 
     zapTarget?.let { note ->
