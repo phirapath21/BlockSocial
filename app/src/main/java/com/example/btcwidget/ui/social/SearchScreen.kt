@@ -80,15 +80,26 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
     // Opened as its own screen: start typing. As a tab, don't pop the keyboard on every visit.
     LaunchedEffect(Unit) { if (onBack != null) runCatching { focus.requestFocus() } }
 
-    fun run() {
+    val profiles by vm.profiles.collectAsState()
+
+    /**
+     * Searches [query]. [typing] is the search-as-you-type run: the keyboard stays open, and
+     * only unambiguous ids (a pasted npub, note or article link) open directly; a #tag or
+     * name@domain still being typed doesn't jump away.
+     */
+    fun run(typing: Boolean = false) {
         val q = query.trim()
         if (q.isEmpty()) return
-        keyboard?.hide()
+        if (!typing) keyboard?.hide()
         job?.cancel()
-        loading = true
         searched = q
+        // People already seen show at once; relay results replace them when they arrive.
+        val local = localPeople(profiles, q)
+        people = local
+        loading = local.isEmpty()
         job = scope.launch {
-            when (val direct = vm.resolve(q)) {
+            val looksLikeId = com.example.btcwidget.nostr.core.Nip19.decode(q) != null || com.example.btcwidget.nostr.core.Hex.isKey(q)
+            when (val direct = if (typing && !looksLikeId) null else vm.resolve(q)) {
                 is NostrRepository.Direct.ProfileTarget -> { loading = false; navigate(ProfileKey(direct.pubkey)); return@launch }
                 is NostrRepository.Direct.NoteTarget -> { loading = false; navigate(NoteKey(direct.id)); return@launch }
                 is NostrRepository.Direct.HashtagTarget -> { loading = false; navigate(HashtagKey(direct.tag)); return@launch }
@@ -99,11 +110,20 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
             notesLoading = true
             val p = async { vm.searchPeople(q) }
             val n = async { vm.searchNotes(q) }
-            people = p.await()
+            people = (p.await() + local).distinctBy { it.pubkey }
             loading = false
             notes = n.await()
             notesLoading = false
         }
+    }
+
+    // Search as you type: a moment after the last key, from two characters on.
+    LaunchedEffect(query) {
+        val q = query.trim()
+        if (q.isEmpty()) { job?.cancel(); searched = null; loading = false; notesLoading = false; people = emptyList(); notes = emptyList(); return@LaunchedEffect }
+        if (q.length < 2 || q == searched) return@LaunchedEffect
+        kotlinx.coroutines.delay(450)
+        run(typing = true)
     }
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
@@ -151,8 +171,17 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                 loading -> Spinner(Modifier.padding(top = 30.dp))
                 // Before searching: Explore, recent notes from everyone or from one relay.
                 searched == null -> ExploreFeed(vm, actions)
-                tab == "people" -> if (people.isEmpty()) EmptyNote("No people found for \"$searched\".") else {
+                tab == "people" -> if (people.isEmpty() && searched?.startsWith("#") != true) EmptyNote("No people found for \"$searched\".") else {
                     LazyColumn(Modifier.fillMaxSize()) {
+                        com.example.btcwidget.nostr.core.HomeFeed.cleanTag(searched.orEmpty())?.takeIf { searched?.startsWith("#") == true }?.let { tag ->
+                            item(key = "tag") {
+                                Text(
+                                    "Open #$tag ›", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.fillMaxWidth().clickable { navigate(HashtagKey(tag)) }.padding(horizontal = 14.dp, vertical = 14.dp)
+                                )
+                                HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+                            }
+                        }
                         items(people, key = { it.pubkey }) { p ->
                             PersonRow(p, isFollowing = p.pubkey in following, onClick = { navigate(ProfileKey(p.pubkey)) })
                         }
@@ -163,6 +192,15 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
             }
         }
     }
+}
+
+/** Profiles already loaded whose name, display name or NIP-05 contains [q], best matches first. */
+private fun localPeople(profiles: Map<String, Profile>, q: String): List<Profile> {
+    val needle = q.lowercase().removePrefix("@")
+    if (needle.length < 2 || needle.startsWith("#")) return emptyList()
+    return profiles.values.filter { p -> listOfNotNull(p.name, p.displayName, p.nip05).any { it.lowercase().contains(needle) } }
+        .sortedBy { p -> if (listOfNotNull(p.name, p.displayName).any { it.lowercase().startsWith(needle) }) 0 else 1 }
+        .take(20)
 }
 
 /** Recent notes from all relays, or one chosen relay: to find people beyond your follows. */
