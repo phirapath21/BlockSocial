@@ -11,6 +11,7 @@ import com.example.btcwidget.nostr.SignerRejected
 import com.example.btcwidget.nostr.core.Event
 import com.example.btcwidget.nostr.core.Profile
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -56,7 +57,14 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     /** Loads the account (follows, relays) once, then the home feed. */
     fun start() {
         if (repo.pubkey == null) return
-        if (_home.value.items.isEmpty() && !_home.value.loading) refreshHome()
+        if (_home.value.items.isEmpty() && !_home.value.loading) {
+            viewModelScope.launch {
+                // Last session's timeline first, then fresh notes replace it.
+                val cached = repo.cachedHome()
+                if (cached.isNotEmpty() && _home.value.items.isEmpty()) _home.value = Paged(cached)
+                refreshHome()
+            }
+        }
     }
 
     fun refreshHome() {
@@ -64,9 +72,17 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         _home.update { it.copy(refreshing = it.items.isNotEmpty(), loading = it.items.isEmpty(), error = null) }
         viewModelScope.launch {
             try {
-                if (!accountLoaded) { repo.loadAccount(); accountLoaded = true }
+                if (!accountLoaded) {
+                    repo.cacheReady.join()
+                    val load = async { repo.loadAccount() }
+                    // With follows from the cache, fetch the feed now and refresh the lists
+                    // alongside; on the very first run the follows are needed first.
+                    if (!repo.hasCachedAccount) load.await()
+                    accountLoaded = true
+                }
                 val items = repo.homeFeed()
                 _home.value = Paged(items, endReached = items.isEmpty())
+                if (items.isNotEmpty()) repo.saveHome(items)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

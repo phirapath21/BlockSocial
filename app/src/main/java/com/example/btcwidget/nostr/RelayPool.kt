@@ -42,7 +42,8 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
     private class Sub(
         val filters: List<Filter>,
         val onEvent: (Event, String) -> Unit,
-        val onEose: (String) -> Unit,
+        /** (relay, gotEose): false when the relay closed the subscription or dropped. */
+        val onEose: (String, Boolean) -> Unit,
         val seen: MutableSet<String> = ConcurrentHashMap.newKeySet()
     )
 
@@ -58,9 +59,10 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
 
     /**
      * Opens a subscription on every relay. Call the returned function to close it.
-     * [onEose] is called once per relay that finishes sending stored events.
+     * [onEose] is called once per relay that finishes sending stored events (true), or that
+     * closed the subscription or dropped (false).
      */
-    fun subscribe(filters: List<Filter>, onEvent: (Event, String) -> Unit, onEose: (String) -> Unit = {}): () -> Unit {
+    fun subscribe(filters: List<Filter>, onEvent: (Event, String) -> Unit, onEose: (String, Boolean) -> Unit = { _, _ -> }): () -> Unit {
         val id = "bf" + nextId.incrementAndGet()
         subs[id] = Sub(filters, onEvent, onEose)
         val req = ClientMessage.req(id, filters)
@@ -72,15 +74,26 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
         }
     }
 
-    /** Stored events matching [filters], gathered until every relay sends EOSE or [timeoutMs] passes. */
-    suspend fun query(filters: List<Filter>, timeoutMs: Long = 6_000): List<Event> {
+    /**
+     * Stored events matching [filters]. Returns when every relay has answered, or [graceMs]
+     * after the first relay finished (slow relays don't hold the screen up: their events
+     * are mostly duplicates), or at [timeoutMs]. Relays that are down and retrying aren't
+     * waited for at all.
+     */
+    suspend fun query(filters: List<Filter>, timeoutMs: Long = 6_000, graceMs: Long = 1_000): List<Event> {
         val out = ConcurrentHashMap<String, Event>()
-        val pending = ConcurrentHashMap.newKeySet<String>().apply { addAll(relays.keys) }
-        val done = CompletableDeferred<Unit>()
+        val pending = ConcurrentHashMap.newKeySet<String>().apply {
+            addAll(relays.filterValues { it.reachable }.keys)
+        }
         if (pending.isEmpty()) return emptyList()
-        val close = subscribe(filters, { e, _ -> out[e.id] = e }) { relay ->
+        val done = CompletableDeferred<Unit>()
+        val firstAnswer = java.util.concurrent.atomic.AtomicBoolean(false)
+        val close = subscribe(filters, { e, _ -> out[e.id] = e }) { relay, gotEose ->
             pending.remove(relay)
             if (pending.isEmpty()) done.complete(Unit)
+            else if (gotEose && firstAnswer.compareAndSet(false, true)) {
+                scope.launch { delay(graceMs); done.complete(Unit) }
+            }
         }
         withTimeoutOrNull(timeoutMs) { done.await() }
         close()
@@ -122,8 +135,8 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
                 if (sub.filters.none { it.matches(m.event) } || !m.event.verify()) return
                 sub.onEvent(m.event, url)
             }
-            is RelayMessage.Eose -> subs[m.subId]?.onEose?.invoke(url)
-            is RelayMessage.Closed -> subs[m.subId]?.onEose?.invoke(url)
+            is RelayMessage.Eose -> subs[m.subId]?.onEose?.invoke(url, true)
+            is RelayMessage.Closed -> subs[m.subId]?.onEose?.invoke(url, false)
             is RelayMessage.Ok -> okWaiters[url + " " + m.eventId]?.complete(PublishResult(url, m.accepted, m.message))
             is RelayMessage.Notice -> Log.d(TAG, "$url: ${m.message.take(200)}")
             else -> Unit
@@ -136,6 +149,9 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
         @Volatile private var closed = false
         private val queue = java.util.concurrent.ConcurrentLinkedQueue<String>()
         private var attempts = 0
+
+        /** Open, or still on its first connection attempt (not failing and backing off). */
+        val reachable: Boolean get() = !closed && (open || attempts == 0)
 
         fun connect() {
             if (closed) return
@@ -171,7 +187,7 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
         private fun dropped() {
             open = false
             // Pending subscriptions on this relay won't get EOSE now.
-            subs.values.forEach { it.onEose(url) }
+            subs.values.forEach { it.onEose(url, false) }
             if (closed) return
             attempts++
             val wait = (1_000L shl attempts.coerceAtMost(6)).coerceAtMost(60_000)

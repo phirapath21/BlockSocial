@@ -10,7 +10,15 @@ import com.example.btcwidget.nostr.core.ThreadRef
 import com.example.btcwidget.nostr.core.UnsignedEvent
 import com.example.btcwidget.nostr.core.Zaps
 import com.example.btcwidget.nostr.core.normalizeRelayUrl
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +64,20 @@ data class NostrNotification(
 class NostrRepository private constructor(private val context: Context) {
     val pool = RelayPool()
 
+    /**
+     * Indexer relays that collect profiles, follow lists and relay lists from everyone
+     * (as Amethyst uses): profiles load even when people post to relays we don't use.
+     */
+    private val indexers = RelayPool().also { it.setRelays(INDEXER_RELAYS) }
+
+    /** Background work (profiles, counts, cache writes) that screens don't wait for. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val cache = NostrCache(java.io.File(context.cacheDir, "nostr"))
+    private var saveProfilesJob: Job? = null
+
+    /** True once the account's lists were read from relays this session (not just the cache). */
+    @Volatile private var accountFresh = false
+
     private val _account = MutableStateFlow(NostrAccountStore.account(context))
     val account: StateFlow<NostrAccount?> = _account.asStateFlow()
 
@@ -80,12 +102,30 @@ class NostrRepository private constructor(private val context: Context) {
     private var muteEvent: Event? = null
     /** The user's Blossom servers (BUD-03 kind 10063), empty for the default. */
     private var mediaServers: List<String> = emptyList()
+    // Declared before init: the cache loader started there may set them.
+    private var relayList: Event? = null
+    private var mediaServerList: Event? = null
     private var signer: NostrSigner? = NostrAccountStore.signer(context)
 
     val pubkey: String? get() = _account.value?.pubkey
 
+    /** Completes once the disk cache (profiles, the account's lists) is loaded. */
+    val cacheReady: Job
+
     init {
         pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)
+        // Show what we knew last time straight away; relays refresh it.
+        cacheReady = scope.launch(Dispatchers.IO) {
+            cache.loadEvents(PROFILES_CACHE).forEach { remember(it, save = false) }
+            pubkey?.let { me -> applyAccountEvents(cache.loadEvents(ACCOUNT_CACHE).filter { it.pubkey == me }, fromRelays = false) }
+        }
+    }
+
+    /** Both the user's relays and the indexers, merged (for profiles and lists). */
+    private suspend fun queryEverywhere(filters: List<Filter>, timeoutMs: Long = 4_000): List<Event> = coroutineScope {
+        val a = async { pool.query(filters, timeoutMs, graceMs = 700) }
+        val b = async { indexers.query(filters, timeoutMs, graceMs = 700) }
+        (a.await() + b.await()).distinctBy { it.id }
     }
 
     // ---- Account ----
@@ -123,6 +163,8 @@ class NostrRepository private constructor(private val context: Context) {
 
     fun logout() {
         NostrAccountStore.clear(context)
+        cache.clear()
+        accountFresh = false
         _account.value = null
         signer = null
         contactsEvent = null
@@ -132,22 +174,52 @@ class NostrRepository private constructor(private val context: Context) {
         _stats.value = emptyMap()
     }
 
-    /** Loads the user's relay list, contacts, mutes and profile. */
+    /** True when follows are known (from relays or the cache), so the home feed can start. */
+    val hasCachedAccount: Boolean get() = contactsEvent != null
+
+    /** Loads the user's relay list, contacts, mutes and profile from relays and indexers. */
     suspend fun loadAccount() {
         val me = pubkey ?: return
-        val events = pool.query(listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.RELAY_LIST, MEDIA_SERVER_LIST))))
+        val events = queryEverywhere(
+            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.RELAY_LIST, MEDIA_SERVER_LIST))),
+            timeoutMs = 6_000
+        )
+        applyAccountEvents(events, fromRelays = true)
+        saveAccount()
+    }
+
+    private fun applyAccountEvents(events: List<Event>, fromRelays: Boolean) {
         fun latest(kind: Int) = events.filter { it.kind == kind }.maxByOrNull { it.createdAt }
         latest(Kind.METADATA)?.let { remember(it) }
-        latest(Kind.CONTACTS)?.let { contactsEvent = it; _following.value = it.tagValues("p").toSet() }
-        latest(Kind.MUTE_LIST)?.let { muteEvent = it; _muted.value = it.tagValues("p").toSet() }
-        mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(latest(MEDIA_SERVER_LIST))
-        if (NostrAccountStore.relays(context) == null) {
-            latest(Kind.RELAY_LIST)?.let { list ->
-                // NIP-65: use the user's relays (both read and write) when they have some.
-                val urls = list.tags.filter { it.size >= 2 && it[0] == "r" }.mapNotNull { normalizeRelayUrl(it[1]) }.take(8)
-                if (urls.isNotEmpty()) pool.setRelays(urls)
+        latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = it.tagValues("p").toSet() } }
+        latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { muteEvent = it; _muted.value = it.tagValues("p").toSet() } }
+        latest(MEDIA_SERVER_LIST)?.let { mediaServerList = it; mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(it) }
+        latest(Kind.RELAY_LIST)?.let { list ->
+            relayList = list
+            if (NostrAccountStore.relays(context) == null) {
+                // NIP-65: add the user's relays to the defaults (a slow personal relay alone would slow everything).
+                val urls = list.tags.filter { it.size >= 2 && it[0] == "r" }.mapNotNull { normalizeRelayUrl(it[1]) }
+                if (urls.isNotEmpty()) pool.setRelays((urls.take(5) + RelayPool.DEFAULT_RELAYS).distinct().take(8))
             }
         }
+        if (fromRelays) accountFresh = true
+    }
+
+    private fun saveAccount() {
+        val me = pubkey ?: return
+        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, relayList, mediaServerList)
+        scope.launch(Dispatchers.IO) { cache.saveEvents(ACCOUNT_CACHE, events) }
+    }
+
+    /** The home timeline saved last time, for an instant first screen. */
+    suspend fun cachedHome(): List<FeedItem> = withContext(Dispatchers.IO) {
+        cache.loadFeed(HOME_CACHE).filter { it.note.pubkey !in _muted.value }.also { items ->
+            items.forEach { remember(it.note) }
+        }
+    }
+
+    fun saveHome(items: List<FeedItem>) {
+        scope.launch(Dispatchers.IO) { cache.saveFeed(HOME_CACHE, items.take(60)) }
     }
 
     fun setRelays(urls: List<String>?) {
@@ -180,36 +252,48 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun hashtagFeed(hashtag: String, until: Long? = null): List<FeedItem> =
         timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("t" to listOf(hashtag.lowercase())), until = until, limit = 40))
 
+    /**
+     * Notes for a timeline. Returns as soon as the notes are in; names, avatars and counts
+     * fill in afterwards (their flows update the screen), instead of holding it up.
+     */
     private suspend fun timeline(vararg filters: Filter, source: RelayPool = pool): List<FeedItem> {
         val events = source.query(filters.toList())
+        // Reposts carry the note as JSON; fetch the few that don't in one request.
+        val embedded = events.filter { it.kind == Kind.REPOST }.associateWith { r ->
+            runCatching { Event.fromJson(r.content) }.getOrNull()?.takeIf { it.kind == Kind.TEXT_NOTE && it.verify() }
+        }
+        val missing = embedded.filterValues { it == null }.keys.mapNotNull { it.tagValues("e").firstOrNull() }
+            .filter { !notes.containsKey(it) }.distinct()
+        if (missing.isNotEmpty()) {
+            pool.query(listOf(Filter(ids = missing)), 3_000, graceMs = 500).forEach { remember(it) }
+        }
         val items = events.mapNotNull { e ->
             when (e.kind) {
                 Kind.TEXT_NOTE -> FeedItem(e)
-                Kind.REPOST -> repostedNote(e)?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
+                Kind.REPOST -> (embedded[e] ?: e.tagValues("e").firstOrNull()?.let { notes[it] })
+                    ?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
                 else -> null
             }
         }.filter { it.note.pubkey !in _muted.value && it.repostedBy !in _muted.value }
             .distinctBy { it.key }
             .sortedByDescending { it.sortTime }
         items.forEach { remember(it.note) }
-        loadProfiles(items.flatMap { listOfNotNull(it.note.pubkey, it.repostedBy) })
-        loadStats(items.map { it.note.id })
+        enrich(items.flatMap { listOfNotNull(it.note.pubkey, it.repostedBy) }, items.map { it.note.id })
         return items
     }
 
-    /** The note inside a repost: embedded JSON if valid, else fetched by id. */
-    private suspend fun repostedNote(repost: Event): Event? {
-        runCatching { Event.fromJson(repost.content) }.getOrNull()?.takeIf { it.kind == Kind.TEXT_NOTE && it.verify() }?.let { return it }
-        val id = repost.tagValues("e").firstOrNull() ?: return null
-        return note(id)
+    /** Loads [pubkeys]' profiles and [noteIds]' counts in the background. */
+    private fun enrich(pubkeys: List<String>, noteIds: List<String>) {
+        scope.launch { runCatching { loadProfiles(pubkeys) } }
+        scope.launch { runCatching { loadStats(noteIds) } }
     }
 
     /** A note by id, from cache or relays. */
     suspend fun note(id: String): Event? {
         notes[id]?.let { return it }
-        return pool.query(listOf(Filter(ids = listOf(id))), 4_000).firstOrNull()?.also {
+        return pool.query(listOf(Filter(ids = listOf(id))), 4_000, graceMs = 400).firstOrNull()?.also {
             remember(it)
-            loadProfiles(listOf(it.pubkey))
+            enrich(listOf(it.pubkey), emptyList())
         }
     }
 
@@ -231,8 +315,7 @@ class NostrRepository private constructor(private val context: Context) {
         replies.forEach { remember(it) }
         val below = replies.filter { ThreadRef.of(it).parent == focus.id }.sortedBy { it.createdAt }
         val all = ancestors + focus + below
-        loadProfiles(all.map { it.pubkey })
-        loadStats(all.map { it.id })
+        enrich(all.map { it.pubkey }, all.map { it.id })
         return Thread(ancestors, focus, below)
     }
 
@@ -263,7 +346,7 @@ class NostrRepository private constructor(private val context: Context) {
                 else -> null
             }
         }.filter { it.actor !in _muted.value }
-        loadProfiles(out.map { it.actor })
+        enrich(out.map { it.actor }, emptyList())
         return out.sortedByDescending { it.event.createdAt }
     }
 
@@ -309,32 +392,43 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun searchNotes(query: String): List<FeedItem> =
         timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), search = query.trim(), limit = 40), source = searchPool)
 
-    /** Fetches kind-0 profiles not yet cached. */
+    /** Pubkeys whose profiles are being fetched, so concurrent screens don't ask twice. */
+    private val profilesInFlight = ConcurrentHashMap.newKeySet<String>()
+
+    /** Fetches kind-0 profiles not yet known, from the user's relays and the indexers at once. */
     suspend fun loadProfiles(pubkeys: Collection<String>) {
-        val missing = pubkeys.filter { !profileEvents.containsKey(it) }.distinct()
+        val missing = pubkeys.distinct().filter { !profileEvents.containsKey(it) && profilesInFlight.add(it) }
         if (missing.isEmpty()) return
-        missing.chunked(150).forEach { chunk ->
-            pool.query(listOf(Filter(authors = chunk, kinds = listOf(Kind.METADATA))), 4_000).forEach { remember(it) }
+        try {
+            coroutineScope {
+                missing.chunked(100).map { chunk ->
+                    async { queryEverywhere(listOf(Filter(authors = chunk, kinds = listOf(Kind.METADATA)))).forEach { remember(it) } }
+                }.awaitAll()
+            }
+        } finally {
+            profilesInFlight.removeAll(missing.toSet())
         }
     }
 
     /** Fetches a profile even if cached (for the profile screen). */
     suspend fun refreshProfile(pubkey: String): Profile? {
-        pool.query(listOf(Filter(authors = listOf(pubkey), kinds = listOf(Kind.METADATA), limit = 1)), 4_000).forEach { remember(it) }
+        queryEverywhere(listOf(Filter(authors = listOf(pubkey), kinds = listOf(Kind.METADATA), limit = 1))).forEach { remember(it) }
         return _profiles.value[pubkey]
     }
 
     /** Whom [pubkey] follows (their latest contact list). */
     suspend fun followingOf(pubkey: String): Set<String> =
-        pool.query(listOf(Filter(authors = listOf(pubkey), kinds = listOf(Kind.CONTACTS), limit = 1)), 4_000)
+        queryEverywhere(listOf(Filter(authors = listOf(pubkey), kinds = listOf(Kind.CONTACTS), limit = 1)))
             .maxByOrNull { it.createdAt }?.tagValues("p")?.toSet().orEmpty()
 
     /** Counts likes, reposts, replies and zaps for [noteIds]; marks the user's own. */
     suspend fun loadStats(noteIds: List<String>) {
         if (noteIds.isEmpty()) return
         val me = pubkey
-        val events = noteIds.chunked(50).flatMap { chunk ->
-            pool.query(listOf(Filter(kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.REACTION, Kind.ZAP_RECEIPT), tags = mapOf("e" to chunk), limit = 1000)), 5_000)
+        val events = coroutineScope {
+            noteIds.distinct().chunked(40).map { chunk ->
+                async { pool.query(listOf(Filter(kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.REACTION, Kind.ZAP_RECEIPT), tags = mapOf("e" to chunk), limit = 500)), 5_000) }
+            }.awaitAll().flatten().distinctBy { it.id }
         }
         val update = noteIds.associateWith { NoteStats() }.toMutableMap()
         for (e in events) {
@@ -364,16 +458,26 @@ class NostrRepository private constructor(private val context: Context) {
         repostedByMe = new.repostedByMe || old.repostedByMe
     )
 
-    private fun remember(e: Event) {
+    private fun remember(e: Event, save: Boolean = true) {
         when (e.kind) {
             Kind.METADATA -> {
                 val old = profileEvents[e.pubkey]
                 if (old == null || e.createdAt > old.createdAt) {
                     profileEvents[e.pubkey] = e
                     Profile.fromEvent(e)?.let { p -> _profiles.update { it + (e.pubkey to p) } }
+                    if (save) scheduleProfileSave()
                 }
             }
             else -> notes[e.id] = e
+        }
+    }
+
+    /** Writes profiles to disk a few seconds after the last change (newest 2,000 kept). */
+    private fun scheduleProfileSave() {
+        saveProfilesJob?.cancel()
+        saveProfilesJob = scope.launch(Dispatchers.IO) {
+            delay(3_000)
+            cache.saveEvents(PROFILES_CACHE, profileEvents.values.sortedByDescending { it.createdAt }.take(2_000))
         }
     }
 
@@ -449,22 +553,26 @@ class NostrRepository private constructor(private val context: Context) {
 
     suspend fun setFollowing(target: String, follow: Boolean) {
         val me = requireMe()
-        // Never overwrite a contact list we haven't loaded: that would wipe the user's follows.
-        if (contactsEvent == null) loadAccount()
+        // Never overwrite a contact list we haven't read from relays this session: a missing or
+        // stale list (e.g. from the cache) would wipe follows made in other apps.
+        if (!accountFresh) loadAccount()
+        if (contactsEvent == null && _following.value.isNotEmpty()) error("Couldn't load your follow list; try again")
         val event = publish(Events.contacts(me, contactsEvent, target, follow))
         contactsEvent = event
         _following.value = event.tagValues("p").toSet()
+        saveAccount()
     }
 
     /** Mutes (or unmutes) [target] with a public NIP-51 mute list. */
     suspend fun setMuted(target: String, mute: Boolean) {
         val me = requireMe()
-        if (muteEvent == null) loadAccount()
+        if (!accountFresh) loadAccount()
         val others = muteEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "p" && it[1] == target }
         val tags = if (mute) others + listOf(listOf("p", target)) else others
         val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, muteEvent?.content.orEmpty()))
         muteEvent = event
         _muted.value = event.tagValues("p").toSet()
+        saveAccount()
     }
 
     /** Requests deletion of the user's own note (NIP-09). */
@@ -524,6 +632,13 @@ class NostrRepository private constructor(private val context: Context) {
         _stats.update { it + (id to change(it[id] ?: NoteStats())) }
 
     companion object {
+        /** Relays that index profiles, follow lists and relay lists (also used by Amethyst). */
+        val INDEXER_RELAYS = listOf("wss://purplepag.es", "wss://user.kindpag.es", "wss://indexer.coracle.social")
+
+        private const val PROFILES_CACHE = "profiles"
+        private const val ACCOUNT_CACHE = "account"
+        private const val HOME_CACHE = "home"
+
         /** BUD-03 list of the user's Blossom media servers. */
         const val MEDIA_SERVER_LIST = 10063
 
