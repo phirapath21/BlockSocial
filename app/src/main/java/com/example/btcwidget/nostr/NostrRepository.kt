@@ -85,6 +85,8 @@ class NostrRepository private constructor(private val context: Context) {
 
     /** Private messages (NIP-17). */
     val dms: DirectMessages by lazy { DirectMessages(this) }
+    /** Communities, public chats and groups. */
+    val spaces: Spaces by lazy { Spaces(this) }
 
     /** True once the account's lists were read from relays this session (not just the cache). */
     @Volatile private var accountFresh = false
@@ -143,7 +145,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     // Outbox state: declared before init, whose cache loader fills it.
     /** Connections to other people's write relays (separate from the user's own relays). */
-    private val outbox = RelayPool()
+    internal val outbox = RelayPool()
 
     /** pubkey → write relays from their kind-10002 list; an empty list means "has none". */
     private val writeRelays = ConcurrentHashMap<String, List<String>>()
@@ -266,6 +268,7 @@ class NostrRepository private constructor(private val context: Context) {
     private fun resetSession() {
         (signer as? BunkerSigner)?.close()
         dms.reset()
+        spaces.reset()
         _nwc.value = null
         pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)
         relayList = null
@@ -759,6 +762,12 @@ class NostrRepository private constructor(private val context: Context) {
     private val profilesInFlight = ConcurrentHashMap.newKeySet<String>()
 
     /** Fetches kind-0 profiles not yet known, from the user's relays and the indexers at once. */
+    /** [loadProfiles] in the background, for people seen in a live stream. */
+    fun loadProfilesLater(pubkeys: Collection<String>) {
+        val missing = pubkeys.filter { it !in _profiles.value }
+        if (missing.isNotEmpty()) scope.launch { runCatching { loadProfiles(missing) } }
+    }
+
     suspend fun loadProfiles(pubkeys: Collection<String>) {
         val missing = pubkeys.distinct().filter { !profileEvents.containsKey(it) && profilesInFlight.add(it) }
         if (missing.isEmpty()) return

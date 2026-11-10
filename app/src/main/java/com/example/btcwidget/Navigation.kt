@@ -40,6 +40,9 @@ fun MainNavigation() {
         entry<RulesKey> { com.example.btcwidget.ui.social.CommunityRulesScreen(back) }
         entry<ArticleKey> { key -> com.example.btcwidget.ui.social.ArticleScreen(social, key.naddr, navigate, back) }
         entry<NostrSettingsKey> { com.example.btcwidget.ui.social.NostrSettingsScreen(social, navigate, back) }
+        entry<CommunityKey> { key -> com.example.btcwidget.ui.social.CommunityScreen(social, key.coordinate, navigate, back) }
+        entry<ChannelKey> { key -> com.example.btcwidget.ui.social.ChannelScreen(social, key.id, navigate, back) }
+        entry<GroupKey> { key -> com.example.btcwidget.ui.social.GroupScreen(social, key.address, navigate, back) }
         entry<SearchKey> { com.example.btcwidget.ui.social.SearchScreen(social, navigate, back) }
       },
   )

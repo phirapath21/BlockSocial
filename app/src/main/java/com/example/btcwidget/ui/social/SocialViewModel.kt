@@ -230,6 +230,42 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         if (on) act("Couldn't load your network") { repo.loadTrust(); say("Showing replies and mentions from your network only") }
     }
 
+    // ---- Communities, public chats, groups ----
+
+    val spaces get() = repo.spaces
+
+    suspend fun communities() = runCatching { repo.spaces.communities() }.getOrDefault(emptyList())
+    suspend fun community(coordinate: String) = runCatching { repo.spaces.community(coordinate) }.getOrNull()
+    suspend fun communityPosts(c: com.example.btcwidget.nostr.core.Communities.Community, includePending: Boolean, until: Long? = null) =
+        runCatching { repo.spaces.posts(c, includePending, until) }.getOrDefault(emptyList())
+
+    fun postToCommunity(c: com.example.btcwidget.nostr.core.Communities.Community, text: String, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't post", finally = { onResult(ok) }) { repo.spaces.post(c, text); ok = true; say("Posted. It shows here once a moderator approves it.") }
+    }
+
+    fun setCommunityJoined(c: com.example.btcwidget.nostr.core.Communities.Community, join: Boolean) =
+        act(if (join) "Couldn't join" else "Couldn't leave") { repo.spaces.setJoined(c, join) }
+
+    suspend fun channels() = runCatching { repo.spaces.channels() }.getOrDefault(emptyList())
+    suspend fun channel(id: String) = runCatching { repo.spaces.channel(id) }.getOrNull()
+
+    fun sendToChannel(channel: com.example.btcwidget.nostr.core.PublicChat.Channel, text: String, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't send", finally = { onResult(ok) }) { repo.spaces.sendToChannel(channel, text); ok = true }
+    }
+
+    suspend fun group(address: com.example.btcwidget.nostr.core.RelayGroups.Address) = runCatching { repo.spaces.group(address) }.getOrNull()
+
+    /** [onResult] gets null when sent, or the relay's reason. */
+    fun sendToGroup(address: com.example.btcwidget.nostr.core.RelayGroups.Address, text: String, onResult: (String?) -> Unit) {
+        var error: String? = "Couldn't send"
+        act("Couldn't send", finally = { onResult(error) }) { error = repo.spaces.sendToGroup(address, text) }
+    }
+
+    fun joinGroup(address: com.example.btcwidget.nostr.core.RelayGroups.Address) =
+        act("Couldn't ask to join") { val e = repo.spaces.joinGroup(address); say(e ?: "Asked to join") }
+
     suspend fun followSuggestions() = runCatching { repo.followSuggestions() }.getOrDefault(emptyList())
     suspend fun badgesOf(pubkey: String) = runCatching { repo.badgesOf(pubkey) }.getOrDefault(emptyList())
 

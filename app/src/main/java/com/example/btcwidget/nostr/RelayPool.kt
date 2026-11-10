@@ -143,8 +143,27 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
         subs.clear()
     }
 
+    /**
+     * NIP-42: signs a relay's AUTH challenge. Null (the default) never authenticates, so
+     * relays don't learn who is reading; set only for relays the user chose to join (groups).
+     */
+    @Volatile var authenticator: (suspend (relay: String, challenge: String) -> Event?)? = null
+
+    private fun authenticate(url: String, challenge: String) {
+        val auth = authenticator ?: return
+        scope.launch {
+            val signed = runCatching { auth(url, challenge) }.getOrNull() ?: return@launch
+            val relay = relays[url] ?: return@launch
+            relay.send(ClientMessage.auth(signed))
+            // Ask again for what the relay refused before authenticating.
+            delay(500)
+            subs.forEach { (id, sub) -> if (sub.only == null || url in sub.only) relay.send(ClientMessage.req(id, sub.filters)) }
+        }
+    }
+
     private fun handle(url: String, text: String) {
         when (val m = RelayMessage.parse(text)) {
+            is RelayMessage.Auth -> authenticate(url, m.challenge)
             is RelayMessage.EventMsg -> {
                 val sub = subs[m.subId] ?: return
                 if (!sub.seen.add(m.event.id)) return

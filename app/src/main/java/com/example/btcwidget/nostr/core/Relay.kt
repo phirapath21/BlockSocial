@@ -49,6 +49,9 @@ object ClientMessage {
 
     /** Written by hand so the event JSON is exactly what was signed. */
     fun event(event: Event): String = "[\"EVENT\"," + event.toJson() + "]"
+
+    /** NIP-42: the signed kind-22242 answer to a relay's challenge. */
+    fun auth(event: Event): String = "[\"AUTH\"," + event.toJson() + "]"
 }
 
 /** Messages a relay sends to a client. */
