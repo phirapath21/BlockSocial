@@ -73,3 +73,20 @@ class DvmTest {
         assertEquals(listOf("relays", "wss://a", "wss://b"), req.tags[1])
     }
 }
+
+class HomeFeedTest {
+    @Test
+    fun feedsRoundTripThroughTheirIds() {
+        val pk = "e".repeat(64)
+        val feeds = listOf(
+            com.example.btcwidget.nostr.core.HomeFeed.Following(false), com.example.btcwidget.nostr.core.HomeFeed.Following(true),
+            com.example.btcwidget.nostr.core.HomeFeed.Global(null), com.example.btcwidget.nostr.core.HomeFeed.Global("wss://nos.lol"),
+            com.example.btcwidget.nostr.core.HomeFeed.Hashtag("siamstr"), com.example.btcwidget.nostr.core.HomeFeed.Dvm(pk, "trending", "Trending: now")
+        )
+        feeds.forEach { assertEquals(it, com.example.btcwidget.nostr.core.HomeFeed.parse(it.id)) }
+        assertEquals("siamstr", com.example.btcwidget.nostr.core.HomeFeed.cleanTag(" #SiamStr "))
+        assertEquals("บิตคอยน์", com.example.btcwidget.nostr.core.HomeFeed.cleanTag("#บิตคอยน์"))
+        assertNull(com.example.btcwidget.nostr.core.HomeFeed.cleanTag("two words"))
+        assertNull(com.example.btcwidget.nostr.core.HomeFeed.parse("global:http://x"))
+    }
+}

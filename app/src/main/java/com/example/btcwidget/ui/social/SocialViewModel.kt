@@ -57,13 +57,72 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     private var accountLoaded = false
 
+    // ---- Home feeds (Primal-style menu) ----
+
+    private val _homeFeeds = MutableStateFlow(loadFeeds())
+    /** The feeds in the Home menu, in order. */
+    val homeFeeds: StateFlow<List<com.example.btcwidget.nostr.core.HomeFeed>> = _homeFeeds.asStateFlow()
+    private val _homeFeed = MutableStateFlow(loadFeed(_homeFeeds.value))
+    /** The feed Home shows. */
+    val homeFeed: StateFlow<com.example.btcwidget.nostr.core.HomeFeed> = _homeFeed.asStateFlow()
+
+    private fun loadFeeds() = com.example.btcwidget.nostr.NostrAccountStore.homeFeeds(getApplication())?.mapNotNull { com.example.btcwidget.nostr.core.HomeFeed.parse(it) }?.ifEmpty { null }
+        ?: com.example.btcwidget.nostr.core.HomeFeed.DEFAULTS
+
+    private fun loadFeed(feeds: List<com.example.btcwidget.nostr.core.HomeFeed>) =
+        com.example.btcwidget.nostr.NostrAccountStore.homeFeed(getApplication())?.let { com.example.btcwidget.nostr.core.HomeFeed.parse(it) }?.takeIf { it in feeds } ?: feeds.first()
+
+    /** Switches Home to [feed] and loads it. */
+    fun selectFeed(feed: com.example.btcwidget.nostr.core.HomeFeed) {
+        if (feed == _homeFeed.value) return
+        _homeFeed.value = feed
+        store.setHomeFeed(getApplication(), feed.id)
+        stopLive?.invoke(); stopLive = null
+        _newPosts.value = emptyList()
+        _home.value = Paged(loading = true)
+        refreshHome()
+    }
+
+    private fun saveFeeds(list: List<com.example.btcwidget.nostr.core.HomeFeed>) {
+        _homeFeeds.value = list
+        store.setHomeFeeds(getApplication(), list.map { it.id })
+    }
+
+    fun addFeed(feed: com.example.btcwidget.nostr.core.HomeFeed) {
+        if (feed !in _homeFeeds.value) saveFeeds(_homeFeeds.value + feed)
+        selectFeed(feed)
+    }
+
+    fun removeFeed(feed: com.example.btcwidget.nostr.core.HomeFeed) {
+        val next = _homeFeeds.value - feed
+        if (next.isEmpty()) return
+        saveFeeds(next)
+        if (_homeFeed.value == feed) selectFeed(next.first())
+    }
+
+    fun moveFeed(feed: com.example.btcwidget.nostr.core.HomeFeed, by: Int) {
+        val list = _homeFeeds.value.toMutableList()
+        val i = list.indexOf(feed)
+        val j = (i + by).coerceIn(0, list.lastIndex)
+        if (i < 0 || i == j) return
+        list.removeAt(i); list.add(j, feed)
+        saveFeeds(list)
+    }
+
+    fun resetFeeds() {
+        saveFeeds(com.example.btcwidget.nostr.core.HomeFeed.DEFAULTS)
+        if (_homeFeed.value !in _homeFeeds.value) selectFeed(_homeFeeds.value.first())
+    }
+
+    private val followingFeed get() = _homeFeed.value is com.example.btcwidget.nostr.core.HomeFeed.Following
+
     /** Loads the account (follows, relays) once, then the home feed. */
     fun start() {
         if (repo.pubkey == null) return
         if (_home.value.items.isEmpty() && !_home.value.loading) {
             viewModelScope.launch {
                 // Last session's timeline first, then fresh notes replace it.
-                val cached = repo.cachedHome()
+                val cached = if (followingFeed) repo.cachedHome() else emptyList()
                 if (cached.isNotEmpty() && _home.value.items.isEmpty()) _home.value = Paged(cached)
                 refreshHome()
             }
@@ -83,10 +142,14 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
                     if (!repo.hasCachedAccount) load.await()
                     accountLoaded = true
                 }
-                val items = repo.homeFeed()
-                _home.value = Paged(items, endReached = items.isEmpty())
-                startLiveHome()
-                if (items.isNotEmpty()) repo.saveHome(items)
+                val feed = _homeFeed.value
+                val items = repo.feed(feed)
+                if (feed != _homeFeed.value) return@launch // switched meanwhile
+                _home.value = Paged(items, endReached = items.isEmpty() || feed is com.example.btcwidget.nostr.core.HomeFeed.Dvm)
+                if (feed is com.example.btcwidget.nostr.core.HomeFeed.Following) {
+                    startLiveHome()
+                    if (items.isNotEmpty()) repo.saveHome(items)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -101,7 +164,9 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         _home.update { it.copy(loading = true) }
         viewModelScope.launch {
             val until = state.items.minOf { it.sortTime } - 1
-            val more = runCatching { repo.homeFeed(until = until) }.getOrDefault(emptyList())
+            val feed = _homeFeed.value
+            val more = runCatching { repo.feed(feed, until = until) }.getOrDefault(emptyList())
+            if (feed != _homeFeed.value) return@launch
             _home.update { s ->
                 val merged = (s.items + more).distinctBy { it.key }
                 s.copy(items = merged, loading = false, endReached = more.isEmpty())
@@ -329,6 +394,8 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         _notifOff.value = store.notificationsOff(app)
         _wot.value = store.wotFilter(app)
         refreshScheduled()
+        _homeFeeds.value = loadFeeds()
+        _homeFeed.value = loadFeed(_homeFeeds.value)
     }
 
     private fun afterLogin() {

@@ -315,20 +315,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
     if (note.kind == com.example.btcwidget.nostr.core.Kind.POLL) {
         com.example.btcwidget.nostr.core.Poll.of(note)?.let { PollView(it, actions) }
     }
-    segments.filterIsInstance<Content.Segment.Image>().take(4).forEach { img ->
-        AsyncImage(
-            model = img.url,
-            contentDescription = "Image",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .padding(top = 8.dp)
-                .fillMaxWidth()
-                .heightIn(max = 320.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
-                .clickable(onClickLabel = "View image") { actions.openImage(img.url, note) }
-        )
-    }
+    segments.filterIsInstance<Content.Segment.Image>().take(4).forEach { img -> NoteImage(note, img.url, actions) }
     segments.filterIsInstance<Content.Segment.Video>().take(2).forEach { VideoPlayer(it.url) }
     // A card for the first web link (not for posts that already show photos, video or a quote).
     if (depth == 0 && segments.none { it is Content.Segment.Image || it is Content.Segment.Video || it is Content.Segment.NoteRef || it is Content.Segment.AddressRef }) {
@@ -382,6 +369,38 @@ internal fun translatableText(note: Event, actions: NoteActions): String =
             else -> ""
         }
     }.trim()
+
+/**
+ * A picture (or GIF) in a note, shown whole at its own shape: the size comes from the note's
+ * imeta "dim" when given, else from the image once loaded. Only very tall or very wide
+ * pictures are trimmed, to keep the timeline readable.
+ */
+@Composable
+private fun NoteImage(note: Event, url: String, actions: NoteActions) {
+    var ratio by remember(note.id, url) { mutableStateOf(com.example.btcwidget.nostr.core.Imeta.aspectRatio(note, url)) }
+    val shape = RoundedCornerShape(14.dp)
+    AsyncImage(
+        model = url,
+        contentDescription = "Image",
+        contentScale = ContentScale.Crop,
+        onSuccess = { state ->
+            val size = state.painter.intrinsicSize
+            if (size.width > 0f && size.height > 0f) ratio = size.width / size.height
+        },
+        modifier = Modifier
+            .padding(top = 8.dp)
+            .fillMaxWidth()
+            .then(ratio?.let { Modifier.aspectRatio(it.coerceIn(MIN_RATIO, MAX_RATIO)) } ?: Modifier.heightIn(min = 120.dp, max = 320.dp))
+            .clip(shape)
+            .background(EInk.Body)
+            .border(0.5.dp, EInk.BodyStroke, shape)
+            .clickable(onClickLabel = "View image") { actions.openImage(url, note) }
+    )
+}
+
+/** Taller than 4:5 portrait or wider than 3:1 is trimmed; everything else shows whole. */
+private const val MIN_RATIO = 0.8f
+private const val MAX_RATIO = 3f
 
 /** A linked long-form article: cover, title and summary, boxed. */
 @Composable
