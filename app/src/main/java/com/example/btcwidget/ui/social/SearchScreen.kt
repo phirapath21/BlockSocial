@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
  * searches people and posts on NIP-50 search relays.
  */
 @Composable
-fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
+fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() -> Unit)? = null) {
     val stats by vm.stats.collectAsState()
     val following by vm.following.collectAsState()
     val scope = rememberCoroutineScope()
@@ -71,7 +71,8 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: () -> 
     var notes by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
     var job by remember { mutableStateOf<Job?>(null) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // Opened as its own screen: start typing. As a tab, don't pop the keyboard on every visit.
+    LaunchedEffect(Unit) { if (onBack != null) runCatching { focus.requestFocus() } }
 
     fun run() {
         val q = query.trim()
@@ -96,12 +97,17 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: () -> 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.statusBarsPadding().fillMaxWidth().padding(end = 12.dp, top = 6.dp, bottom = 6.dp)
+            modifier = Modifier
+                .then(if (onBack != null) Modifier.statusBarsPadding() else Modifier)
+                .fillMaxWidth()
+                .padding(start = if (onBack == null) 12.dp else 0.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
         ) {
-            Text(
-                "←", color = EInk.Value, fontSize = 22.sp,
-                modifier = Modifier.clickable(onClickLabel = "Back", onClick = onBack).padding(horizontal = 14.dp, vertical = 8.dp)
-            )
+            if (onBack != null) {
+                Text(
+                    "←", color = EInk.Value, fontSize = 22.sp,
+                    modifier = Modifier.clickable(onClickLabel = "Back", onClick = onBack).padding(horizontal = 14.dp, vertical = 8.dp)
+                )
+            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },

@@ -52,8 +52,6 @@ import coil3.compose.AsyncImage
 import com.example.btcwidget.ComposeKey
 import com.example.btcwidget.EditProfileKey
 import com.example.btcwidget.LoginKey
-import com.example.btcwidget.SearchKey
-import androidx.compose.material.icons.filled.Search
 import com.example.btcwidget.nostr.FeedItem
 import com.example.btcwidget.nostr.NoteStats
 import com.example.btcwidget.nostr.NostrNotification
@@ -156,8 +154,6 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     LaunchedEffect(account) { vm.start() }
 
     SocialScaffold(vm, navigate) { actions ->
-        Column(Modifier.fillMaxSize()) {
-        HomeHeader(onSearch = { navigate(SearchKey) })
         Box(Modifier.fillMaxSize()) {
             if (account == null) {
                 WelcomeScreen(vm, actions, onLogin = { navigate(LoginKey) })
@@ -183,27 +179,7 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 ) { Text("+", fontSize = 26.sp, fontWeight = FontWeight.Bold) }
             }
         }
-        }
     }
-}
-
-/** Title row of the Home tab, with search. */
-@Composable
-private fun HomeHeader(onSearch: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().height(52.dp).padding(start = 16.dp, end = 6.dp)
-    ) {
-        Text("Home", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        androidx.compose.material3.IconButton(onClick = onSearch) {
-            androidx.compose.material3.Icon(
-                androidx.compose.material.icons.Icons.Default.Search,
-                contentDescription = "Search",
-                tint = EInk.Value
-            )
-        }
-    }
-    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
 
 /** Logged out: what this is, how to join, and a public #bitcoin feed to browse. */
@@ -238,8 +214,6 @@ fun NotificationsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
 
     SocialScaffold(vm, navigate) { actions ->
         Column(Modifier.fillMaxSize()) {
-            Text("Notifications", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp))
-            HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
             if (account == null) {
                 EmptyNote("Log in to see replies, likes, reposts and zaps.")
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { PillButton("Log in", onClick = { navigate(LoginKey) }) }
