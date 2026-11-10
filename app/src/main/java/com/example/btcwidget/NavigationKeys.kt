@@ -23,6 +23,9 @@ import kotlinx.serialization.Serializable
 /** A private conversation; [peers] are pubkeys joined with commas. */
 @Serializable data class ChatKey(val peers: String) : NavKey
 
+/** Whom [pubkey] follows, or ([followers]) who follows them. */
+@Serializable data class FollowsKey(val pubkey: String, val followers: Boolean) : NavKey
+
 /** The community rules. */
 @Serializable data object RulesKey : NavKey
 

@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -159,7 +162,68 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         return nsec
     }
 
+    // ---- Unread state and phone notifications ----
+
+    private val store = com.example.btcwidget.nostr.NostrAccountStore
+    private val app get() = getApplication<Application>()
+
+    private val _notifSeen = MutableStateFlow(store.notificationsSeen(application))
+    private val _dmRead = MutableStateFlow(store.dmRead(application))
+    private val _push = MutableStateFlow(store.pushEnabled(application))
+
+    /** Phone notifications for replies, zaps and messages while the app is closed. */
+    val pushEnabled: StateFlow<Boolean> = _push.asStateFlow()
+
+    /** Notifications newer than the last time the tab was open. */
+    val unreadNotifications: StateFlow<Int> = combine(_notifications, _notifSeen) { n, seen ->
+        n.items.count { it.event.createdAt > seen }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    /** Conversations whose newest message is from someone else and not read yet. */
+    val unreadConversations: StateFlow<Set<String>> = combine(repo.dms.conversations, _dmRead, repo.account) { convs, read, account ->
+        val me = account?.pubkey
+        convs.filter { it.last.sender != me && it.last.createdAt > (read[it.key] ?: 0) }.map { it.key }.toSet()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    fun markNotificationsSeen() {
+        val newest = _notifications.value.items.maxOfOrNull { it.event.createdAt } ?: return
+        if (newest <= _notifSeen.value) return
+        _notifSeen.value = newest
+        store.setNotificationsSeen(app, newest)
+        // Seen in the app: don't announce them again from the background.
+        if (newest > store.notificationsNotified(app)) store.setNotificationsNotified(app, newest)
+    }
+
+    fun markConversationRead(key: String, newest: Long) {
+        if (newest <= (_dmRead.value[key] ?: 0)) return
+        _dmRead.update { it + (key to newest) }
+        store.setDmRead(app, _dmRead.value)
+        if (newest > store.dmNotified(app)) store.setDmNotified(app, newest)
+    }
+
+    fun setPushEnabled(on: Boolean) {
+        store.setPushEnabled(app, on)
+        _push.value = on
+        if (on) com.example.btcwidget.WidgetRefreshScheduler.schedulePeriodic(app)
+        else com.example.btcwidget.WidgetRefreshScheduler.cancelIfUnused(app)
+    }
+
+    /** Loads what the badges need when the app opens (and on resume). */
+    fun refreshBadges() {
+        if (repo.pubkey == null) return
+        startDms()
+        refreshNotifications()
+    }
+
+    /** Re-reads per-account state after logging in or out (the store is cleared then). */
+    private fun reloadReadState() {
+        _notifSeen.value = store.notificationsSeen(app)
+        _dmRead.value = store.dmRead(app)
+        _push.value = store.pushEnabled(app)
+    }
+
     private fun afterLogin() {
+        reloadReadState()
         accountLoaded = false
         _home.value = Paged()
         _notifications.value = Paged()
@@ -168,6 +232,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     fun logout() {
         repo.logout()
+        reloadReadState()
         _home.value = Paged()
         _notifications.value = Paged()
     }
@@ -222,6 +287,10 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     fun unlockDms() = act("Couldn't open messages") { repo.dms.unlock() }
     fun setUpDmInbox() = act("Couldn't set up your inbox") { repo.dms.setUpInbox(); say("Inbox ready: people can message you") }
+
+    // ---- Follow lists ----
+
+    suspend fun followersOf(pubkey: String) = runCatching { repo.followersOf(pubkey) }.getOrDefault(emptyList())
 
     // ---- Search ----
 

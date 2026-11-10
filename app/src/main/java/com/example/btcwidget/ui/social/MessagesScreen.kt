@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -58,6 +59,7 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val locked by vm.dmLocked.collectAsState()
     val inbox by vm.dmInbox.collectAsState()
     val profiles by vm.profiles.collectAsState()
+    val unread by vm.unreadConversations.collectAsState()
     var newMessage by remember { mutableStateOf(false) }
     LaunchedEffect(account) { vm.startDms() }
 
@@ -90,7 +92,7 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 else EmptyNote("No messages yet. Start one with ✉, or from someone's profile.")
             }
             items(conversations, key = { it.key }) { c ->
-                ConversationRow(c, me, profiles, onClick = { navigate(ChatKey(c.key)) })
+                ConversationRow(c, me, profiles, unread = c.key in unread, onClick = { navigate(ChatKey(c.key)) })
             }
         }
         FloatingActionButton(
@@ -120,7 +122,7 @@ private fun Banner(text: String, action: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ConversationRow(c: DirectMessages.Conversation, me: String, profiles: Map<String, Profile>, onClick: () -> Unit) {
+private fun ConversationRow(c: DirectMessages.Conversation, me: String, profiles: Map<String, Profile>, unread: Boolean, onClick: () -> Unit) {
     val names = c.peers.joinToString(", ") { profiles[it]?.bestName ?: Profile.shortNpub(it) }
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp)) {
         Avatar(profiles[c.peers.first()], c.peers.first(), size = 46)
@@ -128,11 +130,16 @@ private fun ConversationRow(c: DirectMessages.Conversation, me: String, profiles
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(names, color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Text(relativeTime(c.last.createdAt), color = EInk.Caption, fontSize = 13.sp)
+                Text(relativeTime(c.last.createdAt), color = if (unread) EInk.Value else EInk.Caption, fontSize = 13.sp)
+                if (unread) {
+                    Box(Modifier.padding(start = 6.dp).size(9.dp).background(EInk.Alert, CircleShape))
+                }
             }
             Text(
                 (if (c.last.sender == me) "You: " else "") + c.last.content.replace('\n', ' '),
-                color = EInk.Label, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                color = if (unread) EInk.Value else EInk.Label, fontSize = 14.sp,
+                fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -193,7 +200,13 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
         vm.startDms()
         vm.loadProfiles(peers)
     }
-    LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size)
+            // Open on screen: everything here is read.
+            vm.markConversationRead(key.joinToString(","), messages.maxOf { it.createdAt })
+        }
+    }
 
     val title = peers.joinToString(", ") { profiles[it]?.bestName ?: Profile.shortNpub(it) }
     Column(Modifier.fillMaxSize().background(EInk.Background).imePadding()) {

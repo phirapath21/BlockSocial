@@ -26,6 +26,13 @@ Blockface is also a Nostr client with a familiar timeline layout.
 - **Notes:** reply (NIP-10 threads), repost (kind 6), quote (NIP-18 `q` tag), like (kind 7), zap (NIP-57, pays through your Lightning wallet app), share link, delete your own (NIP-09).
 - **Profiles:** banner, avatar, bio, NIP-05, Lightning address, follow/unfollow (kind 3, keeps your other follows), edit your own (kind 0).
 - **Notifications:** replies, mentions, reposts, likes and zaps.
+- **Unread and alerts:**
+  - Badges on Notifications and Messages, and bold unread conversations.
+  - Phone notifications for replies, mentions, zaps and DMs while the app is closed, from the same background refresh as the price alerts (every 15/30/60 min, not instant). You can turn them off in Settings › Nostr.
+  - Tapping a notification opens the right tab.
+- **Follow lists:**
+  - Tap "Following" or "Followers" on a profile to see the list, with follow buttons.
+  - Followers come from the indexers and are capped at 500.
 - **Safety:** mute accounts (NIP-51 mute list) and report notes (NIP-56); in-app Community rules (`docs/community-rules.md`).
 - **Search:** people, posts and #hashtags via NIP-50 search relays; an npub, note id, nevent or name@domain (NIP-05) opens directly.
 - **Photos:** attach up to 4 images per post with the system photo picker. They're re-encoded on the phone (EXIF and GPS removed), uploaded to Blossom (your kind-10063 servers or blossom.primal.net), and posted with NIP-92 `imeta` tags.

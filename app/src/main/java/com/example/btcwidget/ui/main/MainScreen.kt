@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -102,6 +104,26 @@ fun MainScreen(
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.HOME) }
     val social: com.example.btcwidget.ui.social.SocialViewModel = viewModel()
     val account by social.account.collectAsStateWithLifecycle()
+    val unreadNotifications by social.unreadNotifications.collectAsStateWithLifecycle()
+    val unreadChats by social.unreadConversations.collectAsStateWithLifecycle()
+    val pushEnabled by social.pushEnabled.collectAsStateWithLifecycle()
+    val notificationItems by social.notifications.collectAsStateWithLifecycle()
+
+    // Badges: load notifications and messages when the account is known and on every return.
+    LaunchedEffect(account) { social.refreshBadges() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { social.refreshBadges() }
+    // Opening the Notifications tab marks them seen.
+    LaunchedEffect(selectedTab, notificationItems) {
+        if (selectedTab == MainTab.NOTIFICATIONS) social.markNotificationsSeen()
+    }
+    // A tapped phone notification opens its tab.
+    val requestedTab by com.example.btcwidget.OpenTabRequest.tab.collectAsStateWithLifecycle()
+    LaunchedEffect(requestedTab) {
+        requestedTab?.let { name ->
+            runCatching { MainTab.valueOf(name) }.getOrNull()?.let { selectedTab = it }
+            com.example.btcwidget.OpenTabRequest.tab.value = null
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         viewModel.refreshNotificationPermission()
@@ -152,6 +174,7 @@ fun MainScreen(
         messagesContent = { com.example.btcwidget.ui.social.MessagesScreen(social, onItemClick) },
         drawerHeader = { com.example.btcwidget.ui.social.DrawerAccountHeader(social, onLogin = { onItemClick(com.example.btcwidget.LoginKey) }) },
         menuButtonIcon = { com.example.btcwidget.ui.social.MenuAvatar(social) },
+        badges = mapOf(MainTab.NOTIFICATIONS to unreadNotifications, MainTab.MESSAGES to unreadChats.size),
         notificationsContent = { com.example.btcwidget.ui.social.NotificationsScreen(social, onItemClick) },
         profileContent = {
             val me = account?.pubkey
@@ -168,7 +191,12 @@ fun MainScreen(
                 onLogin = { onItemClick(com.example.btcwidget.LoginKey) },
                 onLogout = social::logout,
                 onRelaysChange = social::setRelays,
-                onOpenRules = { onItemClick(com.example.btcwidget.RulesKey) }
+                onOpenRules = { onItemClick(com.example.btcwidget.RulesKey) },
+                pushEnabled = pushEnabled,
+                onPushChange = { on ->
+                    social.setPushEnabled(on)
+                    if (on && !settings.notificationsAllowed) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
             )
         }
     )
@@ -217,6 +245,8 @@ fun MainScreenContent(
     messagesContent: @Composable () -> Unit = {},
     /** Top of the side bar: the account (avatar, name) or a log-in prompt. */
     drawerHeader: @Composable () -> Unit = {},
+    /** Unread counts shown on bottom-bar tabs. */
+    badges: Map<MainTab, Int> = emptyMap(),
     /** The top-left button that opens the side bar (the user's avatar when logged in). */
     menuButtonIcon: @Composable () -> Unit = { Text("≡", color = EInk.Value, fontSize = 22.sp) }
 ) {
@@ -372,8 +402,15 @@ fun MainScreenContent(
             )
             BAR_TABS.forEach { tab ->
                 // Icons only, as in X; the names are read out by TalkBack.
+                val count = badges[tab] ?: 0
                 NavigationBarItem(
-                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                    icon = {
+                        BadgedBox(badge = {
+                            if (count > 0) Badge(containerColor = EInk.Alert) { Text(if (count > 99) "99+" else "$count") }
+                        }) {
+                            Icon(tab.icon, contentDescription = if (count > 0) "${tab.label}, $count unread" else tab.label)
+                        }
+                    },
                     alwaysShowLabel = false,
                     selected = selectedTab == tab,
                     onClick = { onTabSelected(tab) },
