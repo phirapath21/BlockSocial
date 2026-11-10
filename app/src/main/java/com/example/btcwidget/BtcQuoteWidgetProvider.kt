@@ -74,8 +74,13 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
             val quoteIndex = AppPrefs.quoteIndex(context, appWidgetId)
             val quote = QUOTES[quoteIndex % QUOTES.size]
 
-            val retro = AppPrefs.theme(context) == AppTheme.RETRO
-            val layoutId = if (retro) R.layout.btc_widget_quote_retro else R.layout.btc_widget_quote
+            val theme = AppPrefs.theme(context)
+            val retro = theme == AppTheme.RETRO
+            val layoutId = when (theme) {
+                AppTheme.CLASSIC -> R.layout.btc_widget_quote
+                AppTheme.RETRO -> R.layout.btc_widget_quote_retro
+                AppTheme.ORANGE -> R.layout.btc_widget_quote_orange
+            }
             val views = RemoteViews(context.packageName, layoutId)
 
             if (retro) {
