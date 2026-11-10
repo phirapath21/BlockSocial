@@ -51,6 +51,7 @@ import com.example.btcwidget.nostr.core.Profile
 import com.example.btcwidget.ui.main.EInk
 import com.example.btcwidget.ui.main.EInkChip
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /**
@@ -67,6 +68,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
     var tab by rememberSaveable { mutableStateOf("people") }
     var searched by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    var notesLoading by remember { mutableStateOf(false) }
     var people by remember { mutableStateOf<List<Profile>>(emptyList()) }
     var notes by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
     var job by remember { mutableStateOf<Job?>(null) }
@@ -88,9 +90,14 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                 is NostrRepository.Direct.HashtagTarget -> { loading = false; navigate(HashtagKey(direct.tag)); return@launch }
                 null -> Unit
             }
-            people = vm.searchPeople(q)
-            notes = vm.searchNotes(q)
+            // Both at once; each list shows as soon as it arrives.
+            notesLoading = true
+            val p = async { vm.searchPeople(q) }
+            val n = async { vm.searchNotes(q) }
+            people = p.await()
             loading = false
+            notes = n.await()
+            notesLoading = false
         }
     }
 
@@ -130,7 +137,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
             EInkChip(text = "PEOPLE" + if (searched != null && !loading) " ${people.size}" else "", selected = tab == "people", onClick = { tab = "people" })
-            EInkChip(text = "POSTS" + if (searched != null && !loading) " ${notes.size}" else "", selected = tab == "posts", onClick = { tab = "posts" })
+            EInkChip(text = "POSTS" + if (searched != null && !notesLoading) " ${notes.size}" else "", selected = tab == "posts", onClick = { tab = "posts" })
         }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 
@@ -148,6 +155,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                         }
                     }
                 }
+                notesLoading && notes.isEmpty() -> Spinner(Modifier.padding(top = 30.dp))
                 else -> if (notes.isEmpty()) EmptyNote("No posts found for \"$searched\".") else NoteList(notes, stats, actions)
             }
         }

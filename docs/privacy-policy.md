@@ -29,7 +29,9 @@ Uninstalling the app or clearing its storage deletes all of this.
 
 When you post, reply, quote, repost, like, follow, mute, report, zap or edit your profile, the app signs an event with your key and sends it to your Nostr relays (by default relay.damus.io, nos.lol and relay.primal.net, or the list you set). These events are **public**, are signed by your public key, and may be copied by other relays and apps. Deleting a note sends a deletion request; relays and people who already have a copy may keep it. The developer does not operate these relays and cannot remove content from them.
 
-To show your timeline, profiles, threads and notifications, the app requests public events from your relays. Relays see your IP address and which events you ask for (for example, whose notes you load). Each relay's own policy applies.
+To show your timeline, profiles, threads and notifications, the app requests public events from your relays. Profiles, follow lists and relay lists are also requested from public indexer relays (purplepag.es, user.kindpag.es and indexer.coracle.social), so people's names and pictures load even when they publish elsewhere. Relays see your IP address and which events you ask for (for example, whose notes you load). Each relay's own policy applies.
+
+**Cache:** to open quickly, the app keeps the last home timeline, profiles it has shown, and your own follow, mute and relay lists in its private cache on the phone. These are public Nostr events; Android may clear the cache, and logging out deletes it.
 
 **Zaps:** when you zap, the app asks the recipient's Lightning address provider (the domain in their Lightning address, for example getalby.com) for an invoice and passes it to your Lightning wallet app. That provider sees your IP address, the amount and your signed zap request (who you zapped, and any comment, which become public in the zap receipt). Payment happens in your wallet app; Blockface never holds funds.
 

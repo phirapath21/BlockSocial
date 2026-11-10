@@ -337,7 +337,8 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     var end by remember(pubkey) { mutableStateOf(false) }
     val theirFollowing by produceState<Set<String>?>(null, pubkey) { value = vm.followingOf(pubkey) }
     LaunchedEffect(pubkey) {
-        vm.refreshProfile(pubkey)
+        // Header and notes load at the same time.
+        launch { vm.refreshProfile(pubkey) }
         items = vm.profileFeed(pubkey)
     }
     val profile = profiles[pubkey]
