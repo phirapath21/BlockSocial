@@ -269,6 +269,9 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     var pollOptions by remember { mutableStateOf(listOf("", "")) }
     var pollMulti by remember { mutableStateOf(false) }
     var pollDays by remember { mutableStateOf(1) }
+    // Publish later (new posts only): seconds since the epoch, or null to post now.
+    var scheduleAt by remember { mutableStateOf<Long?>(null) }
+    var schedulePicker by remember { mutableStateOf(false) }
     // "@name" picked from suggestions → pubkey; turned into nostr:npub links when sending.
     var mentions by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val following by vm.following.collectAsState()
@@ -297,6 +300,13 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
             else vm.uploadImage(uri, done)
         }
     }
+
+    if (schedulePicker) ScheduleDialog(
+        initial = scheduleAt,
+        onDismiss = { schedulePicker = false },
+        onClear = { scheduleAt = null; schedulePicker = false },
+        onPick = { scheduleAt = it; schedulePicker = false }
+    )
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar(
@@ -444,6 +454,15 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                         .clickable(enabled = images.isEmpty() && uploading == 0, onClickLabel = if (poll) "Remove poll" else "Add poll") { poll = !poll }
                         .padding(8.dp)
                 )
+                if (replyTo == null && quote == null) Text(
+                    "🕒",
+                    color = EInk.Value, fontSize = 20.sp,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(if (scheduleAt != null) EInk.Body else EInk.Background)
+                        .clickable(enabled = !poll, onClickLabel = "Schedule") { schedulePicker = true }
+                        .padding(8.dp)
+                )
                 Text(
                     "⚠",
                     color = if (sensitive) EInk.Alert else EInk.Caption, fontSize = 20.sp,
@@ -453,7 +472,8 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                         .padding(8.dp)
                 )
                 Text(
-                    if (sensitive) "Marked sensitive: shown behind a warning."
+                    if (scheduleAt != null) "Posts " + java.text.SimpleDateFormat("EEE, MMM d - h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(scheduleAt!! * 1000)) + ", if your phone is on and online."
+                    else if (sensitive) "Marked sensitive: shown behind a warning."
                     else if (images.any { it.isVideo }) "Videos are posted as they are: any location saved in the file is not removed."
                     else "Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed.",
                     color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
@@ -461,12 +481,18 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                 val canSend = !sending && uploading == 0 && (text.isNotBlank() || images.isNotEmpty() || quote != null) &&
                     (replyTo == null && quote == null || target != null) &&
                     (!poll || text.isNotBlank() && pollOptions.count { it.isNotBlank() } >= 2)
-                PillButton(if (sending) "Posting…" else if (replyTo != null) "Reply" else "Post", filled = canSend) {
+                PillButton(if (sending) "Posting…" else if (replyTo != null) "Reply" else if (scheduleAt != null) "Schedule" else "Post", filled = canSend) {
                     if (!canSend) return@PillButton
                     sending = true
                     // "@handle" → nostr:npub… so it links and notifies them (and gets a "p" tag).
                     val body = mentions.entries.fold(text.trim()) { acc, (handle, pk) ->
                         acc.replace(Regex("@" + Regex.escape(handle) + "(?![\\p{L}\\p{M}\\p{N}_])"), "nostr:" + com.example.btcwidget.nostr.core.Nip19.npub(pk))
+                    }
+                    scheduleAt?.let { at ->
+                        if (vm.schedule(body, images, if (sensitive) "Sensitive content" else null, at)) {
+                            com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack()
+                        } else sending = false
+                        return@PillButton
                     }
                     if (poll) {
                         vm.createPoll(body, pollOptions, pollMulti, pollDays * 86_400L) { ok ->
@@ -482,6 +508,51 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
             }
         }
     }
+}
+
+/** When to publish: quick choices, or a day and time. Returns seconds since the epoch. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+internal fun ScheduleDialog(initial: Long?, onDismiss: () -> Unit, onClear: () -> Unit, onPick: (Long) -> Unit) {
+    val now = remember { java.util.Calendar.getInstance() }
+    var day by remember { mutableStateOf(0) }
+    val start = remember { java.util.Calendar.getInstance().apply { if (initial != null) timeInMillis = initial * 1000 else add(java.util.Calendar.HOUR_OF_DAY, 1) } }
+    val time = androidx.compose.material3.rememberTimePickerState(start.get(java.util.Calendar.HOUR_OF_DAY), start.get(java.util.Calendar.MINUTE), is24Hour = false)
+    fun chosen(): Long = java.util.Calendar.getInstance().apply {
+        add(java.util.Calendar.DAY_OF_YEAR, day)
+        set(java.util.Calendar.HOUR_OF_DAY, time.hour); set(java.util.Calendar.MINUTE, time.minute); set(java.util.Calendar.SECOND, 0)
+    }.timeInMillis / 1000
+    val valid = chosen() > now.timeInMillis / 1000 + 60
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Schedule post") },
+        text = {
+            Column {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    (0..6).forEach { d ->
+                        val label = when (d) {
+                            0 -> "TODAY"; 1 -> "TOMORROW"
+                            else -> java.text.SimpleDateFormat("EEE d", java.util.Locale.ENGLISH).format(java.util.Date(System.currentTimeMillis() + d * 86_400_000L)).uppercase()
+                        }
+                        com.example.btcwidget.ui.main.EInkChip(text = label, selected = day == d, onClick = { day = d })
+                    }
+                }
+                androidx.compose.material3.TimeInput(state = time, modifier = Modifier.padding(top = 12.dp))
+                Text(
+                    if (valid) "It's signed and sent at that time. Your phone must be on and online; a signer app may ask you to approve then."
+                    else "Pick a time in the future.",
+                    color = if (valid) EInk.Caption else EInk.Alert, fontSize = 12.sp
+                )
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(enabled = valid, onClick = { onPick(chosen()) }) { Text("Set") } },
+        dismissButton = {
+            Row {
+                if (initial != null) androidx.compose.material3.TextButton(onClick = onClear) { Text("Post now instead") }
+                androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
 }
 
 /** A small dark label over an image; a spinner while [text] is null (uploading). */

@@ -80,6 +80,8 @@ fun NostrSettingsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack:
                 valid = { it.startsWith("wss://") }
             ) { urls, done -> if (urls.isNotEmpty()) vm.setDmInbox(urls, done) }
 
+            ScheduledSection(vm)
+
             SafetySection(vm)
 
             if (acct.type == SignerType.LOCAL) ExportKeySection(vm)
@@ -126,6 +128,27 @@ internal fun AccountRow(profile: com.example.btcwidget.nostr.core.Profile?, pubk
             Text(note, color = EInk.Caption, fontSize = 12.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { actions() }
+    }
+}
+
+/** Posts waiting to be published, with Post now and Cancel. */
+@Composable
+private fun ScheduledSection(vm: SocialViewModel) {
+    val posts by vm.scheduled.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(Unit) { vm.refreshScheduled() }
+    Section("Scheduled posts", "Sent at their time if your phone is on and online. Schedule one with 🕒 in the composer.")
+    if (posts.isEmpty()) Text("None", color = EInk.Caption, fontSize = 13.sp)
+    posts.forEach { p ->
+        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            Text(java.text.SimpleDateFormat("EEE, MMM d - h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(p.at * 1000)) +
+                if (p.at * 1000 < System.currentTimeMillis()) " · waiting to send" else "",
+                color = EInk.Caption, fontSize = 12.sp)
+            Text(p.content, color = EInk.Value, fontSize = 14.sp, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                EInkChip(text = "POST NOW", selected = true, onClick = { vm.postScheduledNow(p) })
+                EInkChip(text = "CANCEL", selected = false, onClick = { vm.cancelScheduled(p.id) })
+            }
+        }
     }
 }
 

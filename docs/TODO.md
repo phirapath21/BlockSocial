@@ -59,7 +59,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] "For you" feeds via DVMs (NIP-90)
 - [x] Local event database (SQLite) instead of today's small cache
 - [ ] Instant notifications (needs a push server; today it checks every 15–60 min)
-- [ ] Scheduled posts
+- [x] Scheduled posts (sent by the phone at that time)
 
 ## Suggested next batch
 

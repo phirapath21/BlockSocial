@@ -31,6 +31,7 @@ object NostrBackground {
     private const val CHANNEL_DM = "nostr_messages"
     private const val ID_SOCIAL = 200
     private const val ID_DM_BASE = 300
+    private const val ID_SCHEDULED_BASE = 1400
 
     /** Extra on the notification's intent: which tab to open. */
     const val EXTRA_OPEN_TAB = "open_tab"
@@ -141,6 +142,10 @@ object NostrBackground {
     }
 
     private fun preview(m: Nip17.Message) = if (m.kind == Nip17.FILE) "📷 Photo" else m.content
+
+    /** A one-line notification about the user's own activity (e.g. a scheduled post). */
+    internal fun notifyAccount(context: Context, id: Int, title: String, text: String) =
+        post(context, CHANNEL_SOCIAL, ID_SCHEDULED_BASE + Math.floorMod(id, 1000), title, text, listOf(text), "HOME", private = false)
 
     private fun post(context: Context, channel: String, id: Int, title: String, text: String, lines: List<String>, tab: String, private: Boolean) {
         ensureChannels(context)

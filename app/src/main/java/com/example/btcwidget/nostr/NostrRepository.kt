@@ -254,11 +254,12 @@ class NostrRepository private constructor(private val context: Context) {
     fun removeSavedAccount(pubkey: String) {
         NostrAccountStore.removeSaved(context, pubkey)
         Drafts.clear(context, pubkey)
+        ScheduledPosts.clear(context, pubkey)
         _savedAccounts.value = NostrAccountStore.savedAccounts(context)
     }
 
     fun logout() {
-        pubkey?.let { Drafts.clear(context, it) }
+        pubkey?.let { Drafts.clear(context, it); ScheduledPosts.clear(context, it) }
         NostrAccountStore.clear(context)
         resetSession()
         _savedAccounts.value = NostrAccountStore.savedAccounts(context)

@@ -4,6 +4,7 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="nostr_account.xml" />
     <exclude domain="sharedpref" path="nostr_drafts.xml" />
+    <exclude domain="sharedpref" path="nostr_scheduled.xml" />
     <exclude domain="sharedpref" path="nostr_accounts.xml" />
     <exclude domain="database" path="nostr_events.db" />
     <exclude domain="database" path="nostr_events.db-wal" />
