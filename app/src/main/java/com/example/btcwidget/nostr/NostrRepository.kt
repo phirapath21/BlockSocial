@@ -120,6 +120,14 @@ class NostrRepository private constructor(private val context: Context) {
 
     internal val appContext: Context get() = context
 
+    // Outbox state: declared before init, whose cache loader fills it.
+    /** Connections to other people's write relays (separate from the user's own relays). */
+    private val outbox = RelayPool()
+
+    /** pubkey → write relays from their kind-10002 list; an empty list means "has none". */
+    private val writeRelays = ConcurrentHashMap<String, List<String>>()
+    private val relayListEvents = ConcurrentHashMap<String, Event>()
+
     /** Completes once the disk cache (profiles, the account's lists) is loaded. */
     val cacheReady: Job
 
@@ -128,6 +136,10 @@ class NostrRepository private constructor(private val context: Context) {
         // Show what we knew last time straight away; relays refresh it.
         cacheReady = scope.launch(Dispatchers.IO) {
             cache.loadEvents(PROFILES_CACHE).forEach { remember(it, save = false) }
+            cache.loadEvents(RELAY_LIST_CACHE).forEach { e ->
+                relayListEvents[e.pubkey] = e
+                writeRelays[e.pubkey] = com.example.btcwidget.nostr.core.Outbox.writeRelays(e)
+            }
             pubkey?.let { me -> applyAccountEvents(cache.loadEvents(ACCOUNT_CACHE).filter { it.pubkey == me }, fromRelays = false) }
         }
     }
@@ -257,12 +269,55 @@ class NostrRepository private constructor(private val context: Context) {
             )
         }
         val authors = (_following.value + me).toList()
-        return timeline(Filter(authors = authors, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit))
+        return authoredTimeline(authors) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit) }
     }
 
     /** A profile's notes and reposts. */
     suspend fun profileFeed(pubkey: String, until: Long? = null, limit: Int = 30): List<FeedItem> =
-        timeline(Filter(authors = listOf(pubkey), kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit))
+        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit) }
+
+    // ---- Outbox model (NIP-65): read people from the relays they write to ----
+
+
+    /** Fetches relay lists (from the indexers and our relays) for authors we don't know yet. */
+    private suspend fun loadWriteRelays(authors: Collection<String>) {
+        val missing = authors.distinct().filter { !writeRelays.containsKey(it) }
+        if (missing.isEmpty()) return
+        coroutineScope {
+            missing.chunked(150).map { chunk ->
+                async { queryEverywhere(listOf(Filter(authors = chunk, kinds = listOf(Kind.RELAY_LIST))), timeoutMs = 4_000) }
+            }.awaitAll()
+        }.flatten().groupBy { it.pubkey }.forEach { (pk, lists) ->
+            val latest = lists.maxBy { it.createdAt }
+            relayListEvents[pk] = latest
+            writeRelays[pk] = com.example.btcwidget.nostr.core.Outbox.writeRelays(latest)
+        }
+        missing.forEach { writeRelays.putIfAbsent(it, emptyList()) }
+        scope.launch(Dispatchers.IO) { cache.saveEvents(RELAY_LIST_CACHE, relayListEvents.values.sortedByDescending { it.createdAt }.take(3_000)) }
+    }
+
+    /**
+     * Notes by [authors], from our relays and, at the same time, from the relays each of
+     * them writes to (at most 12 extra relays, two per person). Merged into one timeline.
+     */
+    private suspend fun authoredTimeline(authors: List<String>, filterFor: (List<String>) -> Filter): List<FeedItem> {
+        val events = coroutineScope {
+            val ours = async { pool.query(listOf(filterFor(authors))) }
+            val theirs = async {
+                runCatching {
+                    loadWriteRelays(authors)
+                    val plan = com.example.btcwidget.nostr.core.Outbox.plan(authors, writeRelays, avoid = pool.urls)
+                    if (plan.isEmpty()) return@runCatching emptyList()
+                    outbox.addRelays(plan.keys)
+                    plan.map { (url, who) ->
+                        async { outbox.query(listOf(filterFor(who)), timeoutMs = 5_000, only = setOf(url)) }
+                    }.awaitAll().flatten()
+                }.getOrDefault(emptyList())
+            }
+            (ours.await() + theirs.await()).distinctBy { it.id }
+        }
+        return buildTimeline(events)
+    }
 
     /** Notes tagged with [hashtag]. */
     suspend fun hashtagFeed(hashtag: String, until: Long? = null): List<FeedItem> =
@@ -272,8 +327,10 @@ class NostrRepository private constructor(private val context: Context) {
      * Notes for a timeline. Returns as soon as the notes are in; names, avatars and counts
      * fill in afterwards (their flows update the screen), instead of holding it up.
      */
-    private suspend fun timeline(vararg filters: Filter, source: RelayPool = pool): List<FeedItem> {
-        val events = source.query(filters.toList())
+    private suspend fun timeline(vararg filters: Filter, source: RelayPool = pool): List<FeedItem> =
+        buildTimeline(source.query(filters.toList()))
+
+    private suspend fun buildTimeline(events: List<Event>): List<FeedItem> {
         // Reposts carry the note as JSON; fetch the few that don't in one request.
         val embedded = events.filter { it.kind == Kind.REPOST }.associateWith { r ->
             runCatching { Event.fromJson(r.content) }.getOrNull()?.takeIf { it.kind == Kind.TEXT_NOTE && it.verify() }
@@ -841,6 +898,7 @@ class NostrRepository private constructor(private val context: Context) {
         private const val PROFILES_CACHE = "profiles"
         private const val ACCOUNT_CACHE = "account"
         private const val HOME_CACHE = "home"
+        private const val RELAY_LIST_CACHE = "relay_lists"
 
         /** BUD-03 list of the user's Blossom media servers. */
         const val MEDIA_SERVER_LIST = 10063

@@ -41,6 +41,8 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
 
     private class Sub(
         val filters: List<Filter>,
+        /** Relays this subscription is sent to; null = all. */
+        val only: Set<String>?,
         val onEvent: (Event, String) -> Unit,
         /** (relay, gotEose): false when the relay closed the subscription or dropped. */
         val onEose: (String, Boolean) -> Unit,
@@ -62,16 +64,30 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
      * [onEose] is called once per relay that finishes sending stored events (true), or that
      * closed the subscription or dropped (false).
      */
-    fun subscribe(filters: List<Filter>, onEvent: (Event, String) -> Unit, onEose: (String, Boolean) -> Unit = { _, _ -> }): () -> Unit {
+    fun subscribe(
+        filters: List<Filter>,
+        onEvent: (Event, String) -> Unit,
+        onEose: (String, Boolean) -> Unit = { _, _ -> },
+        only: Set<String>? = null
+    ): () -> Unit {
         val id = "bf" + nextId.incrementAndGet()
-        subs[id] = Sub(filters, onEvent, onEose)
+        subs[id] = Sub(filters, only, onEvent, onEose)
         val req = ClientMessage.req(id, filters)
-        relays.values.forEach { it.send(req) }
+        targets(only).forEach { it.send(req) }
         return {
             subs.remove(id)
             val close = ClientMessage.close(id)
-            relays.values.forEach { it.send(close) }
+            targets(only).forEach { it.send(close) }
         }
+    }
+
+    private fun targets(only: Set<String>?) = if (only == null) relays.values else relays.filterKeys { it in only }.values
+
+    /** Adds [urls] without dropping others; beyond [max] relays, the oldest unused ones close. */
+    fun addRelays(urls: Collection<String>, max: Int = 24) {
+        urls.forEach { url -> relays.getOrPut(url) { Relay(url).also { it.connect() } } }
+        val busy = subs.values.flatMap { it.only ?: emptySet() }.toSet() + urls
+        relays.keys.filter { it !in busy }.take((relays.size - max).coerceAtLeast(0)).forEach { relays.remove(it)?.close() }
     }
 
     /**
@@ -80,21 +96,21 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
      * are mostly duplicates), or at [timeoutMs]. Relays that are down and retrying aren't
      * waited for at all.
      */
-    suspend fun query(filters: List<Filter>, timeoutMs: Long = 6_000, graceMs: Long = 1_000): List<Event> {
+    suspend fun query(filters: List<Filter>, timeoutMs: Long = 6_000, graceMs: Long = 1_000, only: Set<String>? = null): List<Event> {
         val out = ConcurrentHashMap<String, Event>()
         val pending = ConcurrentHashMap.newKeySet<String>().apply {
-            addAll(relays.filterValues { it.reachable }.keys)
+            addAll(relays.filter { (url, r) -> r.reachable && (only == null || url in only) }.keys)
         }
         if (pending.isEmpty()) return emptyList()
         val done = CompletableDeferred<Unit>()
         val firstAnswer = java.util.concurrent.atomic.AtomicBoolean(false)
-        val close = subscribe(filters, { e, _ -> out[e.id] = e }) { relay, gotEose ->
+        val close = subscribe(filters, { e, _ -> out[e.id] = e }, { relay, gotEose ->
             pending.remove(relay)
             if (pending.isEmpty()) done.complete(Unit)
             else if (gotEose && firstAnswer.compareAndSet(false, true)) {
                 scope.launch { delay(graceMs); done.complete(Unit) }
             }
-        }
+        }, only)
         withTimeoutOrNull(timeoutMs) { done.await() }
         close()
         return out.values.sortedByDescending { it.createdAt }
@@ -166,7 +182,7 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
                     open = true
                     attempts = 0
                     // Resend live subscriptions, then anything queued while connecting.
-                    subs.forEach { (id, sub) -> webSocket.send(ClientMessage.req(id, sub.filters)) }
+                    subs.forEach { (id, sub) -> if (sub.only == null || url in sub.only) webSocket.send(ClientMessage.req(id, sub.filters)) }
                     while (true) webSocket.send(queue.poll() ?: break)
                 }
 
@@ -187,7 +203,7 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
         private fun dropped() {
             open = false
             // Pending subscriptions on this relay won't get EOSE now.
-            subs.values.forEach { it.onEose(url, false) }
+            subs.values.forEach { if (it.only == null || url in it.only) it.onEose(url, false) }
             if (closed) return
             attempts++
             val wait = (1_000L shl attempts.coerceAtMost(6)).coerceAtMost(60_000)

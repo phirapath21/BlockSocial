@@ -48,6 +48,9 @@ Blockface is also a Nostr client with a familiar timeline layout.
 - **Search:** people, posts and #hashtags via NIP-50 search relays; an npub, note id, nevent or name@domain (NIP-05) opens directly.
 - **Photos:** attach up to 4 images per post with the system photo picker. They're re-encoded on the phone (EXIF and GPS removed), uploaded to Blossom (your kind-10063 servers or blossom.primal.net), and posted with NIP-92 `imeta` tags.
 - **Relays:** relay.damus.io, nos.lol and relay.primal.net by default, plus your NIP-65 relays when you have them, or your own list in Settings. Profiles and lists also come from indexer relays (purplepag.es, user.kindpag.es, indexer.coracle.social).
+- **Outbox model:**
+  - Home and profiles also read each person's notes from the relays they write to (their NIP-65 lists, from indexers and cached).
+  - At most 12 extra relays, 2 per person, sharing relays where possible. Notes posted elsewhere aren't missed.
 - **Speed:**
   - A query returns once the first relay finishes, plus a short grace period, instead of waiting for the slowest relay. Relays that are down aren't waited for.
   - Names, avatars and counts fill in after the notes appear.

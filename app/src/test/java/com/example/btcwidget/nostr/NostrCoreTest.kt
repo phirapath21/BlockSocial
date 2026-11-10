@@ -431,3 +431,36 @@ class Nip04NwcTest {
         }
     }
 }
+
+class OutboxTest {
+    private val o = com.example.btcwidget.nostr.core.Outbox
+
+    @org.junit.Test
+    fun writeRelaysSkipReadOnly() {
+        val e = com.example.btcwidget.nostr.core.Event("i", "p", 0, 10002, listOf(
+            listOf("r", "wss://a.example"), listOf("r", "wss://b.example", "write"),
+            listOf("r", "wss://c.example", "read"), listOf("r", "https://bad")
+        ), "", "")
+        org.junit.Assert.assertEquals(listOf("wss://a.example", "wss://b.example"), o.writeRelays(e))
+    }
+
+    @org.junit.Test
+    fun planSharesRelaysAndRespectsTheCap() {
+        val lists = mapOf(
+            "alice" to listOf("wss://big", "wss://a1", "wss://a2"),
+            "bob" to listOf("wss://big", "wss://b1"),
+            "carol" to listOf("wss://c1"),
+            "dave" to listOf("wss://d1", "wss://d2")
+        )
+        val plan = o.plan(listOf("alice", "bob", "carol", "dave", "erin"), lists, perAuthor = 2, maxRelays = 4)
+        org.junit.Assert.assertTrue(plan.size <= 4)
+        // The shared relay is used for both people who write there.
+        org.junit.Assert.assertTrue(plan["wss://big"]!!.containsAll(listOf("alice", "bob")))
+        // Carol has a single relay: it's picked.
+        org.junit.Assert.assertEquals(listOf("carol"), plan["wss://c1"])
+        // Erin has no list: left to the defaults.
+        org.junit.Assert.assertTrue(plan.values.none { "erin" in it })
+        // Avoided relays (e.g. ones we already query) aren't planned.
+        org.junit.Assert.assertFalse(o.plan(listOf("bob"), lists, avoid = setOf("wss://big")).containsKey("wss://big"))
+    }
+}
