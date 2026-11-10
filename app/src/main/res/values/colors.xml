@@ -13,4 +13,10 @@
     <color name="retro_value">#39FF6E</color>
     <color name="retro_caption">#22C552</color>
     <color name="retro_rule">#0F3D1E</color>
+    <!-- Orange pill theme: bitcoin orange panels, dark type (matches Palette.ORANGE_PILL) -->
+    <color name="orange_panel_top">#FFA235</color>
+    <color name="orange_panel_bottom">#F0850C</color>
+    <color name="orange_value">#1A0E00</color>
+    <color name="orange_caption">#3B2200</color>
+    <color name="orange_rule">#661A0E00</color>
 </resources>

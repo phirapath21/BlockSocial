@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Orange pill theme panel behind the quote widget, matching the painted panels -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="270"
+        android:endColor="@color/orange_panel_bottom"
+        android:startColor="@color/orange_panel_top" />
+    <corners android:radius="16dp" />
+</shape>

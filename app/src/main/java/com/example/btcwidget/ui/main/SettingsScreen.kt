@@ -82,7 +82,8 @@ fun SettingsScreen(
             SettingRow("Theme", note = "App and widgets") {
                 AppTheme.entries.forEach { option ->
                     EInkChip(
-                        text = option.label.uppercase(),
+                        // First word only, so three chips fit beside the label.
+                        text = option.label.substringBefore(' ').uppercase(),
                         selected = theme == option,
                         onClick = { onThemeSelected(option) }
                     )

@@ -19,7 +19,8 @@ class BlockclockPainterTest {
 
         override fun roundRect(l: Float, t: Float, r: Float, b: Float, radius: Float, color: Int) = Unit
         override fun roundRectGradient(l: Float, t: Float, r: Float, b: Float, radius: Float, top: Int, bottom: Int) {
-            panel = Box(l, t, r, b)
+            // The first gradient is the panel; later ones are effects such as gloss.
+            if (panel == null) panel = Box(l, t, r, b)
         }
         override fun grain(l: Float, t: Float, r: Float, b: Float, radius: Float) = Unit
         override fun circle(cx: Float, cy: Float, radius: Float, color: Int) = Unit

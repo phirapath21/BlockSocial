@@ -6,7 +6,10 @@ enum class AppTheme(val label: String, val palette: Palette) {
     CLASSIC("Classic", Palette.CLASSIC),
 
     /** Green phosphor terminal: pixel type, glow, scanlines and faint falling code. */
-    RETRO("Retro", Palette.RETRO);
+    RETRO("Retro", Palette.RETRO),
+
+    /** Bitcoin orange: glossy orange pills with near-black type on a warm dark app. */
+    ORANGE("Orange pill", Palette.ORANGE_PILL);
 
     companion object {
         fun fromName(name: String?): AppTheme = entries.firstOrNull { it.name == name } ?: CLASSIC
@@ -37,6 +40,8 @@ data class Palette(
     val grain: Boolean,
     /** CRT effects: phosphor glow on type, scanlines, faint falling code. */
     val crt: Boolean,
+    /** A soft highlight across the top of the panel, like light on a glossy pill. */
+    val gloss: Boolean = false,
     val ui: UiColors
 ) {
     companion object {
@@ -88,6 +93,33 @@ data class Palette(
                 alert = 0xFFFFB000.toInt()
             )
         )
+
+        /** Bitcoin orange (#F7931A) panels, dark type; the app around them is a warm near-black. */
+        val ORANGE_PILL = Palette(
+            bgTop = 0xFFFFA235.toInt(),
+            bgBottom = 0xFFF0850C.toInt(),
+            ink = 0xFF1A0E00.toInt(),
+            caption = 0xFF3B2200.toInt(),
+            track = 0x40000000,
+            // White reads on orange where red would not.
+            alert = 0xFFFFFFFF.toInt(),
+            wash = 0x1F1A0E00,
+            displayFont = DrawSurface.Font.CONDENSED,
+            captionFont = DrawSurface.Font.MONO,
+            grain = true,
+            crt = false,
+            gloss = true,
+            ui = UiColors(
+                background = 0xFF120A03.toInt(),
+                body = 0xFF21150A.toInt(),
+                bodyStroke = 0xFF3D2814.toInt(),
+                value = 0xFFFF9F2E.toInt(),
+                label = 0xFFE8B98A.toInt(),
+                caption = 0xFFB38B66.toInt(),
+                track = 0xFF3D2814.toInt(),
+                alert = 0xFFFF6A5C.toInt()
+            )
+        )
     }
 }
 
@@ -115,6 +147,7 @@ internal object PanelEffects {
     fun background(s: DrawSurface, width: Float, height: Float, radius: Float, p: Palette, seed: Int, codeOpacity: Float = 1f) {
         s.roundRectGradient(0f, 0f, width, height, radius, p.bgTop, p.bgBottom)
         if (p.grain) s.grain(0f, 0f, width, height, radius)
+        if (p.gloss) s.roundRectGradient(0f, 0f, width, height * 0.55f, radius, 0x40FFFFFF, 0x00FFFFFF)
         if (p.crt) code(s, width, height, radius, p, seed, codeOpacity)
     }
 

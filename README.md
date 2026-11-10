@@ -60,6 +60,7 @@ The widgets and the app share one look: a **dark grained panel** with **tall con
 - A **monospace caption** underneath (e.g. `Market price of bitcoin`); a red dot marks stale data.
 - The panel fills the widget and is painted as one image, so it stays crisp at every size; the app uses the same painter.
 - **Retro theme** (Settings → Display → Theme): green phosphor terminal type with a soft glow, scanlines and faint falling hex behind the value; stale data is marked in amber. It applies to the app and every widget.
+- **Orange pill theme**: glossy bitcoin-orange panels with near-black type, set in a warm dark app; stale data is marked with a white dot.
 - Display face: [Oswald](https://github.com/googlefonts/OswaldFont) Light, bundled under the SIL Open Font License (see `licenses/Oswald-OFL.txt`).
 - Retro theme face: [VT323](https://fonts.google.com/specimen/VT323), subset to Latin, bundled under the SIL Open Font License (see `licenses/VT323-OFL.txt`).
 
