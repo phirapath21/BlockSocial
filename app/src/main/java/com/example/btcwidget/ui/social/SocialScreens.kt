@@ -425,6 +425,10 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     val pinnedNote by produceState<com.example.btcwidget.nostr.core.Event?>(null, pubkey, if (account?.pubkey == pubkey) myPins else null) {
         value = vm.pinnedNoteOf(pubkey)
     }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable(pubkey) { mutableStateOf(0) }
+    // Loaded the first time the Articles tab opens.
+    var articles by remember(pubkey) { mutableStateOf<List<com.example.btcwidget.nostr.core.Article>?>(null) }
+    LaunchedEffect(pubkey, tab) { if (tab == 3 && articles == null) articles = vm.articlesBy(pubkey) }
     LaunchedEffect(pubkey) {
         // Header and notes load at the same time.
         launch { vm.refreshProfile(pubkey) }
@@ -432,7 +436,6 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     }
     val profile = profiles[pubkey]
     val isMe = account?.pubkey == pubkey
-    var tab by androidx.compose.runtime.saveable.rememberSaveable(pubkey) { mutableStateOf(0) }
     // X-style profile tabs, filtered from the same notes.
     val shown = remember(items, tab) {
         items.orEmpty().filter { item ->
@@ -440,6 +443,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
             when (tab) {
                 0 -> !isReply
                 1 -> isReply
+                3 -> false
                 else -> item.repostedBy == null && com.example.btcwidget.nostr.core.Content.parse(item.note.content).any { it is com.example.btcwidget.nostr.core.Content.Segment.Image } ||
                     item.repostedBy == null && com.example.btcwidget.nostr.core.Imeta.imageUrls(item.note).isNotEmpty()
             }
@@ -479,13 +483,19 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         onUnmute = { vm.mute(pubkey, false) },
                         actions = actions
                     )
-                    FeedTabs(listOf("Posts", "Replies", "Media"), selected = tab) { tab = it }
+                    FeedTabs(listOf("Posts", "Replies", "Media", "Articles"), selected = tab) { tab = it }
                     pinnedNote?.takeIf { tab == 0 }?.let { pin ->
                         Text("📌 Pinned", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 8.dp))
                         NoteCard(pin, stats[pin.id] ?: NoteStats(), actions)
                     }
                     val loaded = items
-                    if (loaded == null) Spinner()
+                    if (tab == 3) {
+                        val list = articles
+                        if (list == null) Spinner()
+                        else if (list.isEmpty()) EmptyNote("No articles yet.")
+                        else list.forEach { ArticleRow(it, onClick = { actions.openArticle(com.example.btcwidget.nostr.core.Nip19.Address(it.event.kind, it.pubkey, it.identifier)) }) }
+                    }
+                    else if (loaded == null) Spinner()
                     else if (shown.isEmpty()) EmptyNote(listOf("No posts yet.", "No replies yet.", "No photos yet.")[tab] + if (!end && loaded.isNotEmpty()) " Scroll loads older notes." else "")
                 }
             )

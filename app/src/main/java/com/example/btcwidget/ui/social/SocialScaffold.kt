@@ -89,6 +89,8 @@ fun SocialScaffold(
         openEngagement = { n, tab -> navigate(com.example.btcwidget.EngagementKey(n.id, tab)) },
         profileOf = { profiles[it] },
         resolveNote = { vm.note(it) },
+        resolveArticle = { vm.article(it) },
+        openArticle = { a -> navigate(com.example.btcwidget.ArticleKey(Nip19.naddr(a.kind, a.pubkey, a.identifier, a.relays))) },
         linkPreview = { vm.linkPreview(it) },
         me = account?.pubkey
     )

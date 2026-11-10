@@ -8,6 +8,7 @@ import com.example.btcwidget.nostr.core.Events
 import com.example.btcwidget.nostr.core.Filter
 import com.example.btcwidget.nostr.core.Hex
 import com.example.btcwidget.nostr.core.Kind
+import com.example.btcwidget.nostr.core.Markdown
 import com.example.btcwidget.nostr.core.Nip19
 import com.example.btcwidget.nostr.core.Profile
 import com.example.btcwidget.nostr.core.RelayMessage
@@ -189,6 +190,7 @@ class NostrCoreTest {
                 is Content.Segment.Hashtag -> "#" + it.tag
                 is Content.Segment.ProfileRef -> it.raw
                 is Content.Segment.NoteRef -> it.raw
+                is Content.Segment.AddressRef -> it.raw
             }
         }.startsWith("gm nostr:$npub see https://x.com/a.jpg, and"))
     }
@@ -472,5 +474,30 @@ class OutboxTest {
             reply("b", "focus", 20), reply("a", "focus", 10), reply("a1", "a", 30), reply("a1x", "a1", 40), reply("b1", "b", 25)
         ))
         assertEquals(listOf("a" to 0, "a1" to 1, "a1x" to 2, "b" to 0, "b1" to 1), rows.map { it.event.id to it.depth })
+    }
+
+    @Test
+    fun naddrRoundTripsAndArticleParses() {
+        val pk = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+        val a = Nip19.naddr(30023, pk, "my-post", listOf("wss://relay.example"))
+        assertEquals(Nip19.Address(30023, pk, "my-post", listOf("wss://relay.example")), Nip19.decode("nostr:$a"))
+        val seg = Content.parse("read nostr:$a now").filterIsInstance<Content.Segment.AddressRef>().single()
+        assertEquals("my-post", seg.address.identifier)
+        val e = Event("00", pk, 5, Kind.ARTICLE, listOf(listOf("d", "my-post"), listOf("title", "Hello"), listOf("published_at", "3")), "# x", "")
+        val art = com.example.btcwidget.nostr.core.Article.of(e)!!
+        assertEquals("Hello", art.title); assertEquals(3L, art.publishedAt)
+    }
+
+    @Test
+    fun markdownBlocksAndSpans() {
+        val blocks = Markdown.parse("# Title\n\nSome **bold** and *it* with [link](https://a.b).\nsame para\n\n- one\n2. two\n> quoted\n\n```\ncode\n```\n![alt](https://x/y.png)\n---")
+        assertEquals(8, blocks.size)
+        assertEquals(Markdown.Block.Heading(1, listOf(Markdown.Span.Plain("Title"))), blocks[0])
+        val p = blocks[1] as Markdown.Block.Paragraph
+        assertEquals(listOf(Markdown.Span.Plain("Some "), Markdown.Span.Bold("bold"), Markdown.Span.Plain(" and "), Markdown.Span.Italic("it"), Markdown.Span.Plain(" with "), Markdown.Span.Link("link", "https://a.b"), Markdown.Span.Plain(". same para")), p.spans)
+        assertEquals("2.", (blocks[3] as Markdown.Block.ListItem).marker)
+        assertEquals(Markdown.Block.Code("code"), blocks[5])
+        assertEquals(Markdown.Block.Image("https://x/y.png", "alt"), blocks[6])
+        assertEquals(Markdown.Block.Rule, blocks[7])
     }
 }

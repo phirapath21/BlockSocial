@@ -309,8 +309,12 @@ class NostrRepository private constructor(private val context: Context) {
      * Notes by [authors], from our relays and, at the same time, from the relays each of
      * them writes to (at most 12 extra relays, two per person). Merged into one timeline.
      */
-    private suspend fun authoredTimeline(authors: List<String>, filterFor: (List<String>) -> Filter): List<FeedItem> {
-        val events = coroutineScope {
+    private suspend fun authoredTimeline(authors: List<String>, filterFor: (List<String>) -> Filter): List<FeedItem> =
+        buildTimeline(authoredEvents(authors, filterFor = filterFor))
+
+    /** Events by [authors] from our relays, their write relays (outbox) and any [hints]. */
+    private suspend fun authoredEvents(authors: List<String>, hints: List<String> = emptyList(), filterFor: (List<String>) -> Filter): List<Event> =
+        coroutineScope {
             val ours = async { pool.query(listOf(filterFor(authors))) }
             val theirs = async {
                 runCatching {
@@ -323,10 +327,36 @@ class NostrRepository private constructor(private val context: Context) {
                     }.awaitAll().flatten()
                 }.getOrDefault(emptyList())
             }
-            (ours.await() + theirs.await()).distinctBy { it.id }
+            val hinted = async {
+                val urls = hints.filter { it.startsWith("wss://") && it !in pool.urls }.take(3).toSet()
+                if (urls.isEmpty()) emptyList() else runCatching {
+                    outbox.addRelays(urls)
+                    outbox.query(listOf(filterFor(authors)), timeoutMs = 5_000, only = urls)
+                }.getOrDefault(emptyList())
+            }
+            (ours.await() + theirs.await() + hinted.await()).distinctBy { it.id }
         }
-        return buildTimeline(events)
+
+    // ---- Long-form articles (NIP-23) ----
+
+    /** The latest version of the article at [address]. */
+    suspend fun article(address: com.example.btcwidget.nostr.core.Nip19.Address): com.example.btcwidget.nostr.core.Article? {
+        val events = authoredEvents(listOf(address.pubkey), address.relays) {
+            Filter(authors = it, kinds = listOf(address.kind), tags = mapOf("d" to listOf(address.identifier)), limit = 3)
+        }
+        val latest = events.filter { it.pubkey == address.pubkey && it.firstTag("d")?.get(1).orEmpty() == address.identifier }
+            .maxByOrNull { it.createdAt } ?: return null
+        enrich(listOf(latest.pubkey), listOf(latest.id))
+        return com.example.btcwidget.nostr.core.Article.of(latest)
     }
+
+    /** Articles [pubkey] has written, newest first (one per identifier). */
+    suspend fun articlesBy(pubkey: String): List<com.example.btcwidget.nostr.core.Article> =
+        authoredEvents(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.ARTICLE), limit = 30) }
+            .filter { it.pubkey == pubkey }
+            .groupBy { it.firstTag("d")?.get(1).orEmpty() }
+            .mapNotNull { (_, versions) -> com.example.btcwidget.nostr.core.Article.of(versions.maxBy { it.createdAt }) }
+            .sortedByDescending { it.publishedAt }
 
     /**
      * Recent notes from everyone, for discovering people: from all our relays, or only from
@@ -454,6 +484,7 @@ class NostrRepository private constructor(private val context: Context) {
         data class ProfileTarget(val pubkey: String) : Direct
         data class NoteTarget(val id: String) : Direct
         data class HashtagTarget(val tag: String) : Direct
+        data class ArticleTarget(val address: com.example.btcwidget.nostr.core.Nip19.Address) : Direct
     }
 
     /** npub/nprofile/note/nevent/hex, "#tag" or a NIP-05 address; null for free text. */
@@ -462,6 +493,7 @@ class NostrRepository private constructor(private val context: Context) {
         when (val e = com.example.btcwidget.nostr.core.Nip19.decode(q)) {
             is com.example.btcwidget.nostr.core.Nip19.Pubkey -> return Direct.ProfileTarget(e.hex)
             is com.example.btcwidget.nostr.core.Nip19.Note -> return Direct.NoteTarget(e.id)
+            is com.example.btcwidget.nostr.core.Nip19.Address -> if (e.kind == Kind.ARTICLE) return Direct.ArticleTarget(e)
             else -> Unit
         }
         if (q.startsWith("#") && q.length > 1 && q.drop(1).all { it.isLetterOrDigit() || it == '_' }) return Direct.HashtagTarget(q.drop(1))

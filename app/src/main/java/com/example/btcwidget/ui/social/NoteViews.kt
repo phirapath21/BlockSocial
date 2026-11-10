@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,6 +77,8 @@ class NoteActions(
     val isFollowing: (String) -> Boolean,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
+    val resolveArticle: suspend (com.example.btcwidget.nostr.core.Nip19.Address) -> com.example.btcwidget.nostr.core.Article?,
+    val openArticle: (com.example.btcwidget.nostr.core.Nip19.Address) -> Unit,
     val linkPreview: suspend (String) -> com.example.btcwidget.nostr.core.LinkPreview?,
     val me: String?
 )
@@ -248,7 +251,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 append("@" + (actions.profileOf(seg.pubkey)?.bestName ?: Profile.shortNpub(seg.pubkey)))
             }
             // Images and quoted notes are shown as blocks below.
-            is Content.Segment.Image, is Content.Segment.Video, is Content.Segment.NoteRef -> Unit
+            is Content.Segment.Image, is Content.Segment.Video, is Content.Segment.NoteRef, is Content.Segment.AddressRef -> Unit
         }
     }
     val shown = text.text.trim()
@@ -277,13 +280,15 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
     }
     segments.filterIsInstance<Content.Segment.Video>().take(2).forEach { VideoPlayer(it.url) }
     // A card for the first web link (not for posts that already show photos, video or a quote).
-    if (depth == 0 && segments.none { it is Content.Segment.Image || it is Content.Segment.Video || it is Content.Segment.NoteRef }) {
+    if (depth == 0 && segments.none { it is Content.Segment.Image || it is Content.Segment.Video || it is Content.Segment.NoteRef || it is Content.Segment.AddressRef }) {
         segments.filterIsInstance<Content.Segment.Link>().firstOrNull()?.let { LinkCard(it.url, actions) }
     }
     if (depth == 0) {
         segments.filterIsInstance<Content.Segment.NoteRef>().distinctBy { it.id }.take(2).forEach { ref ->
             QuotedNote(ref.id, actions)
         }
+        segments.filterIsInstance<Content.Segment.AddressRef>().filter { it.address.kind == com.example.btcwidget.nostr.core.Kind.ARTICLE }
+            .distinctBy { it.address.identifier + it.address.pubkey }.take(2).forEach { ArticleCard(it.address, actions) }
     }
 }
 
@@ -311,6 +316,33 @@ private fun LinkCard(url: String, actions: NoteActions) {
             Text(p.site, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(p.title, color = EInk.Value, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             p.description?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+        }
+    }
+}
+
+/** A linked long-form article: cover, title and summary, boxed. */
+@Composable
+private fun ArticleCard(address: com.example.btcwidget.nostr.core.Nip19.Address, actions: NoteActions) {
+    val article by produceState<com.example.btcwidget.nostr.core.Article?>(null, address) { value = actions.resolveArticle(address) }
+    Column(
+        modifier = Modifier
+            .padding(top = 8.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
+            .clickable { actions.openArticle(address) }
+    ) {
+        val a = article
+        a?.image?.let { url ->
+            coil3.compose.AsyncImage(
+                model = url, contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().height(140.dp)
+            )
+        }
+        Column(Modifier.padding(10.dp)) {
+            Text("ARTICLE", color = EInk.Caption, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(a?.title ?: "Loading article…", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            a?.summary?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
         }
     }
 }

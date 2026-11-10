@@ -109,6 +109,10 @@ object Events {
                 is Content.Segment.ProfileRef -> tags += listOf("p", seg.pubkey)
                 is Content.Segment.NoteRef ->
                     tags.add(listOfNotNull("q", seg.id, seg.relays.firstOrNull() ?: "", seg.author))
+                is Content.Segment.AddressRef -> with(seg.address) {
+                    tags.add(listOf("q", "$kind:$pubkey:$identifier", relays.firstOrNull() ?: ""))
+                    tags.add(listOf("p", pubkey))
+                }
                 else -> Unit
             }
         }
@@ -195,10 +199,11 @@ object Content {
         data class Hashtag(val tag: String) : Segment
         data class ProfileRef(val pubkey: String, val raw: String) : Segment
         data class NoteRef(val id: String, val relays: List<String>, val author: String?, val raw: String) : Segment
+        data class AddressRef(val address: Nip19.Address, val raw: String) : Segment
     }
 
     private val TOKEN = Regex(
-        """(nostr:(?:npub|nprofile|note|nevent)1[02-9ac-hj-np-z]+)|(https?://[^\s<>"']+)|(?<![\w#])#([\p{L}\p{M}\p{N}_]+)"""
+        """(nostr:(?:npub|nprofile|note|nevent|naddr)1[02-9ac-hj-np-z]+)|(https?://[^\s<>"']+)|(?<![\w#])#([\p{L}\p{M}\p{N}_]+)"""
     )
     private val IMAGE = Regex("""\.(png|jpe?g|gif|webp|avif)(\?.*)?$""", RegexOption.IGNORE_CASE)
     private val VIDEO = Regex("""\.(mp4|webm|mov|m4v|m3u8)(\?.*)?$""", RegexOption.IGNORE_CASE)
@@ -216,6 +221,7 @@ object Content {
                 nostr != null -> out += when (val e = Nip19.decode(nostr)) {
                     is Nip19.Pubkey -> Segment.ProfileRef(e.hex, nostr)
                     is Nip19.Note -> Segment.NoteRef(e.id, e.relays, e.author, nostr)
+                    is Nip19.Address -> Segment.AddressRef(e, nostr)
                     else -> Segment.Text(nostr)
                 }
                 url != null -> {

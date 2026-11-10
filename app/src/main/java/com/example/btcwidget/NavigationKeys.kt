@@ -37,3 +37,6 @@ import kotlinx.serialization.Serializable
 
 /** Editing the user's own profile. */
 @Serializable data object EditProfileKey : NavKey
+
+/** A long-form article (NIP-23), by its naddr. */
+@Serializable data class ArticleKey(val naddr: String) : NavKey

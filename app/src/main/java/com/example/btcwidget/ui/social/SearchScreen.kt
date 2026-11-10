@@ -90,6 +90,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                 is NostrRepository.Direct.ProfileTarget -> { loading = false; navigate(ProfileKey(direct.pubkey)); return@launch }
                 is NostrRepository.Direct.NoteTarget -> { loading = false; navigate(NoteKey(direct.id)); return@launch }
                 is NostrRepository.Direct.HashtagTarget -> { loading = false; navigate(HashtagKey(direct.tag)); return@launch }
+                is NostrRepository.Direct.ArticleTarget -> { loading = false; navigate(com.example.btcwidget.ArticleKey(direct.address.let { com.example.btcwidget.nostr.core.Nip19.naddr(it.kind, it.pubkey, it.identifier, it.relays) })); return@launch }
                 null -> Unit
             }
             // Both at once; each list shows as soon as it arrives.

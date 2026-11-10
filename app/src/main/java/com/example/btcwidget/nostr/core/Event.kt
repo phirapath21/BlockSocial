@@ -18,6 +18,7 @@ object Kind {
     const val BOOKMARKS = 10003
     const val PINNED = 10001
     const val RELAY_LIST = 10002
+    const val ARTICLE = 30023
 }
 
 /** An event before signing: everything but id and sig. */
