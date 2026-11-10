@@ -54,6 +54,7 @@ fun SocialScaffold(
     var deleteTarget by remember { mutableStateOf<Event?>(null) }
     var viewImage by remember { mutableStateOf<Pair<String, Event>?>(null) }
     val bookmarks by vm.bookmarks.collectAsState()
+    val pins by vm.pinned.collectAsState()
     val following by vm.following.collectAsState()
     val stats by vm.stats.collectAsState()
     val nwcWallet by vm.nwc.collectAsState()
@@ -80,6 +81,8 @@ fun SocialScaffold(
         share = { n -> shareNote(context, n) },
         bookmark = { n -> signedIn { vm.toggleBookmark(n) } },
         isBookmarked = { it in bookmarks },
+        pin = { n -> signedIn { vm.togglePin(n) } },
+        isPinned = { it in pins },
         openImage = { url, note -> viewImage = url to note },
         follow = { pk, on -> signedIn { vm.follow(pk, on) } },
         isFollowing = { it in following },

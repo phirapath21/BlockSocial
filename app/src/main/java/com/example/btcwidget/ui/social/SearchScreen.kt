@@ -2,7 +2,9 @@ package com.example.btcwidget.ui.social
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -144,10 +146,8 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
         SocialScaffold(vm, navigate) { actions ->
             when {
                 loading -> Spinner(Modifier.padding(top = 30.dp))
-                searched == null -> EmptyNote(
-                    "Find people by name, npub or name@domain, posts by words, or a topic with #tag. " +
-                        "Word search uses search relays (relay.nostr.band, search.nos.today)."
-                )
+                // Before searching: Explore, recent notes from everyone or from one relay.
+                searched == null -> ExploreFeed(vm, actions)
                 tab == "people" -> if (people.isEmpty()) EmptyNote("No people found for \"$searched\".") else {
                     LazyColumn(Modifier.fillMaxSize()) {
                         items(people, key = { it.pubkey }) { p ->
@@ -158,6 +158,48 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                 notesLoading && notes.isEmpty() -> Spinner(Modifier.padding(top = 30.dp))
                 else -> if (notes.isEmpty()) EmptyNote("No posts found for \"$searched\".") else NoteList(notes, stats, actions)
             }
+        }
+    }
+}
+
+/** Recent notes from all relays, or one chosen relay: to find people beyond your follows. */
+@Composable
+private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
+    val stats by vm.stats.collectAsState()
+    val scope = rememberCoroutineScope()
+    var relay by rememberSaveable { mutableStateOf<String?>(null) }
+    var items by remember(relay) { mutableStateOf<List<FeedItem>?>(null) }
+    var loadingMore by remember(relay) { mutableStateOf(false) }
+    var end by remember(relay) { mutableStateOf(false) }
+    LaunchedEffect(relay) { items = vm.globalFeed(relay) }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)
+        ) {
+            EInkChip(text = "GLOBAL", selected = relay == null, onClick = { relay = null })
+            vm.relays.forEach { url ->
+                EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = relay == url, onClick = { relay = url })
+            }
+        }
+        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+        when (val list = items) {
+            null -> Spinner(Modifier.padding(top = 30.dp))
+            else -> if (list.isEmpty()) EmptyNote("Nothing here right now.") else NoteList(
+                list, stats, actions,
+                loadingMore = loadingMore,
+                onLoadMore = {
+                    if (!loadingMore && !end) {
+                        loadingMore = true
+                        scope.launch {
+                            val more = vm.globalFeed(relay, until = list.minOf { it.sortTime } - 1)
+                            items = (list + more).distinctBy { it.key }
+                            end = more.isEmpty()
+                            loadingMore = false
+                        }
+                    }
+                }
+            )
         }
     }
 }

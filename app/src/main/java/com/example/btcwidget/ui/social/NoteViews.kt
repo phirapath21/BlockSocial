@@ -65,6 +65,8 @@ class NoteActions(
     val delete: (Event) -> Unit,
     val share: (Event) -> Unit,
     val bookmark: (Event) -> Unit,
+    val pin: (Event) -> Unit,
+    val isPinned: (String) -> Boolean,
     val isBookmarked: (String) -> Boolean,
     /** Opens an image full screen, with its note's author and actions. */
     val openImage: (url: String, note: Event) -> Unit,
@@ -178,6 +180,10 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
                     onClick = { menu = false; actions.bookmark(note) }
                 )
                 if (note.pubkey == actions.me) {
+                    DropdownMenuItem(
+                        text = { Text(if (actions.isPinned(note.id)) "Unpin from profile" else "Pin to profile") },
+                        onClick = { menu = false; actions.pin(note) }
+                    )
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; actions.delete(note) })
                 } else {
                     DropdownMenuItem(text = { Text("Mute this account") }, onClick = { menu = false; actions.mute(note.pubkey) })

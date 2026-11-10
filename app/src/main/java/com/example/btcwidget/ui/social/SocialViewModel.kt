@@ -299,6 +299,9 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun followersOf(pubkey: String) = runCatching { repo.followersOf(pubkey) }.getOrDefault(emptyList())
 
+    suspend fun globalFeed(relay: String?, until: Long? = null) = runCatching { repo.globalFeed(relay, until) }.getOrDefault(emptyList())
+    val relays: List<String> get() = repo.pool.urls.toList().sorted()
+
     // ---- Search ----
 
     suspend fun resolve(query: String) = runCatching { repo.resolve(query) }.getOrNull()
@@ -392,6 +395,15 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
             say(if (on) "Bookmarked" else "Bookmark removed")
         }
     }
+
+    val pinned get() = repo.pinned
+
+    fun togglePin(note: Event) {
+        val on = note.id !in repo.pinned.value
+        act(if (on) "Couldn't pin" else "Couldn't unpin") { repo.setPinned(note, on); say(if (on) "Pinned to your profile" else "Unpinned") }
+    }
+
+    suspend fun pinnedNoteOf(pubkey: String) = runCatching { repo.pinnedNoteOf(pubkey) }.getOrNull()
 
     suspend fun bookmarkedNotes() = runCatching { repo.bookmarkedNotes() }.getOrDefault(emptyList())
 

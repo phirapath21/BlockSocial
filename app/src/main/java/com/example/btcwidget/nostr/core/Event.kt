@@ -16,6 +16,7 @@ object Kind {
     const val ZAP_RECEIPT = 9735
     const val MUTE_LIST = 10000
     const val BOOKMARKS = 10003
+    const val PINNED = 10001
     const val RELAY_LIST = 10002
 }
 

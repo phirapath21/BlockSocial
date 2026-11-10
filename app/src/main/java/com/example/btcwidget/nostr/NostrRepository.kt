@@ -105,6 +105,11 @@ class NostrRepository private constructor(private val context: Context) {
     private var contactsEvent: Event? = null
     private var muteEvent: Event? = null
     private var bookmarkEvent: Event? = null
+    private var pinEvent: Event? = null
+
+    private val _pinned = MutableStateFlow<List<String>>(emptyList())
+    /** The user's pinned note ids (NIP-51 kind 10001), first shown first. */
+    val pinned: StateFlow<List<String>> = _pinned.asStateFlow()
 
     private val _bookmarks = MutableStateFlow<List<String>>(emptyList())
     /** Note ids the user bookmarked (NIP-51 kind 10003), newest first. */
@@ -195,6 +200,8 @@ class NostrRepository private constructor(private val context: Context) {
         contactsEvent = null
         muteEvent = null
         bookmarkEvent = null
+        pinEvent = null
+        _pinned.value = emptyList()
         _bookmarks.value = emptyList()
         _following.value = emptySet()
         _muted.value = emptySet()
@@ -208,7 +215,7 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun loadAccount() {
         val me = pubkey ?: return
         val events = queryEverywhere(
-            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.RELAY_LIST, MEDIA_SERVER_LIST))),
+            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.PINNED, Kind.RELAY_LIST, MEDIA_SERVER_LIST))),
             timeoutMs = 6_000
         )
         applyAccountEvents(events, fromRelays = true)
@@ -219,6 +226,7 @@ class NostrRepository private constructor(private val context: Context) {
         fun latest(kind: Int) = events.filter { it.kind == kind }.maxByOrNull { it.createdAt }
         latest(Kind.METADATA)?.let { remember(it) }
         latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = it.tagValues("p").toSet() } }
+        latest(Kind.PINNED)?.let { if (it.createdAt >= (pinEvent?.createdAt ?: 0)) { pinEvent = it; _pinned.value = it.tagValues("e") } }
         latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { bookmarkEvent = it; _bookmarks.value = it.tagValues("e").reversed() } }
         latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { muteEvent = it; _muted.value = it.tagValues("p").toSet() } }
         latest(MEDIA_SERVER_LIST)?.let { mediaServerList = it; mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(it) }
@@ -235,7 +243,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     private fun saveAccount() {
         val me = pubkey ?: return
-        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, relayList, mediaServerList)
+        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList)
         scope.launch(Dispatchers.IO) { cache.saveEvents(ACCOUNT_CACHE, events) }
     }
 
@@ -317,6 +325,17 @@ class NostrRepository private constructor(private val context: Context) {
             (ours.await() + theirs.await()).distinctBy { it.id }
         }
         return buildTimeline(events)
+    }
+
+    /**
+     * Recent notes from everyone, for discovering people: from all our relays, or only from
+     * [relay] (which needn't be one of ours).
+     */
+    suspend fun globalFeed(relay: String? = null, until: Long? = null): List<FeedItem> {
+        val filter = Filter(kinds = listOf(Kind.TEXT_NOTE), until = until, limit = 40)
+        if (relay == null) return timeline(filter)
+        outbox.addRelays(listOf(relay))
+        return buildTimeline(outbox.query(listOf(filter), timeoutMs = 6_000, only = setOf(relay)))
     }
 
     /** Notes tagged with [hashtag]. */
@@ -801,6 +820,28 @@ class NostrRepository private constructor(private val context: Context) {
         bookmarkEvent = event
         _bookmarks.value = event.tagValues("e").reversed()
         saveAccount()
+    }
+
+    /** Pins [note] to the top of the user's profile (first in their kind-10001 list), or unpins it. */
+    suspend fun setPinned(note: Event, on: Boolean) {
+        val me = requireMe()
+        require(note.pubkey == me) { "Only your own notes can be pinned" }
+        if (!accountFresh) loadAccount()
+        val others = pinEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "e" && it[1] == note.id }
+        val tags = if (on) listOf(listOf("e", note.id, relayHint())) + others else others
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.PINNED, tags, pinEvent?.content.orEmpty()))
+        pinEvent = event
+        _pinned.value = event.tagValues("e")
+        saveAccount()
+    }
+
+    /** The note [pubkey] pinned first, if any. */
+    suspend fun pinnedNoteOf(pubkey: String): Event? {
+        val ids = if (pubkey == this.pubkey) _pinned.value
+            else queryEverywhere(listOf(Filter(authors = listOf(pubkey), kinds = listOf(Kind.PINNED), limit = 1)))
+                .maxByOrNull { it.createdAt }?.tagValues("e").orEmpty()
+        val id = ids.firstOrNull() ?: return null
+        return note(id)?.takeIf { it.pubkey == pubkey }
     }
 
     /** The bookmarked notes, in bookmark order (newest first). */

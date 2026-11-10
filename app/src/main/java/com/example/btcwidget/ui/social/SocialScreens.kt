@@ -400,6 +400,11 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     var loadingMore by remember(pubkey) { mutableStateOf(false) }
     var end by remember(pubkey) { mutableStateOf(false) }
     val theirFollowing by produceState<Set<String>?>(null, pubkey) { value = vm.followingOf(pubkey) }
+    // X shows the pinned note first on the Posts tab. My own pins reload when I change them.
+    val myPins by vm.pinned.collectAsState()
+    val pinnedNote by produceState<com.example.btcwidget.nostr.core.Event?>(null, pubkey, if (account?.pubkey == pubkey) myPins else null) {
+        value = vm.pinnedNoteOf(pubkey)
+    }
     LaunchedEffect(pubkey) {
         // Header and notes load at the same time.
         launch { vm.refreshProfile(pubkey) }
@@ -455,6 +460,10 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         actions = actions
                     )
                     FeedTabs(listOf("Posts", "Replies", "Media"), selected = tab) { tab = it }
+                    pinnedNote?.takeIf { tab == 0 }?.let { pin ->
+                        Text("📌 Pinned", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 8.dp))
+                        NoteCard(pin, stats[pin.id] ?: NoteStats(), actions)
+                    }
                     val loaded = items
                     if (loaded == null) Spinner()
                     else if (shown.isEmpty()) EmptyNote(listOf("No posts yet.", "No replies yet.", "No photos yet.")[tab] + if (!end && loaded.isNotEmpty()) " Scroll loads older notes." else "")

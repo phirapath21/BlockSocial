@@ -18,8 +18,8 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 ## 🟡 Basics users expect
 
 ### Reading
-- [ ] Global / per-relay feed, to discover people beyond follows
-- [ ] Pinned note on profiles (NIP-51 kind 10001)
+- [x] Global / per-relay feed, to discover people beyond follows
+- [x] Pinned note on profiles (NIP-51 kind 10001)
 - [ ] Nested reply threads (today: one level)
 - [ ] Long-form articles (NIP-23)
 - [ ] Translate notes (e.g. into Thai)
