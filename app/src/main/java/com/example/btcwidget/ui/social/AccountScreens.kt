@@ -91,7 +91,7 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val hasSigner = remember { AmberSigner.isInstalled(context) }
-    var mode by remember { mutableStateOf("choose") }   // choose | nsec | create | backup
+    var mode by remember { mutableStateOf("choose") }   // choose | bunker | nsec | create | backup
     var input by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -111,6 +111,18 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                         "Your Nostr account is a key pair. Keep the private key (nsec) safe: whoever has it can post as you, and it can't be reset.",
                         color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
                     )
+                    // Accounts already on this phone (after Add account, or a logout of one of several).
+                    val saved by vm.savedAccounts.collectAsState()
+                    val profiles by vm.profiles.collectAsState()
+                    if (saved.isNotEmpty()) {
+                        Text("On this phone", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        saved.forEach { a ->
+                            AccountRow(profiles[a.pubkey], a.pubkey, when (a.type) { com.example.btcwidget.nostr.SignerType.AMBER -> "Signer app"; com.example.btcwidget.nostr.SignerType.BUNKER -> "Remote signer"; else -> "Key on this phone" }) {
+                                com.example.btcwidget.ui.main.EInkChip(text = "USE", selected = true, onClick = { vm.switchAccount(a.pubkey); onDone() })
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
                     Option(
                         title = "Connect a signer app",
                         body = if (hasSigner) "Recommended. Your key stays in the signer (such as Amber); Blockface never sees it."
@@ -119,6 +131,9 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                         filled = true
                     ) {
                         if (hasSigner) vm.loginWithAmber(onDone) else uriHandler.openUri("https://github.com/greenart7c3/Amber")
+                    }
+                    Option("Remote signer (bunker)", "Use a NIP-46 signer such as nsec.app: paste its bunker:// link. Your key stays with that signer.", "Use bunker", false) {
+                        mode = "bunker"; error = null; input = ""
                     }
                     Option("Log in with nsec", "Paste your private key. It's encrypted with this phone's secure hardware and never backed up or sent anywhere.", "Use nsec", false) {
                         mode = "nsec"; error = null
@@ -131,6 +146,34 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                         color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 16.dp).clickable(onClickLabel = "Open community rules", onClick = onOpenRules).padding(vertical = 6.dp)
                     )
+                }
+                "bunker" -> {
+                    var connecting by remember { mutableStateOf(false) }
+                    Text("Remote signer", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "In your signer (nsec.app, nsecBunker…) create a connection for Blockface and paste its bunker:// link. " +
+                            "You may need to approve the connection there.",
+                        color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                    )
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it.trim(); error = null },
+                        label = { Text("bunker://…") },
+                        singleLine = true,
+                        isError = error != null,
+                        colors = fieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    error?.let { Text(it, color = EInk.Alert, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
+                    Spacer(Modifier.height(14.dp))
+                    PillButton(if (connecting) "Waiting for the signer…" else "Connect", filled = input.startsWith("bunker://") && !connecting) {
+                        if (!input.startsWith("bunker://") || connecting) return@PillButton
+                        connecting = true
+                        vm.loginWithBunker(input) { e ->
+                            connecting = false
+                            if (e == null) onDone() else error = e
+                        }
+                    }
                 }
                 "nsec" -> {
                     val focus = remember { FocusRequester() }
@@ -212,11 +255,20 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     val profiles by vm.profiles.collectAsState()
     val account by vm.account.collectAsState()
     val target by produceState<Event?>(null, replyTo, quote) { value = (replyTo ?: quote)?.let { vm.note(it) } }
-    var text by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val draftKey = remember(replyTo, quote, account?.pubkey) { com.example.btcwidget.nostr.Drafts.key(account?.pubkey, replyTo, quote) }
+    // Picks up where you left off; every change is saved, and posting removes the draft.
+    var text by remember { mutableStateOf(com.example.btcwidget.nostr.Drafts.get(context, draftKey).orEmpty()) }
+    LaunchedEffect(text) { com.example.btcwidget.nostr.Drafts.put(context, draftKey, text) }
     var sending by remember { mutableStateOf(false) }
     var images by remember { mutableStateOf<List<SocialViewModel.Attachment>>(emptyList()) }
     var uploading by remember { mutableStateOf(0) }
     var sensitive by remember { mutableStateOf(false) }
+    // A poll (NIP-88) instead of a note: only for new posts.
+    var poll by remember { mutableStateOf(false) }
+    var pollOptions by remember { mutableStateOf(listOf("", "")) }
+    var pollMulti by remember { mutableStateOf(false) }
+    var pollDays by remember { mutableStateOf(1) }
     // "@name" picked from suggestions → pubkey; turned into nostr:npub links when sending.
     var mentions by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val following by vm.following.collectAsState()
@@ -228,16 +280,21 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
             .sortedWith(compareBy({ it.pubkey !in following }, { !(it.name ?: it.bestName).lowercase().startsWith(q) }))
             .take(5)
     }
+    val hashtagQuery = remember(text) { HASHTAG_AT_END.find(text)?.groupValues?.get(2) }
+    val tagSuggestions = remember(hashtagQuery) { hashtagQuery?.let { vm.hashtagSuggestions(it) }.orEmpty() }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     // System photo picker: no storage permission needed.
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
             uploading++
-            vm.uploadImage(uri) { attachment ->
+            val done: (SocialViewModel.Attachment?) -> Unit = { attachment ->
                 uploading--
                 if (attachment != null) images = images + attachment
             }
+            // Photos are re-encoded (location removed); videos upload as they are.
+            if (context.contentResolver.getType(uri)?.startsWith("video/") == true) vm.uploadVideo(uri, done)
+            else vm.uploadImage(uri, done)
         }
     }
 
@@ -292,11 +349,43 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     Text(" @$handle", color = EInk.Caption, fontSize = 13.sp, maxLines = 1)
                 }
             }
+            if (tagSuggestions.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)
+                ) {
+                    tagSuggestions.forEach { tag ->
+                        com.example.btcwidget.ui.main.EInkChip(text = "#$tag", selected = false, onClick = {
+                            text = text.replace(HASHTAG_AT_END, "\$1#" + Regex.escapeReplacement(tag) + " ")
+                        })
+                    }
+                }
+            }
             if (quote != null) {
                 target?.let { t ->
                     Column(Modifier.fillMaxWidth().padding(top = 8.dp).background(EInk.Body).padding(10.dp)) {
                         Text(profiles[t.pubkey]?.bestName ?: Profile.shortNpub(t.pubkey), color = EInk.Value, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text(t.content.take(280), color = EInk.Label, fontSize = 14.sp, maxLines = 5)
+                    }
+                }
+            }
+            if (poll) {
+                Column(Modifier.fillMaxWidth().padding(top = 8.dp).border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(12.dp)).padding(10.dp)) {
+                    pollOptions.forEachIndexed { i, value ->
+                        OutlinedTextField(
+                            value = value,
+                            onValueChange = { v -> pollOptions = pollOptions.toMutableList().also { it[i] = v.take(25) } },
+                            placeholder = { Text("Choice ${i + 1}" + if (i >= 2) " (optional)" else "") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState())) {
+                        if (pollOptions.size < 4) com.example.btcwidget.ui.main.EInkChip(text = "+ CHOICE", selected = false, onClick = { pollOptions = pollOptions + "" })
+                        com.example.btcwidget.ui.main.EInkChip(text = if (pollMulti) "MULTIPLE" else "ONE CHOICE", selected = pollMulti, onClick = { pollMulti = !pollMulti })
+                        listOf(1, 3, 7).forEach { d ->
+                            com.example.btcwidget.ui.main.EInkChip(text = "${d}D", selected = pollDays == d, onClick = { pollDays = d })
+                        }
                     }
                 }
             }
@@ -307,7 +396,11 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                 ) {
                     images.forEach { img ->
                         Box {
-                            AsyncImage(
+                            if (img.isVideo) {
+                                Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body), contentAlignment = Alignment.Center) {
+                                    Text("▶ Video", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+                            } else AsyncImage(
                                 model = img.url, contentDescription = "Attached image", contentScale = ContentScale.Crop,
                                 modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body)
                             )
@@ -337,9 +430,18 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     color = EInk.Value, fontSize = 22.sp,
                     modifier = Modifier
                         .clip(CircleShape)
-                        .clickable(enabled = images.size + uploading < 4, onClickLabel = "Add image") {
-                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        .clickable(enabled = !poll && images.size + uploading < 4, onClickLabel = "Add photo or video") {
+                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                         }
+                        .padding(8.dp)
+                )
+                if (replyTo == null && quote == null) Text(
+                    "📊",
+                    color = EInk.Value, fontSize = 20.sp,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(if (poll) EInk.Body else EInk.Background)
+                        .clickable(enabled = images.isEmpty() && uploading == 0, onClickLabel = if (poll) "Remove poll" else "Add poll") { poll = !poll }
                         .padding(8.dp)
                 )
                 Text(
@@ -352,11 +454,13 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                 )
                 Text(
                     if (sensitive) "Marked sensitive: shown behind a warning."
+                    else if (images.any { it.isVideo }) "Videos are posted as they are: any location saved in the file is not removed."
                     else "Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed.",
                     color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
                 )
                 val canSend = !sending && uploading == 0 && (text.isNotBlank() || images.isNotEmpty() || quote != null) &&
-                    (replyTo == null && quote == null || target != null)
+                    (replyTo == null && quote == null || target != null) &&
+                    (!poll || text.isNotBlank() && pollOptions.count { it.isNotBlank() } >= 2)
                 PillButton(if (sending) "Posting…" else if (replyTo != null) "Reply" else "Post", filled = canSend) {
                     if (!canSend) return@PillButton
                     sending = true
@@ -364,9 +468,15 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     val body = mentions.entries.fold(text.trim()) { acc, (handle, pk) ->
                         acc.replace(Regex("@" + Regex.escape(handle) + "(?![\\p{L}\\p{M}\\p{N}_])"), "nostr:" + com.example.btcwidget.nostr.core.Nip19.npub(pk))
                     }
+                    if (poll) {
+                        vm.createPoll(body, pollOptions, pollMulti, pollDays * 86_400L) { ok ->
+                            if (ok) { com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack() } else sending = false
+                        }
+                        return@PillButton
+                    }
                     vm.send(body, replyTo?.let { target }, quote?.let { target }, images, if (sensitive) "Sensitive content" else null) { ok ->
                         // Success closes the screen; a failure re-enables the button.
-                        if (ok) onBack() else sending = false
+                        if (ok) { com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack() } else sending = false
                     }
                 }
             }
@@ -385,6 +495,9 @@ private fun UploadBadge(text: String?) {
         else Text(text, color = Color.White, fontSize = 12.sp)
     }
 }
+
+/** A "#tag" being typed at the end of the text. */
+private val HASHTAG_AT_END = Regex("""(^|\s)#([\p{L}\p{M}\p{N}_]{1,40})$""")
 
 /** An "@name" being typed at the end of the text. */
 private val MENTION_AT_END = Regex("""(^|\s)@([\p{L}\p{M}\p{N}_.]{1,30})$""")

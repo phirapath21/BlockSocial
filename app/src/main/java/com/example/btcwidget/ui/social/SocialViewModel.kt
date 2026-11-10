@@ -130,6 +130,23 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         afterLogin(); onDone()
     }
 
+    /** Logs in with a bunker:// link; [onResult] gets an error message, or null on success. */
+    fun loginWithBunker(uri: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val error = try {
+                repo.loginWithBunker(uri); afterLogin(); null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SignerRejected) {
+                "The signer declined"
+            } catch (e: Exception) {
+                Log.d("SocialViewModel", "bunker login failed", e)
+                e.message ?: "Couldn't connect to the signer"
+            }
+            onResult(error)
+        }
+    }
+
     /** Returns an error message, or null on success. */
     fun loginWithSecret(input: String): String? = try {
         repo.loginWithSecret(input)
@@ -174,6 +191,51 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Phone notifications for replies, zaps and messages while the app is closed. */
     val pushEnabled: StateFlow<Boolean> = _push.asStateFlow()
+
+    // ---- Account settings ----
+
+    private val _notifOff = MutableStateFlow(store.notificationsOff(application))
+    /** Phone notification types turned off ("reply", "mention", "repost", "like", "zap", "dm"). */
+    val notificationsOff: StateFlow<Set<String>> = _notifOff.asStateFlow()
+
+    fun setNotificationType(type: String, on: Boolean) {
+        val next = if (on) _notifOff.value - type else _notifOff.value + type
+        store.setNotificationsOff(getApplication(), next)
+        _notifOff.value = next
+    }
+
+    /** The nsec of an account whose key is on this phone; null for signer-app accounts. */
+    fun exportNsec(): String? = store.secretKey(getApplication())
+        ?.takeIf { store.account(getApplication())?.type == com.example.btcwidget.nostr.SignerType.LOCAL }
+        ?.let { com.example.btcwidget.nostr.core.Nip19.nsec(it) }
+
+    // ---- Safety: muted words, hashtags, threads; web of trust ----
+
+    val mutes get() = repo.mutes
+
+    fun muteEntry(type: String, value: String, mute: Boolean) =
+        act("Couldn't update mutes") { repo.setMuteEntry(type, value, mute); if (mute) say("Muted") }
+
+    fun unmuteAllThreads() = act("Couldn't update mutes") { repo.unmuteAllThreads() }
+
+    /** Mutes the conversation [note] belongs to (its root note). */
+    fun muteThread(note: Event) = muteEntry("e", com.example.btcwidget.nostr.core.ThreadRef.of(note).root ?: note.id, true)
+
+    private val _wot = MutableStateFlow(store.wotFilter(application))
+    val wotFilter: StateFlow<Boolean> = _wot.asStateFlow()
+
+    fun setWotFilter(on: Boolean) {
+        repo.setWotFilter(on)
+        _wot.value = on
+        if (on) act("Couldn't load your network") { repo.loadTrust(); say("Showing replies and mentions from your network only") }
+    }
+
+    fun mediaServers(): List<String> = repo.mediaServerUrls()
+    fun setMediaServers(urls: List<String>, onDone: () -> Unit) =
+        act("Couldn't save media servers") { repo.setMediaServers(urls); say("Media servers saved"); onDone() }
+
+    fun setDmInbox(urls: List<String>, onDone: () -> Unit) =
+        act("Couldn't save inbox relays") { repo.dms.setUpInbox(urls); say("Inbox relays saved"); onDone() }
 
     /** Notifications newer than the last time the tab was open. */
     val unreadNotifications: StateFlow<Int> = combine(_notifications, _notifSeen) { n, seen ->
@@ -221,6 +283,8 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         _notifSeen.value = store.notificationsSeen(app)
         _dmRead.value = store.dmRead(app)
         _push.value = store.pushEnabled(app)
+        _notifOff.value = store.notificationsOff(app)
+        _wot.value = store.wotFilter(app)
     }
 
     private fun afterLogin() {
@@ -231,8 +295,36 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         refreshHome()
     }
 
-    fun logout() {
-        repo.logout()
+    // ---- Multiple accounts ----
+
+    val savedAccounts get() = repo.savedAccounts
+
+    fun switchAccount(pubkey: String) {
+        try {
+            stopLive?.invoke(); stopLive = null
+            _newPosts.value = emptyList()
+            repo.switchAccount(pubkey)
+            afterLogin()
+            repo.pubkey?.let { me -> viewModelScope.launch { runCatching { repo.refreshProfile(me) } } }
+            say("Switched account")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.w("SocialViewModel", "switch failed", e)
+            say("Couldn't switch account")
+        }
+    }
+
+    /** Keeps the current account on the phone and logs out of it, so another can log in. */
+    fun prepareAddAccount() {
+        stopLive?.invoke(); stopLive = null
+        repo.stashForNewLogin()
+        logout(keepAccount = true)
+    }
+
+    fun removeSavedAccount(pubkey: String) = repo.removeSavedAccount(pubkey)
+
+    fun logout(keepAccount: Boolean = false) {
+        if (!keepAccount) repo.logout()
         reloadReadState()
         stopLive?.invoke(); stopLive = null
         _newPosts.value = emptyList()
@@ -249,6 +341,9 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun thread(id: String) = runCatching { repo.thread(id) }.getOrNull()
     suspend fun note(id: String) = runCatching { repo.note(id) }.getOrNull()
+    fun hashtagSuggestions(prefix: String) = repo.hashtagSuggestions(prefix)
+    suspend fun article(address: com.example.btcwidget.nostr.core.Nip19.Address) = runCatching { repo.article(address) }.getOrNull()
+    suspend fun articlesBy(pubkey: String) = runCatching { repo.articlesBy(pubkey) }.getOrDefault(emptyList())
     suspend fun profileFeed(pubkey: String, until: Long? = null) = runCatching { repo.profileFeed(pubkey, until) }.getOrDefault(emptyList())
     suspend fun hashtagFeed(tag: String) = runCatching { repo.hashtagFeed(tag) }.getOrDefault(emptyList())
     suspend fun refreshProfile(pubkey: String) = runCatching { repo.refreshProfile(pubkey) }.getOrNull()
@@ -258,7 +353,21 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     // ---- Images ----
 
     /** An uploaded image waiting to be posted. */
-    data class Attachment(val url: String, val mime: String, val sha256: String, val width: Int, val height: Int)
+    data class Attachment(val url: String, val mime: String, val sha256: String, val width: Int, val height: Int) {
+        val isVideo get() = mime.startsWith("video/")
+    }
+
+    /** Uploads a picked video as-is (up to 100 MB). */
+    fun uploadVideo(uri: android.net.Uri, onResult: (Attachment?) -> Unit) {
+        var result: Attachment? = null
+        act("Couldn't upload the video", finally = { onResult(result) }) {
+            val prepared = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.example.btcwidget.nostr.VideoPrep.prepare(getApplication(), uri)
+            }
+            val blob = repo.uploadVideo(prepared)
+            result = Attachment(blob.url, prepared.mime, blob.sha256, prepared.width, prepared.height)
+        }
+    }
 
     /** Prepares (strips metadata) and uploads a picked image; [onResult] gets it, or null on failure. */
     fun uploadImage(uri: android.net.Uri, onResult: (Attachment?) -> Unit) {
@@ -283,10 +392,28 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun startDms() { if (repo.pubkey != null) viewModelScope.launch { runCatching { repo.dms.start() } } }
 
     /** Sends a private message; [onResult] gets whether it was delivered. */
-    fun sendDm(peers: List<String>, text: String, onResult: (Boolean) -> Unit) {
+    fun sendDm(peers: List<String>, text: String, replyTo: String? = null, onResult: (Boolean) -> Unit) {
         var ok = false
-        act("Couldn't send the message", finally = { onResult(ok) }) { repo.dms.send(peers, text); ok = true }
+        act("Couldn't send the message", finally = { onResult(ok) }) { repo.dms.send(peers, text, replyTo); ok = true }
     }
+
+    fun reactDm(peers: List<String>, target: com.example.btcwidget.nostr.core.Nip17.Message, emoji: String) =
+        act("Couldn't react") { repo.dms.react(peers, target, emoji) }
+
+    /** Sends a photo, encrypted on the phone (location data removed first). */
+    fun sendDmImage(peers: List<String>, uri: android.net.Uri, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't send the photo", finally = { onResult(ok) }) {
+            val prepared = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                com.example.btcwidget.nostr.ImagePrep.prepare(getApplication(), uri)
+            }
+            repo.dms.sendImage(peers, prepared)
+            ok = true
+        }
+    }
+
+    suspend fun openDmFile(info: com.example.btcwidget.nostr.core.DmFile.Info): ByteArray? =
+        runCatching { repo.dms.openFile(info) }.getOrNull()
 
     fun unlockDms() = act("Couldn't open messages") { repo.dms.unlock() }
     fun setUpDmInbox() = act("Couldn't set up your inbox") { repo.dms.setUpInbox(); say("Inbox ready: people can message you") }
@@ -299,6 +426,9 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun followersOf(pubkey: String) = runCatching { repo.followersOf(pubkey) }.getOrDefault(emptyList())
 
+    suspend fun globalFeed(relay: String?, until: Long? = null) = runCatching { repo.globalFeed(relay, until) }.getOrDefault(emptyList())
+    val relays: List<String> get() = repo.pool.urls.toList().sorted()
+
     // ---- Search ----
 
     suspend fun resolve(query: String) = runCatching { repo.resolve(query) }.getOrNull()
@@ -308,6 +438,8 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     // ---- Actions ----
 
     fun like(note: Event) = act("Couldn't like") { repo.like(note) }
+    fun react(note: Event, content: String, emojiUrl: String?) = act("Couldn't react") { repo.react(note, content, emojiUrl) }
+    val emojis get() = repo.emojis
     fun repost(note: Event) = act("Couldn't repost") { repo.repost(note); say("Reposted") }
     fun follow(pubkey: String, follow: Boolean) = act(if (follow) "Couldn't follow" else "Couldn't unfollow") { repo.setFollowing(pubkey, follow) }
     fun mute(pubkey: String, mute: Boolean) = act("Couldn't update mutes") {
@@ -392,6 +524,67 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
             say(if (on) "Bookmarked" else "Bookmark removed")
         }
     }
+
+    val pinned get() = repo.pinned
+
+    // ---- Polls (NIP-88) ----
+
+    suspend fun pollTally(poll: com.example.btcwidget.nostr.core.Poll) = runCatching { repo.pollTally(poll) }.getOrNull()
+
+    fun vote(poll: com.example.btcwidget.nostr.core.Poll, optionIds: List<String>, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't vote", finally = { onResult(ok) }) { repo.vote(poll, optionIds); ok = true }
+    }
+
+    fun createPoll(question: String, options: List<String>, multipleChoice: Boolean, durationSeconds: Long?, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't post the poll", finally = { onResult(ok) }) {
+            val endsAt = durationSeconds?.let { System.currentTimeMillis() / 1000 + it }
+            val event = repo.createPoll(question, options, multipleChoice, endsAt)
+            _home.update { it.copy(items = listOf(FeedItem(event)) + it.items) }
+            ok = true
+        }
+    }
+
+    // ---- Translation (on the device, ML Kit) ----
+
+    sealed interface Translation {
+        data object Loading : Translation
+        data class Done(val text: String, val from: String) : Translation
+    }
+
+    private val _translations = MutableStateFlow<Map<String, Translation>>(emptyMap())
+    val translations: StateFlow<Map<String, Translation>> = _translations.asStateFlow()
+
+    /** Translates [note] into the phone's language, or shows the original again if it is translated. */
+    fun toggleTranslation(note: Event, text: String) {
+        when (_translations.value[note.id]) {
+            is Translation.Done -> { _translations.update { it - note.id }; return }
+            Translation.Loading -> return
+            null -> Unit
+        }
+        _translations.update { it + (note.id to Translation.Loading) }
+        viewModelScope.launch {
+            val result = runCatching { com.example.btcwidget.nostr.NoteTranslator.translate(text) }
+            _translations.update { map ->
+                result.fold(
+                    onSuccess = { map + (note.id to Translation.Done(it.text, it.fromLanguage)) },
+                    onFailure = { map - note.id }
+                )
+            }
+            result.exceptionOrNull()?.let { e ->
+                if (e is CancellationException) throw e
+                say((e as? com.example.btcwidget.nostr.NoteTranslator.Unsupported)?.message ?: "Couldn't translate. Check your connection for the first download.")
+            }
+        }
+    }
+
+    fun togglePin(note: Event) {
+        val on = note.id !in repo.pinned.value
+        act(if (on) "Couldn't pin" else "Couldn't unpin") { repo.setPinned(note, on); say(if (on) "Pinned to your profile" else "Unpinned") }
+    }
+
+    suspend fun pinnedNoteOf(pubkey: String) = runCatching { repo.pinnedNoteOf(pubkey) }.getOrNull()
 
     suspend fun bookmarkedNotes() = runCatching { repo.bookmarkedNotes() }.getOrDefault(emptyList())
 

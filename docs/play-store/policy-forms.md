@@ -13,8 +13,10 @@ With Nostr, the app sends what the user posts to Nostr relays (third parties the
   - **Messages › Other in-app messages** and **App activity › Other user-generated content:** notes, replies, reposts, likes, follows, mutes, reports, zap comments. App functionality. Optional.
   - **Messages › Other in-app messages (private):** NIP-17 direct messages, end-to-end encrypted on the device and sent to the recipients' relays at the user's request. App functionality. Optional. Encrypted in transit and at rest on relays; the developer can't read them.
   - **Photos and videos › Photos:** images the user attaches to a post, uploaded to a Blossom media server. App functionality. Optional. EXIF metadata (including location) is removed before upload.
+  - **Photos and videos › Videos:** videos the user attaches to a post, uploaded as-is to a Blossom media server. App functionality. Optional. Metadata in the file is not removed (the app warns the user).
   - **App activity › Other actions** is not needed beyond the above.
   - **App activity › In-app search history:** search words are sent to NIP-50 search relays when the user searches. App functionality. Optional. Not stored by the developer.
+  - **App info and performance › Diagnostics:** Google's ML Kit (used only when the user translates a note) sends Google API usage and performance information, not note text. Declare per Google's current ML Kit data disclosure (developers.google.com/ml-kit, "Data disclosure"); it is collected by the SDK, not the developer.
 - **Is data processed ephemerally?** No (relays store public notes).
 - **Is all of the user data collected by your app encrypted in transit?** Yes: relays use wss:// (TLS), APIs use HTTPS. (Users can add a plain ws:// relay themselves; mention this if the form asks.)
 - **Can users request deletion?** The app sends NIP-09 deletion requests for the user's own notes, and logging out deletes the key from the phone. Relays are third parties; the developer can't delete data from them. Answer per the form's options and point to the privacy policy.

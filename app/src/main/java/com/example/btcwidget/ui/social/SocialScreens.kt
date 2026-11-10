@@ -44,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -352,7 +354,9 @@ fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit
                     LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                         items(t.ancestors, key = { "a" + it.id }) { NoteCard(it, stats[it.id] ?: NoteStats(), actions) }
                         item(key = "focus") { NoteCard(t.focus, stats[t.focus.id] ?: NoteStats(), actions, large = true) }
-                        items(t.replies, key = { "r" + it.id }) { NoteCard(it, stats[it.id] ?: NoteStats(), actions) }
+                        items(t.replies, key = { "r" + it.event.id }) { row ->
+                            NoteCard(row.event, stats[row.event.id] ?: NoteStats(), actions, modifier = Modifier.threadIndent(row.depth))
+                        }
                         if (t.replies.isEmpty()) item { EmptyNote("No replies yet.") }
                     }
                     // Pinned at the bottom, as on X; it stays while you scroll the replies.
@@ -368,6 +372,22 @@ fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit
         }
     }
 }
+
+/** Indents a nested reply and draws a line for each level above it. Deep threads stop indenting. */
+private fun Modifier.threadIndent(depth: Int): Modifier {
+    val levels = depth.coerceAtMost(MAX_INDENT)
+    if (levels == 0) return this
+    return drawBehind {
+        val step = INDENT_STEP.dp.toPx()
+        for (i in 0 until levels) {
+            val x = step * i + step / 2
+            drawLine(EInk.BodyStroke, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
+        }
+    }.padding(start = (INDENT_STEP * levels).dp)
+}
+
+private const val INDENT_STEP = 14
+private const val MAX_INDENT = 5
 
 // ---- Hashtag ----
 
@@ -400,6 +420,15 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     var loadingMore by remember(pubkey) { mutableStateOf(false) }
     var end by remember(pubkey) { mutableStateOf(false) }
     val theirFollowing by produceState<Set<String>?>(null, pubkey) { value = vm.followingOf(pubkey) }
+    // X shows the pinned note first on the Posts tab. My own pins reload when I change them.
+    val myPins by vm.pinned.collectAsState()
+    val pinnedNote by produceState<com.example.btcwidget.nostr.core.Event?>(null, pubkey, if (account?.pubkey == pubkey) myPins else null) {
+        value = vm.pinnedNoteOf(pubkey)
+    }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable(pubkey) { mutableStateOf(0) }
+    // Loaded the first time the Articles tab opens.
+    var articles by remember(pubkey) { mutableStateOf<List<com.example.btcwidget.nostr.core.Article>?>(null) }
+    LaunchedEffect(pubkey, tab) { if (tab == 3 && articles == null) articles = vm.articlesBy(pubkey) }
     LaunchedEffect(pubkey) {
         // Header and notes load at the same time.
         launch { vm.refreshProfile(pubkey) }
@@ -407,7 +436,6 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     }
     val profile = profiles[pubkey]
     val isMe = account?.pubkey == pubkey
-    var tab by androidx.compose.runtime.saveable.rememberSaveable(pubkey) { mutableStateOf(0) }
     // X-style profile tabs, filtered from the same notes.
     val shown = remember(items, tab) {
         items.orEmpty().filter { item ->
@@ -415,6 +443,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
             when (tab) {
                 0 -> !isReply
                 1 -> isReply
+                3 -> false
                 else -> item.repostedBy == null && com.example.btcwidget.nostr.core.Content.parse(item.note.content).any { it is com.example.btcwidget.nostr.core.Content.Segment.Image } ||
                     item.repostedBy == null && com.example.btcwidget.nostr.core.Imeta.imageUrls(item.note).isNotEmpty()
             }
@@ -454,9 +483,19 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         onUnmute = { vm.mute(pubkey, false) },
                         actions = actions
                     )
-                    FeedTabs(listOf("Posts", "Replies", "Media"), selected = tab) { tab = it }
+                    FeedTabs(listOf("Posts", "Replies", "Media", "Articles"), selected = tab) { tab = it }
+                    pinnedNote?.takeIf { tab == 0 }?.let { pin ->
+                        Text("📌 Pinned", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 8.dp))
+                        NoteCard(pin, stats[pin.id] ?: NoteStats(), actions)
+                    }
                     val loaded = items
-                    if (loaded == null) Spinner()
+                    if (tab == 3) {
+                        val list = articles
+                        if (list == null) Spinner()
+                        else if (list.isEmpty()) EmptyNote("No articles yet.")
+                        else list.forEach { ArticleRow(it, onClick = { actions.openArticle(com.example.btcwidget.nostr.core.Nip19.Address(it.event.kind, it.pubkey, it.identifier)) }) }
+                    }
+                    else if (loaded == null) Spinner()
                     else if (shown.isEmpty()) EmptyNote(listOf("No posts yet.", "No replies yet.", "No photos yet.")[tab] + if (!end && loaded.isNotEmpty()) " Scroll loads older notes." else "")
                 }
             )

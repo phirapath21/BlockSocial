@@ -16,7 +16,12 @@ object Kind {
     const val ZAP_RECEIPT = 9735
     const val MUTE_LIST = 10000
     const val BOOKMARKS = 10003
+    const val PINNED = 10001
     const val RELAY_LIST = 10002
+    const val ARTICLE = 30023
+    const val POLL = 1068
+    const val EMOJI_LIST = 10030
+    const val POLL_RESPONSE = 1018
 }
 
 /** An event before signing: everything but id and sig. */

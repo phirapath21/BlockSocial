@@ -123,8 +123,8 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
     }
 
     /** Sends [event] to every relay and waits for their OK (or [timeoutMs]). */
-    suspend fun publish(event: Event, timeoutMs: Long = 8_000): List<PublishResult> {
-        val targets = relays.values.toList()
+    suspend fun publish(event: Event, timeoutMs: Long = 8_000, only: Set<String>? = null): List<PublishResult> {
+        val targets = relays.values.filter { only == null || it.url in only }
         val waiters = targets.associateWith { r ->
             CompletableDeferred<PublishResult>().also { okWaiters[r.url + " " + event.id] = it }
         }
@@ -231,6 +231,15 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
             OkHttpClient.Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
                 .pingInterval(30, TimeUnit.SECONDS)
+                .build()
+        }
+
+        /** For media uploads: big videos on slow connections need longer than the default. */
+        val uploadClient: OkHttpClient by lazy {
+            defaultClient.newBuilder()
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(120, TimeUnit.SECONDS)
+                .callTimeout(15, TimeUnit.MINUTES)
                 .build()
         }
     }

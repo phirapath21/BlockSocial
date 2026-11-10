@@ -62,7 +62,7 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
         started = true
         _loading.value = true
         try {
-            open(repo.cache.loadEvents(WRAP_CACHE).filter { it.tagValues("p").contains(me) })
+            open(repo.cache.loadEvents(WRAP_CACHE).filter { it.tagValues("p").contains(me) || (it.kind == Nip17.LEGACY_DM && it.pubkey == me) })
             val myList = repo.queryEverywhere(listOf(Filter(authors = listOf(me), kinds = listOf(Nip17.DM_RELAYS), limit = 1)))
                 .maxByOrNull { it.createdAt }
             val inboxRelays = Nip17.relaysFrom(myList)
@@ -72,10 +72,19 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
             val pool = RelayPool().also { it.setRelays((inboxRelays + repo.pool.urls).distinct().take(10)) }
             inboxPool = pool
             val filter = Filter(kinds = listOf(Nip17.GIFT_WRAP), tags = mapOf("p" to listOf(me)), limit = 1000)
-            open(pool.query(listOf(filter), timeoutMs = 8_000))
+            // Older apps' NIP-04 messages, both directions: read so history isn't lost.
+            val legacy = listOf(
+                Filter(kinds = listOf(Nip17.LEGACY_DM), tags = mapOf("p" to listOf(me)), limit = 300),
+                Filter(kinds = listOf(Nip17.LEGACY_DM), authors = listOf(me), limit = 300)
+            )
+            open(pool.query(listOf(filter) + legacy, timeoutMs = 8_000))
             // New messages as they arrive. Wraps are back-dated up to two days, so look back that far.
+            val now = com.example.btcwidget.nostr.core.Events.now()
             stopLive = pool.subscribe(
-                listOf(Filter(kinds = listOf(Nip17.GIFT_WRAP), tags = mapOf("p" to listOf(me)), since = com.example.btcwidget.nostr.core.Events.now() - 2 * 24 * 3600 - 60)),
+                listOf(
+                    Filter(kinds = listOf(Nip17.GIFT_WRAP), tags = mapOf("p" to listOf(me)), since = now - 2 * 24 * 3600 - 60),
+                    Filter(kinds = listOf(Nip17.LEGACY_DM), tags = mapOf("p" to listOf(me)), since = now - 60)
+                ),
                 { wrap, _ -> repo.scope.launch { open(listOf(wrap)) } }
             )
         } finally {
@@ -92,7 +101,11 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
             fresh.map { wrap ->
                 async {
                     val msg = runCatching {
-                        Nip17.unwrap(wrap) { ciphertext, peer ->
+                        if (wrap.kind == Nip17.LEGACY_DM) {
+                            val peer = Nip17.legacyPeer(wrap, repo.pubkey ?: "") ?: return@runCatching null
+                            val text = signer.nip04Decrypt(wrap.content, peer, interactive = false) ?: throw Locked()
+                            Nip17.fromLegacy(wrap, text)
+                        } else Nip17.unwrap(wrap) { ciphertext, peer ->
                             signer.nip44Decrypt(ciphertext, peer, interactive = false) ?: throw Locked()
                         }
                     }
@@ -113,8 +126,11 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
     /** Asks the signer app once (the user can tick "always allow"), then opens the rest. */
     suspend fun unlock() {
         val signer = repo.requireSigner()
-        val first = lockedWraps.values.firstOrNull() ?: return
-        signer.nip44Decrypt(first.content, first.pubkey, interactive = true)
+        val first = lockedWraps.values.firstOrNull { it.kind == Nip17.GIFT_WRAP }
+        if (first != null) signer.nip44Decrypt(first.content, first.pubkey, interactive = true)
+        val legacy = lockedWraps.values.firstOrNull { it.kind == Nip17.LEGACY_DM }
+        if (legacy != null) Nip17.legacyPeer(legacy, repo.pubkey ?: "")?.let { signer.nip04Decrypt(legacy.content, it, interactive = true) }
+        if (first == null && legacy == null) return
         val retry = lockedWraps.values.toList()
         lockedWraps.clear()
         retry.forEach { wraps.remove(it.id) }
@@ -125,7 +141,7 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
         val me = repo.pubkey ?: return
         val all = byId.values.sortedBy { it.createdAt }
         _messages.value = all
-        _conversations.value = all.groupBy { it.peers(me) }
+        _conversations.value = all.filter { it.isBubble }.groupBy { it.peers(me) }
             .map { (peers, msgs) -> Conversation(peers, msgs.last()) }
             .sortedByDescending { it.last.createdAt }
     }
@@ -143,8 +159,47 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
      */
     suspend fun send(peers: List<String>, text: String, replyTo: String? = null) {
         val me = repo.pubkey ?: error("Log in to Nostr first")
+        deliver(peers, Nip17.rumor(me, peers, text.trim(), replyTo))
+    }
+
+    /** Reacts to [target] with [emoji] (a kind-7 rumor, wrapped like a message). */
+    suspend fun react(peers: List<String>, target: Nip17.Message, emoji: String) {
+        val me = repo.pubkey ?: error("Log in to Nostr first")
+        deliver(peers, Nip17.rumor(me, peers, emoji, replyTo = target.id, kind = Nip17.REACTION, extraTags = listOf(listOf("k", target.kind.toString()))))
+    }
+
+    /**
+     * Sends a photo: encrypted on the phone with a new key, uploaded, and the key sent only
+     * inside the encrypted message (kind 15).
+     */
+    suspend fun sendImage(peers: List<String>, image: PreparedImage) {
+        val me = repo.pubkey ?: error("Log in to Nostr first")
+        val sealed = com.example.btcwidget.nostr.core.DmFile.encrypt(image.bytes)
+        val blob = repo.uploadEncrypted(sealed.bytes)
+        val tags = com.example.btcwidget.nostr.core.DmFile.tags(
+            image.mime, sealed, blob.sha256, com.example.btcwidget.nostr.core.Blossom.sha256Hex(image.bytes), image.width, image.height
+        )
+        deliver(peers, Nip17.rumor(me, peers, blob.url, kind = Nip17.FILE, extraTags = tags))
+    }
+
+    /** Downloads and decrypts a photo sent in a message. */
+    suspend fun openFile(info: com.example.btcwidget.nostr.core.DmFile.Info): ByteArray =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val request = okhttp3.Request.Builder().url(info.url).build()
+            val bytes = RelayPool.uploadClient.newCall(request).execute().use { r ->
+                if (!r.isSuccessful) error("Couldn't download the photo (HTTP ${r.code})")
+                val len = r.body.contentLength()
+                if (len > MAX_FILE) error("The file is too large")
+                r.body.bytes().also { if (it.size > MAX_FILE) error("The file is too large") }
+            }
+            info.sha256?.let { if (!com.example.btcwidget.nostr.core.Blossom.sha256Hex(bytes).equals(it, true)) error("The file was changed") }
+            com.example.btcwidget.nostr.core.DmFile.decrypt(bytes, info.key, info.nonce)
+        }
+
+    /** Wraps [rumor] for each recipient and for the user's own copy, and delivers it. */
+    private suspend fun deliver(peers: List<String>, rumor: com.example.btcwidget.nostr.core.UnsignedEvent) {
+        val me = repo.pubkey ?: error("Log in to Nostr first")
         val signer = repo.requireSigner()
-        val rumor = Nip17.rumor(me, peers, text.trim(), replyTo)
         val targets = (peers + me).distinct()
         // Inbox relays of every recipient, looked up together.
         val lists = repo.queryEverywhere(listOf(Filter(authors = targets, kinds = listOf(Nip17.DM_RELAYS))))
@@ -192,6 +247,7 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
 
     companion object {
         private const val WRAP_CACHE = "dm_wraps"
+        private const val MAX_FILE = 25L * 1024 * 1024
 
         /** Inbox relays suggested when setting up DMs. */
         val DEFAULT_INBOX = listOf("wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net")

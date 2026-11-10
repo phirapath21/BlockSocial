@@ -18,38 +18,38 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 ## 🟡 Basics users expect
 
 ### Reading
-- [ ] Global / per-relay feed, to discover people beyond follows
-- [ ] Pinned note on profiles (NIP-51 kind 10001)
-- [ ] Nested reply threads (today: one level)
-- [ ] Long-form articles (NIP-23)
-- [ ] Translate notes (e.g. into Thai)
-- [ ] Polls (NIP-88)
+- [x] Global / per-relay feed, to discover people beyond follows
+- [x] Pinned note on profiles (NIP-51 kind 10001)
+- [x] Nested reply threads (today: one level)
+- [x] Long-form articles (NIP-23)
+- [x] Translate notes (e.g. into Thai)
+- [x] Polls (NIP-88)
 
 ### Writing
-- [ ] Drafts (NIP-37)
-- [ ] #hashtag autocomplete
-- [ ] Video upload
+- [x] Drafts, saved on the phone (NIP-37 relay sync not done)
+- [x] #hashtag autocomplete
+- [x] Video upload
 - [ ] GIF picker (needs Tenor or GIPHY and an API key)
-- [ ] Emoji reactions and custom emoji (NIP-30), beyond ♥
+- [x] Emoji reactions and custom emoji (NIP-30), beyond ♥
 
 ### Account and settings
-- [ ] Multiple accounts and switching
-- [ ] NIP-46 remote signer (bunker), for people not using Amber
-- [ ] Export nsec, with a warning, for accounts using an nsec or created in the app
-- [ ] Settings for media servers (Blossom list) and DM inbox relays
-- [ ] Notification settings by type (e.g. turn off likes)
+- [x] Multiple accounts and switching
+- [x] NIP-46 remote signer (bunker), for people not using Amber
+- [x] Export nsec, with a warning, for accounts using an nsec or created in the app
+- [x] Settings for media servers (Blossom list) and DM inbox relays
+- [x] Notification settings by type (e.g. turn off likes)
 - [ ] Thai translation of the UI
 
 ### Direct messages
-- [ ] Photos in DMs
-- [ ] Reply to a message, and react to messages
-- [ ] Read legacy DMs (NIP-04); most older Nostr DMs use it
-- [ ] "Message requests" for people you don't follow (spam control)
-- [ ] Create group chats from the UI (groups already work underneath)
+- [x] Photos in DMs
+- [x] Reply to a message, and react to messages
+- [x] Read legacy DMs (NIP-04); most older Nostr DMs use it
+- [x] "Message requests" for people you don't follow (spam control)
+- [x] Create group chats from the UI (groups already work underneath)
 
 ### Safety
-- [ ] Mute words, hashtags and threads (today: accounts only)
-- [ ] Web-of-trust spam filter: hide accounts nobody in your network follows
+- [x] Mute words, hashtags and threads (today: accounts only)
+- [x] Web-of-trust spam filter: hide accounts nobody in your network follows
 
 ## 🟢 Advanced / extras
 

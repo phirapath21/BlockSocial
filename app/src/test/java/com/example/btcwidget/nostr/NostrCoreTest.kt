@@ -8,6 +8,7 @@ import com.example.btcwidget.nostr.core.Events
 import com.example.btcwidget.nostr.core.Filter
 import com.example.btcwidget.nostr.core.Hex
 import com.example.btcwidget.nostr.core.Kind
+import com.example.btcwidget.nostr.core.Markdown
 import com.example.btcwidget.nostr.core.Nip19
 import com.example.btcwidget.nostr.core.Profile
 import com.example.btcwidget.nostr.core.RelayMessage
@@ -189,6 +190,8 @@ class NostrCoreTest {
                 is Content.Segment.Hashtag -> "#" + it.tag
                 is Content.Segment.ProfileRef -> it.raw
                 is Content.Segment.NoteRef -> it.raw
+                is Content.Segment.AddressRef -> it.raw
+                is Content.Segment.Emoji -> ":" + it.code + ":"
             }
         }.startsWith("gm nostr:$npub see https://x.com/a.jpg, and"))
     }
@@ -462,5 +465,87 @@ class OutboxTest {
         org.junit.Assert.assertTrue(plan.values.none { "erin" in it })
         // Avoided relays (e.g. ones we already query) aren't planned.
         org.junit.Assert.assertFalse(o.plan(listOf("bob"), lists, avoid = setOf("wss://big")).containsKey("wss://big"))
+    }
+
+    @Test
+    fun replyTreeNestsRepliesInReadingOrder() {
+        fun reply(id: String, parent: String, at: Long) = Event(id, "pk", at, Kind.TEXT_NOTE,
+            listOf(listOf("e", "focus", "", "root"), listOf("e", parent, "", "reply")), "", "")
+        val rows = com.example.btcwidget.nostr.core.ReplyTree.flatten("focus", listOf(
+            reply("b", "focus", 20), reply("a", "focus", 10), reply("a1", "a", 30), reply("a1x", "a1", 40), reply("b1", "b", 25)
+        ))
+        assertEquals(listOf("a" to 0, "a1" to 1, "a1x" to 2, "b" to 0, "b1" to 1), rows.map { it.event.id to it.depth })
+    }
+
+    @Test
+    fun naddrRoundTripsAndArticleParses() {
+        val pk = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+        val a = Nip19.naddr(30023, pk, "my-post", listOf("wss://relay.example"))
+        assertEquals(Nip19.Address(30023, pk, "my-post", listOf("wss://relay.example")), Nip19.decode("nostr:$a"))
+        val seg = Content.parse("read nostr:$a now").filterIsInstance<Content.Segment.AddressRef>().single()
+        assertEquals("my-post", seg.address.identifier)
+        val e = Event("00", pk, 5, Kind.ARTICLE, listOf(listOf("d", "my-post"), listOf("title", "Hello"), listOf("published_at", "3")), "# x", "")
+        val art = com.example.btcwidget.nostr.core.Article.of(e)!!
+        assertEquals("Hello", art.title); assertEquals(3L, art.publishedAt)
+    }
+
+    @Test
+    fun markdownBlocksAndSpans() {
+        val blocks = Markdown.parse("# Title\n\nSome **bold** and *it* with [link](https://a.b).\nsame para\n\n- one\n2. two\n> quoted\n\n```\ncode\n```\n![alt](https://x/y.png)\n---")
+        assertEquals(8, blocks.size)
+        assertEquals(Markdown.Block.Heading(1, listOf(Markdown.Span.Plain("Title"))), blocks[0])
+        val p = blocks[1] as Markdown.Block.Paragraph
+        assertEquals(listOf(Markdown.Span.Plain("Some "), Markdown.Span.Bold("bold"), Markdown.Span.Plain(" and "), Markdown.Span.Italic("it"), Markdown.Span.Plain(" with "), Markdown.Span.Link("link", "https://a.b"), Markdown.Span.Plain(". same para")), p.spans)
+        assertEquals("2.", (blocks[3] as Markdown.Block.ListItem).marker)
+        assertEquals(Markdown.Block.Code("code"), blocks[5])
+        assertEquals(Markdown.Block.Image("https://x/y.png", "alt"), blocks[6])
+        assertEquals(Markdown.Block.Rule, blocks[7])
+    }
+
+    @Test
+    fun pollTallyCountsLatestVotePerPerson() {
+        val unsigned = com.example.btcwidget.nostr.core.Poll.create("pk", "Best?", listOf("A", " B ", ""), false, endsAt = 100, relays = listOf("wss://r"), now = 1)
+        val poll = com.example.btcwidget.nostr.core.Poll.of(unsigned.signed("s"))!!
+        assertEquals(listOf("A", "B"), poll.options.map { it.label })
+        fun vote(who: String, at: Long, vararg ids: String) = com.example.btcwidget.nostr.core.Poll.response(who, poll, ids.toList(), now = at).signed("s")
+        val t = poll.tally(listOf(
+            vote("x", 10, "opt0"), vote("x", 20, "opt1"),   // changed mind: B
+            vote("y", 30, "opt0"),
+            vote("z", 200, "opt0"),                        // after the end
+            Event("i", "w", 5, Kind.POLL_RESPONSE, listOf(listOf("e", poll.event.id), listOf("response", "opt0"), listOf("response", "opt1")), "", "s")
+        ), me = "x")
+        assertEquals(1 + 1, t.count("opt0"))   // y and w (single choice keeps w's first)
+        assertEquals(1, t.count("opt1"))
+        assertEquals(3, t.voters)
+        assertEquals(setOf("opt1"), t.mine)
+    }
+
+    @Test
+    fun customEmojiSplitsTextAndTagsReactions() {
+        val e = Event("i", "pk", 1, Kind.TEXT_NOTE, listOf(listOf("emoji", "blob", "https://e/blob.png"), listOf("emoji", "bad", "http://x")), "hi :blob: and :bad: :blob:", "s")
+        val emojis = com.example.btcwidget.nostr.core.CustomEmoji.of(e)
+        assertEquals(mapOf("blob" to "https://e/blob.png"), emojis)
+        val segs = Content.parse(e.content, emojis)
+        assertEquals(listOf(Content.Segment.Text("hi "), Content.Segment.Emoji("blob", "https://e/blob.png"), Content.Segment.Text(" and :bad: "), Content.Segment.Emoji("blob", "https://e/blob.png")), segs)
+        val r = Events.reaction("me", e, ":blob:", "https://e/blob.png")
+        assertTrue(listOf("emoji", "blob", "https://e/blob.png") in r.tags)
+        assertFalse(Events.reaction("me", e, "🔥", "https://x").tags.any { it[0] == "emoji" })
+    }
+
+    @Test
+    fun muteRulesHideWordsTagsAndThreads() {
+        val list = Event("m", "me", 1, Kind.MUTE_LIST, listOf(listOf("p", "bad"), listOf("word", "Scam"), listOf("word", "สแปม"), listOf("t", "NSFW"), listOf("e", "root1")), "", "")
+        val rules = com.example.btcwidget.nostr.core.MuteRules.of(list)
+        fun note(content: String, tags: List<List<String>> = emptyList(), pk: String = "ok") = Event("n" + content.hashCode(), pk, 1, Kind.TEXT_NOTE, tags, content, "")
+        assertTrue(rules.hides(note("hi", pk = "bad")))
+        assertTrue(rules.hides(note("free SCAM inside")))
+        assertFalse(rules.hides(note("scampi for dinner")))
+        assertTrue(rules.hides(note("ข้อความสแปมนะ")))
+        assertTrue(rules.hides(note("pic", listOf(listOf("t", "nsfw")))))
+        assertTrue(rules.hides(note("reply", listOf(listOf("e", "root1", "", "root"), listOf("e", "x", "", "reply")))))
+        assertFalse(rules.hides(note("fine")))
+        val net = com.example.btcwidget.nostr.core.TrustNetwork("a".repeat(64), listOf("b".repeat(64)), listOf("c".repeat(64)))
+        assertTrue(net.contains("c".repeat(64)))
+        assertFalse(net.contains("d".repeat(64)))
     }
 }

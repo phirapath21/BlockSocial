@@ -14,6 +14,11 @@ import java.security.SecureRandom
  */
 object Nip17 {
     const val CHAT = 14
+    /** An encrypted file (photo) message: content is its URL, tags carry the key. */
+    const val FILE = 15
+    const val REACTION = 7
+    /** Legacy NIP-04 direct message: readable here, never sent. */
+    const val LEGACY_DM = 4
     const val SEAL = 13
     const val GIFT_WRAP = 1059
     /** The relays a user wants to receive DMs on. */
@@ -31,18 +36,29 @@ object Nip17 {
         val createdAt: Long,
         val replyTo: String?,
         /** The gift wrap it arrived in. */
-        val wrapId: String
+        val wrapId: String,
+        /** [CHAT], [FILE], [REACTION] (to [replyTo]) or [LEGACY_DM]. */
+        val kind: Int = CHAT,
+        val tags: List<List<String>> = emptyList()
     ) {
+        /** Shown as a bubble (reactions attach to the message they react to). */
+        val isBubble get() = kind != REACTION
+        /** Less private: relays can see who talked to whom, and when. */
+        val isLegacy get() = kind == LEGACY_DM
+        val file: DmFile.Info? get() = if (kind == FILE) DmFile.parse(content, tags) else null
+
         /** Everyone in the conversation except [me], sorted: the conversation's key. */
         fun peers(me: String): List<String> = (recipients + sender).filter { it != me }.distinct().sorted().ifEmpty { listOf(me) }
     }
 
-    fun rumor(sender: String, recipients: List<String>, content: String, replyTo: String? = null, now: Long = Events.now()) =
-        UnsignedEvent(
-            sender, now, CHAT,
-            recipients.distinct().map { listOf("p", it) } + listOfNotNull(replyTo?.let { listOf("e", it) }),
-            content
-        )
+    fun rumor(
+        sender: String, recipients: List<String>, content: String, replyTo: String? = null,
+        now: Long = Events.now(), kind: Int = CHAT, extraTags: List<List<String>> = emptyList()
+    ) = UnsignedEvent(
+        sender, now, kind,
+        recipients.distinct().map { listOf("p", it) } + listOfNotNull(replyTo?.let { listOf("e", it) }) + extraTags,
+        content
+    )
 
     /** The rumor as JSON with its id but no signature, as NIP-17 sends it. */
     fun rumorJson(rumor: UnsignedEvent): String = buildString {
@@ -97,7 +113,7 @@ object Nip17 {
             )
         }.getOrNull() ?: return null
         // The seal's signer must be the rumor's author, or anyone could put words in someone's mouth.
-        if (rumor.kind != CHAT || rumor.pubkey != seal.pubkey) return null
+        if (rumor.kind !in setOf(CHAT, FILE, REACTION) || rumor.pubkey != seal.pubkey) return null
         return Message(
             id = rumor.id,
             sender = rumor.pubkey,
@@ -105,9 +121,22 @@ object Nip17 {
             content = rumor.content,
             createdAt = rumor.createdAt,
             replyTo = rumor.tags.firstOrNull { it.size >= 2 && it[0] == "e" }?.get(1),
-            wrapId = wrap.id
+            wrapId = wrap.id,
+            kind = rumor.kind,
+            tags = rumor.tags
         )
     }
+
+    /** A legacy NIP-04 message (kind 4) between the user and one person, already decrypted. */
+    fun fromLegacy(event: Event, plaintext: String): Message? {
+        if (event.kind != LEGACY_DM || !event.verify()) return null
+        val to = event.tagValues("p").firstOrNull { Hex.isKey(it) } ?: return null
+        return Message(event.id, event.pubkey, listOf(to), plaintext, event.createdAt, event.tagValues("e").firstOrNull(), event.id, LEGACY_DM)
+    }
+
+    /** The other person in a legacy message the user sent or received. */
+    fun legacyPeer(event: Event, me: String): String? =
+        if (event.pubkey == me) event.tagValues("p").firstOrNull() else event.pubkey
 
     /** Relays from a kind-10050 DM relay list. */
     fun relaysFrom(list: Event?): List<String> =
@@ -115,4 +144,50 @@ object Nip17 {
 
     fun dmRelayList(pubkey: String, relays: List<String>) =
         UnsignedEvent(pubkey, Events.now(), DM_RELAYS, relays.map { listOf("relay", it) }, "")
+}
+
+/**
+ * Encrypted files in private messages (NIP-17 kind 15): the file is encrypted on the phone
+ * with a fresh AES-GCM key, uploaded, and the key travels only inside the encrypted message.
+ */
+object DmFile {
+    data class Info(val url: String, val mime: String, val key: ByteArray, val nonce: ByteArray, val sha256: String?, val width: Int?, val height: Int?)
+
+    data class Sealed(val bytes: ByteArray, val key: ByteArray, val nonce: ByteArray)
+
+    private val random = SecureRandom()
+
+    fun encrypt(plain: ByteArray): Sealed {
+        val key = ByteArray(32).also { random.nextBytes(it) }
+        val nonce = ByteArray(12).also { random.nextBytes(it) }
+        return Sealed(cipher(javax.crypto.Cipher.ENCRYPT_MODE, key, nonce).doFinal(plain), key, nonce)
+    }
+
+    fun decrypt(encrypted: ByteArray, key: ByteArray, nonce: ByteArray): ByteArray =
+        cipher(javax.crypto.Cipher.DECRYPT_MODE, key, nonce).doFinal(encrypted)
+
+    private fun cipher(mode: Int, key: ByteArray, nonce: ByteArray) = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding").apply {
+        init(mode, javax.crypto.spec.SecretKeySpec(key, "AES"), javax.crypto.spec.GCMParameterSpec(128, nonce))
+    }
+
+    /** Tags for a kind-15 message about an uploaded encrypted file. */
+    fun tags(mime: String, sealed: Sealed, encryptedSha256: String, originalSha256: String, width: Int, height: Int): List<List<String>> = listOf(
+        listOf("file-type", mime),
+        listOf("encryption-algorithm", "aes-gcm"),
+        listOf("decryption-key", Hex.encode(sealed.key)),
+        listOf("decryption-nonce", Hex.encode(sealed.nonce)),
+        listOf("x", encryptedSha256),
+        listOf("ox", originalSha256),
+        listOf("size", sealed.bytes.size.toString()),
+        listOf("dim", "${width}x$height")
+    )
+
+    fun parse(url: String, tags: List<List<String>>): Info? {
+        fun tag(name: String) = tags.firstOrNull { it.size >= 2 && it[0] == name }?.get(1)
+        if (!url.startsWith("https://") || tag("encryption-algorithm") != "aes-gcm") return null
+        val key = tag("decryption-key")?.let { runCatching { Hex.decode(it) }.getOrNull() }?.takeIf { it.size == 32 } ?: return null
+        val nonce = tag("decryption-nonce")?.let { runCatching { Hex.decode(it) }.getOrNull() }?.takeIf { it.size in 12..16 } ?: return null
+        val dim = tag("dim")?.split('x')
+        return Info(url, tag("file-type") ?: "application/octet-stream", key, nonce, tag("x"), dim?.getOrNull(0)?.toIntOrNull(), dim?.getOrNull(1)?.toIntOrNull())
+    }
 }

@@ -2,6 +2,11 @@ package com.example.btcwidget.ui.social
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,7 +65,11 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val inbox by vm.dmInbox.collectAsState()
     val profiles by vm.profiles.collectAsState()
     val unread by vm.unreadConversations.collectAsState()
+    val following by vm.following.collectAsState()
+    val allMessages by vm.dmMessages.collectAsState()
     var newMessage by remember { mutableStateOf(false) }
+    var newGroup by remember { mutableStateOf(false) }
+    var showRequests by remember { mutableStateOf(false) }
     LaunchedEffect(account) { vm.startDms() }
 
     val me = account?.pubkey
@@ -76,8 +85,26 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
         return
     }
 
+    // Message requests: chats with people you don't follow, until you reply.
+    val answered = remember(allMessages, me) { allMessages.filter { it.sender == me }.map { it.peers(me).joinToString(",") }.toSet() }
+    val (requests, chats) = remember(conversations, following, answered) {
+        conversations.partition { c -> c.key !in answered && c.peers.none { it in following } }
+    }
+    val shown = if (showRequests) requests else chats
+
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize()) {
+            if (requests.isNotEmpty() || showRequests) item(key = "tabs") {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.example.btcwidget.ui.main.EInkChip(text = "CHATS", selected = !showRequests, onClick = { showRequests = false })
+                    com.example.btcwidget.ui.main.EInkChip(text = "REQUESTS ${requests.size}", selected = showRequests, onClick = { showRequests = true })
+                }
+                if (showRequests) Text(
+                    "From people you don't follow. Replying moves a chat to Chats. Links and photos here can come from strangers.",
+                    color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                )
+                HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+            }
             if (inbox?.isEmpty() == true) item(key = "inbox") {
                 Banner(
                     "Set up your inbox so people can message you. This publishes which relays receive your private messages.",
@@ -87,11 +114,11 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
             if (locked > 0) item(key = "locked") {
                 Banner("$locked messages need your signer app's permission to open.", "Allow", vm::unlockDms)
             }
-            if (conversations.isEmpty()) item(key = "empty") {
+            if (shown.isEmpty()) item(key = "empty") {
                 if (loading) Spinner(Modifier.padding(top = 40.dp))
-                else EmptyNote("No messages yet. Start one with ✉, or from someone's profile.")
+                else EmptyNote(if (showRequests) "No message requests." else "No messages yet. Start one with ✉, or from someone's profile.")
             }
-            items(conversations, key = { it.key }) { c ->
+            items(shown, key = { it.key }) { c ->
                 ConversationRow(c, me, profiles, unread = c.key in unread, onClick = { navigate(ChatKey(c.key)) })
             }
         }
@@ -107,6 +134,10 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     if (newMessage) NewMessageDialog(vm, onDismiss = { newMessage = false }, onOpen = { pubkey ->
         newMessage = false
         navigate(ChatKey(pubkey))
+    }, onNewGroup = { newMessage = false; newGroup = true })
+    if (newGroup) NewGroupDialog(vm, onDismiss = { newGroup = false }, onStart = { peers ->
+        newGroup = false
+        navigate(ChatKey(peers.sorted().joinToString(",")))
     })
 }
 
@@ -136,7 +167,7 @@ private fun ConversationRow(c: DirectMessages.Conversation, me: String, profiles
                 }
             }
             Text(
-                (if (c.last.sender == me) "You: " else "") + c.last.content.replace('\n', ' '),
+                (if (c.last.sender == me) "You: " else "") + (if (c.last.kind == com.example.btcwidget.nostr.core.Nip17.FILE) "📷 Photo" else c.last.content.replace('\n', ' ')),
                 color = if (unread) EInk.Value else EInk.Label, fontSize = 14.sp,
                 fontWeight = if (unread) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -148,7 +179,7 @@ private fun ConversationRow(c: DirectMessages.Conversation, me: String, profiles
 
 /** Start a conversation: an npub, nprofile or name@domain. */
 @Composable
-private fun NewMessageDialog(vm: SocialViewModel, onDismiss: () -> Unit, onOpen: (String) -> Unit) {
+private fun NewMessageDialog(vm: SocialViewModel, onDismiss: () -> Unit, onOpen: (String) -> Unit, onNewGroup: () -> Unit) {
     val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -167,6 +198,7 @@ private fun NewMessageDialog(vm: SocialViewModel, onDismiss: () -> Unit, onOpen:
                     color = if (error != null) EInk.Alert else EInk.Caption, fontSize = 12.sp,
                     modifier = Modifier.padding(top = 6.dp)
                 )
+                TextButton(onClick = onNewGroup, modifier = Modifier.padding(top = 4.dp)) { Text("New group chat ›") }
             }
         },
         confirmButton = {
@@ -184,6 +216,59 @@ private fun NewMessageDialog(vm: SocialViewModel, onDismiss: () -> Unit, onOpen:
     )
 }
 
+/** Pick people you follow (or paste npubs) for a group chat. */
+@Composable
+private fun NewGroupDialog(vm: SocialViewModel, onDismiss: () -> Unit, onStart: (List<String>) -> Unit) {
+    val following by vm.following.collectAsState()
+    val profiles by vm.profiles.collectAsState()
+    var query by remember { mutableStateOf("") }
+    var picked by remember { mutableStateOf(listOf<String>()) }
+    LaunchedEffect(following) { vm.loadProfiles(following.take(300)) }
+    val q = query.trim().lowercase()
+    val pasted = remember(q) { (com.example.btcwidget.nostr.core.Nip19.decode(q) as? com.example.btcwidget.nostr.core.Nip19.Pubkey)?.hex }
+    val matches = remember(q, following, profiles) {
+        following.filter { pk ->
+            q.isEmpty() || profiles[pk]?.let { p -> listOfNotNull(p.name, p.displayName, p.nip05).any { it.lowercase().contains(q) } } == true
+        }.sortedBy { profiles[it]?.bestName?.lowercase() ?: "~" }.take(40)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New group chat") },
+        text = {
+            Column {
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search follows or paste an npub") }, singleLine = true)
+                if (picked.isNotEmpty()) Text(
+                    picked.joinToString(", ") { profiles[it]?.bestName ?: Profile.shortNpub(it) },
+                    color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)
+                )
+                LazyColumn(Modifier.padding(top = 6.dp).heightIn(max = 280.dp)) {
+                    val rows = (listOfNotNull(pasted) + matches).distinct()
+                    items(rows, key = { it }) { pk ->
+                        val on = pk in picked
+                        Row(
+                            Modifier.fillMaxWidth().clickable { picked = if (on) picked - pk else (picked + pk).take(MAX_GROUP) }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(if (on) "☑" else "☐", color = EInk.Value, fontSize = 18.sp, modifier = Modifier.padding(end = 8.dp))
+                            Avatar(profiles[pk], pk, size = 28)
+                            Text(profiles[pk]?.bestName ?: Profile.shortNpub(pk), color = EInk.Value, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
+                        }
+                    }
+                }
+                Text("Everyone in the group sees each other and every message. Up to $MAX_GROUP people.", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        },
+        confirmButton = { TextButton(enabled = picked.size >= 2, onClick = { onStart(picked) }) { Text("Start") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+/** Each message is wrapped once per member, so groups stay small. */
+private const val MAX_GROUP = 10
+
+/** Emoji offered when reacting to a message. */
+private val DM_REACTIONS = listOf("❤️", "😂", "👍", "🔥", "😮", "😢", "🙏")
+
 /** A conversation with [peers]: bubbles, newest at the bottom, and a composer. */
 @Composable
 fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
@@ -192,9 +277,27 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
     val profiles by vm.profiles.collectAsState()
     val me = account?.pubkey
     val key = remember(peers) { peers.sorted() }
-    val messages = remember(all, me, key) { if (me == null) emptyList() else all.filter { it.peers(me) == key } }
+    val inChat = remember(all, me, key) { if (me == null) emptyList() else all.filter { it.peers(me) == key } }
+    val messages = remember(inChat) { inChat.filter { it.isBubble } }
+    // Reactions grouped under the message they react to (each person's latest counts).
+    val reactions = remember(inChat) {
+        inChat.filter { it.kind == com.example.btcwidget.nostr.core.Nip17.REACTION && it.replyTo != null }
+            .groupBy { it.replyTo!! }
+            .mapValues { (_, rs) -> rs.groupBy { it.sender }.map { (_, mine) -> mine.maxBy { it.createdAt }.content } }
+    }
+    val byId = remember(messages) { messages.associateBy { it.id } }
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    var replyTo by remember { mutableStateOf<com.example.btcwidget.nostr.core.Nip17.Message?>(null) }
+    var menuFor by remember { mutableStateOf<String?>(null) }
+    var photoSending by remember { mutableStateOf(false) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val photoPicker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            photoSending = true
+            vm.sendDmImage(peers, uri) { photoSending = false }
+        }
+    }
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) {
         vm.startDms()
@@ -222,32 +325,85 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                             Avatar(profiles[peers.first()], peers.first(), size = 56)
                             Text(title, color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                             Text("🔒 End-to-end encrypted (NIP-17)", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                            if (messages.any { it.isLegacy }) Text(
+                                "Older messages marked \"old format\" use NIP-04: relays could see who talked and when.",
+                                color = EInk.Caption, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp, start = 20.dp, end = 20.dp)
+                            )
                         }
                     }
                     items(messages, key = { it.id }) { m ->
                         val mine = m.sender == me
-                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
-                            Column(
-                                Modifier
-                                    .widthIn(max = 290.dp)
-                                    .background(if (mine) EInk.Value else EInk.Body, RoundedCornerShape(18.dp))
-                                    .padding(horizontal = 14.dp, vertical = 9.dp)
-                            ) {
-                                if (!mine && peers.size > 1) {
-                                    Text(profiles[m.sender]?.bestName ?: Profile.shortNpub(m.sender), color = EInk.Caption, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        val fg = if (mine) EInk.Background else EInk.Value
+                        Column(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                            Box {
+                                Column(
+                                    Modifier
+                                        .widthIn(max = 290.dp)
+                                        .background(if (mine) EInk.Value else EInk.Body, RoundedCornerShape(18.dp))
+                                        .combinedClickable(onClick = {}, onLongClickLabel = "Message options", onLongClick = { menuFor = m.id })
+                                        .padding(horizontal = 14.dp, vertical = 9.dp)
+                                ) {
+                                    if (!mine && peers.size > 1) {
+                                        Text(profiles[m.sender]?.bestName ?: Profile.shortNpub(m.sender), color = EInk.Caption, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    m.replyTo?.let { byId[it] }?.let { parent ->
+                                        Text(
+                                            "↩ " + (profiles[parent.sender]?.bestName ?: Profile.shortNpub(parent.sender)) + ": " +
+                                                (if (parent.kind == com.example.btcwidget.nostr.core.Nip17.FILE) "📷 Photo" else parent.content.replace('\n', ' ')),
+                                            color = fg.copy(alpha = 0.7f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(bottom = 4.dp)
+                                        )
+                                    }
+                                    val file = m.file
+                                    if (file != null) EncryptedPhoto(vm, file)
+                                    else Text(m.content, color = fg, fontSize = 15.sp)
+                                    Text(
+                                        relativeTime(m.createdAt) + if (m.isLegacy) " · old format" else "", fontSize = 11.sp,
+                                        color = if (mine) EInk.Background.copy(alpha = 0.7f) else EInk.Caption,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
                                 }
-                                Text(m.content, color = if (mine) EInk.Background else EInk.Value, fontSize = 15.sp)
+                                androidx.compose.material3.DropdownMenu(expanded = menuFor == m.id, onDismissRequest = { menuFor = null }) {
+                                    Row(Modifier.padding(horizontal = 8.dp)) {
+                                        DM_REACTIONS.forEach { e ->
+                                            Text(e, fontSize = 22.sp, modifier = Modifier.clip(CircleShape).clickable { menuFor = null; vm.reactDm(peers, m, e) }.padding(5.dp))
+                                        }
+                                    }
+                                    androidx.compose.material3.DropdownMenuItem(text = { Text("Reply") }, onClick = { menuFor = null; replyTo = m })
+                                    if (m.kind != com.example.btcwidget.nostr.core.Nip17.FILE) androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Copy") },
+                                        onClick = { menuFor = null; clipboard.setText(androidx.compose.ui.text.AnnotatedString(m.content)) }
+                                    )
+                                }
+                            }
+                            reactions[m.id]?.takeIf { it.isNotEmpty() }?.let { rs ->
                                 Text(
-                                    relativeTime(m.createdAt), fontSize = 11.sp,
-                                    color = if (mine) EInk.Background.copy(alpha = 0.7f) else EInk.Caption,
-                                    modifier = Modifier.padding(top = 2.dp)
+                                    rs.groupingBy { it }.eachCount().entries.joinToString(" ") { (e, n) -> if (n > 1) "$e $n" else e },
+                                    fontSize = 13.sp, color = EInk.Value,
+                                    modifier = Modifier.padding(top = 2.dp).background(EInk.Body, RoundedCornerShape(10.dp)).padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
                         }
                     }
                 }
                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+                replyTo?.let { r ->
+                    Row(Modifier.fillMaxWidth().background(EInk.Body).padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Replying to " + (if (r.sender == me) "yourself" else profiles[r.sender]?.bestName ?: Profile.shortNpub(r.sender)) + ": " +
+                                (if (r.kind == com.example.btcwidget.nostr.core.Nip17.FILE) "📷 Photo" else r.content.replace('\n', ' ')),
+                            color = EInk.Label, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                        )
+                        Text("✕", color = EInk.Value, fontSize = 14.sp, modifier = Modifier.clickable(onClickLabel = "Cancel reply") { replyTo = null }.padding(6.dp))
+                    }
+                }
                 Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (photoSending) "…" else "🖼", fontSize = 22.sp, color = EInk.Value,
+                        modifier = Modifier.clip(CircleShape).clickable(enabled = !photoSending, onClickLabel = "Send a photo") {
+                            photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }.padding(6.dp)
+                    )
                     OutlinedTextField(
                         value = text, onValueChange = { text = it },
                         placeholder = { Text("Message") },
@@ -266,13 +422,36 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                         sending = true
                         val outgoing = text
                         text = ""
-                        vm.sendDm(peers, outgoing) { ok ->
+                        val parent = replyTo
+                        replyTo = null
+                        vm.sendDm(peers, outgoing, parent?.id) { ok ->
                             sending = false
-                            if (!ok) text = outgoing
+                            if (!ok) { text = outgoing; replyTo = parent }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/** A photo sent in a message: downloaded, decrypted on the phone, then shown. */
+@Composable
+private fun EncryptedPhoto(vm: SocialViewModel, info: com.example.btcwidget.nostr.core.DmFile.Info) {
+    val bitmap by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, info.url) {
+        value = vm.openDmFile(info)?.let { bytes ->
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                runCatching { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }.getOrNull()
+            }
+        }
+    }
+    val ratio = if ((info.width ?: 0) > 0 && (info.height ?: 0) > 0) info.width!!.toFloat() / info.height!! else 1f
+    Box(
+        Modifier.width(240.dp).aspectRatio(ratio.coerceIn(0.5f, 2f)).clip(RoundedCornerShape(12.dp)).background(EInk.Track),
+        contentAlignment = Alignment.Center
+    ) {
+        val b = bitmap
+        if (b != null) androidx.compose.foundation.Image(b, contentDescription = "Photo", contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        else Text("🔒 Photo", color = EInk.Caption, fontSize = 13.sp)
     }
 }

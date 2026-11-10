@@ -71,7 +71,8 @@ object NostrBackground {
             timeoutMs = 10_000
         ).filter { it.pubkey != me && it.createdAt > since }
         if (events.isEmpty()) return
-        val lines = events.sortedByDescending { it.createdAt }.mapNotNull { describe(it, names) }
+        val off = NostrAccountStore.notificationsOff(context)
+        val lines = events.sortedByDescending { it.createdAt }.filter { typeOf(it) !in off }.mapNotNull { describe(it, names) }
         NostrAccountStore.setNotificationsNotified(context, events.maxOf { it.createdAt })
         if (lines.isEmpty()) return
         post(
@@ -84,6 +85,15 @@ object NostrBackground {
         )
     }
 
+    /** The notification type name used in settings. */
+    private fun typeOf(e: Event): String = when (e.kind) {
+        Kind.TEXT_NOTE -> if (ThreadRef.of(e).isReply) "reply" else "mention"
+        Kind.REPOST -> "repost"
+        Kind.REACTION -> "like"
+        Kind.ZAP_RECEIPT -> "zap"
+        else -> "other"
+    }
+
     private fun describe(e: Event, names: Map<String, String>): String? = when (e.kind) {
         Kind.TEXT_NOTE -> {
             val who = name(names, e.pubkey)
@@ -91,7 +101,8 @@ object NostrBackground {
             "$who $verb: ${e.content.take(80).replace('\n', ' ')}"
         }
         Kind.REPOST -> "${name(names, e.pubkey)} reposted your note"
-        Kind.REACTION -> if (e.content == "-") null else "${name(names, e.pubkey)} liked your note"
+        Kind.REACTION -> if (e.content == "-") null
+            else "${name(names, e.pubkey)} " + (if (e.content == "+" || e.content.isBlank()) "liked your note" else "reacted ${e.content} to your note")
         Kind.ZAP_RECEIPT -> Zaps.parseReceipt(e)?.let { r ->
             "⚡ ${r.sender?.let { name(names, it) } ?: "Someone"} zapped ${r.amountMsat / 1000} sats"
         }
@@ -99,6 +110,7 @@ object NostrBackground {
     }
 
     private suspend fun checkMessages(context: Context, pool: RelayPool, me: String, names: Map<String, String>) {
+        if ("dm" in NostrAccountStore.notificationsOff(context)) return
         val signer = NostrAccountStore.signer(context) ?: return
         val now = System.currentTimeMillis() / 1000
         val notified = NostrAccountStore.dmNotified(context).takeIf { it > 0 } ?: (now - 3600)
@@ -110,7 +122,7 @@ object NostrBackground {
         val fresh = wraps.mapNotNull { wrap ->
             // A signer app that would need to ask returns null: those wait until the app is opened.
             runCatching { Nip17.unwrap(wrap) { c, peer -> signer.nip44Decrypt(c, peer, interactive = false) ?: error("locked") } }.getOrNull()
-        }.filter { it.sender != me && it.createdAt > notified }.distinctBy { it.id }
+        }.filter { it.sender != me && it.createdAt > notified && it.isBubble }.distinctBy { it.id }
         if (fresh.isEmpty()) return
         NostrAccountStore.setDmNotified(context, fresh.maxOf { it.createdAt })
         fresh.groupBy { it.peers(me) }.forEach { (peers, msgs) ->
@@ -118,13 +130,15 @@ object NostrBackground {
             post(
                 context, CHANNEL_DM, ID_DM_BASE + Math.floorMod(peers.joinToString(",").hashCode(), 1000),
                 title = name(names, latest.sender) + if (msgs.size > 1) " (${msgs.size})" else "",
-                text = latest.content.take(200),
-                lines = msgs.sortedBy { it.createdAt }.takeLast(5).map { it.content.take(100) },
+                text = preview(latest).take(200),
+                lines = msgs.sortedBy { it.createdAt }.takeLast(5).map { preview(it).take(100) },
                 tab = "MESSAGES",
                 private = true
             )
         }
     }
+
+    private fun preview(m: Nip17.Message) = if (m.kind == Nip17.FILE) "📷 Photo" else m.content
 
     private fun post(context: Context, channel: String, id: Int, title: String, text: String, lines: List<String>, tab: String, private: Boolean) {
         ensureChannels(context)

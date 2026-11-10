@@ -107,6 +107,8 @@ object Nip19 {
     data class Pubkey(val hex: String, val relays: List<String> = emptyList()) : Entity
     data class SecretKey(val hex: String) : Entity
     data class Note(val id: String, val relays: List<String> = emptyList(), val author: String? = null, val kind: Int? = null) : Entity
+    /** A replaceable event by kind, author and "d" identifier, e.g. a long-form article. */
+    data class Address(val kind: Int, val pubkey: String, val identifier: String, val relays: List<String> = emptyList()) : Entity
 
     fun npub(pubkey: String) = Bech32.encode("npub", Hex.decode(pubkey))
     fun nsec(seckey: String) = Bech32.encode("nsec", Hex.decode(seckey))
@@ -134,6 +136,19 @@ object Nip19 {
         return Bech32.encode("nprofile", tlv.toByteArray())
     }
 
+    fun naddr(kind: Int, pubkey: String, identifier: String, relays: List<String> = emptyList()): String {
+        val tlv = ArrayList<Byte>()
+        fun put(type: Int, value: ByteArray) {
+            require(value.size <= 255) { "TLV value too long" }
+            tlv += type.toByte(); tlv += value.size.toByte(); value.forEach { tlv += it }
+        }
+        put(0, identifier.toByteArray())
+        relays.forEach { put(1, it.toByteArray()) }
+        put(2, Hex.decode(pubkey))
+        put(3, byteArrayOf((kind ushr 24).toByte(), (kind ushr 16).toByte(), (kind ushr 8).toByte(), kind.toByte()))
+        return Bech32.encode("naddr", tlv.toByteArray())
+    }
+
     /** Decodes a NIP-19 string, with or without a "nostr:" prefix; null if it isn't one. */
     fun decode(value: String): Entity? = runCatching {
         val (hrp, data) = Bech32.decode(value.removePrefix("nostr:"))
@@ -155,6 +170,18 @@ object Nip19 {
                         ((it[0].toInt() and 0xFF) shl 24) or ((it[1].toInt() and 0xFF) shl 16) or
                             ((it[2].toInt() and 0xFF) shl 8) or (it[3].toInt() and 0xFF)
                     }
+                )
+            }
+            "naddr" -> {
+                val tlv = parseTlv(data)
+                Address(
+                    kind = tlv.first(3).also { require(it.size == 4) { "bad kind" } }.let {
+                        ((it[0].toInt() and 0xFF) shl 24) or ((it[1].toInt() and 0xFF) shl 16) or
+                            ((it[2].toInt() and 0xFF) shl 8) or (it[3].toInt() and 0xFF)
+                    },
+                    pubkey = Hex.encode(tlv.first(2).requireKey()),
+                    identifier = String(tlv.first(0)),
+                    relays = tlv.all(1).map { String(it) }
                 )
             }
             else -> null

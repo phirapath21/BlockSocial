@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.btcwidget.nostr.core.Event
 import com.example.btcwidget.nostr.core.Events
 import com.example.btcwidget.nostr.core.Filter
+import com.example.btcwidget.nostr.core.ReplyTree
 import com.example.btcwidget.nostr.core.Kind
 import com.example.btcwidget.nostr.core.Profile
 import com.example.btcwidget.nostr.core.ThreadRef
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.ConcurrentHashMap
 
@@ -37,7 +39,9 @@ data class NoteStats(
     val likes: Int = 0,
     val zapMsat: Long = 0,
     val likedByMe: Boolean = false,
-    val repostedByMe: Boolean = false
+    val repostedByMe: Boolean = false,
+    /** The user's own reaction ("+" for a like, or an emoji), when [likedByMe]. */
+    val myReaction: String? = null
 )
 
 /** One row of a timeline: a note, or a repost of one. */
@@ -96,6 +100,11 @@ class NostrRepository private constructor(private val context: Context) {
     /** Pubkeys the user follows. */
     val following: StateFlow<Set<String>> = _following.asStateFlow()
 
+    /** Words, hashtags and threads from the mute list (accounts are in [muted]). */
+    private val _mutes = MutableStateFlow(com.example.btcwidget.nostr.core.MuteRules())
+    val mutes: StateFlow<com.example.btcwidget.nostr.core.MuteRules> = _mutes.asStateFlow()
+    /** Follows and their follows, when the web-of-trust filter is on and loaded. */
+    @Volatile private var trust: com.example.btcwidget.nostr.core.TrustNetwork? = null
     private val _muted = MutableStateFlow<Set<String>>(emptySet())
     /** Pubkeys the user muted (NIP-51 kind 10000); hidden everywhere. */
     val muted: StateFlow<Set<String>> = _muted.asStateFlow()
@@ -105,6 +114,15 @@ class NostrRepository private constructor(private val context: Context) {
     private var contactsEvent: Event? = null
     private var muteEvent: Event? = null
     private var bookmarkEvent: Event? = null
+    private var pinEvent: Event? = null
+    private var emojiListEvent: Event? = null
+    /** The user's custom emoji (NIP-30 kind 10030 list), shortcode to image. */
+    private val _emojis = MutableStateFlow<Map<String, String>>(emptyMap())
+    val emojis: StateFlow<Map<String, String>> = _emojis.asStateFlow()
+
+    private val _pinned = MutableStateFlow<List<String>>(emptyList())
+    /** The user's pinned note ids (NIP-51 kind 10001), first shown first. */
+    val pinned: StateFlow<List<String>> = _pinned.asStateFlow()
 
     private val _bookmarks = MutableStateFlow<List<String>>(emptyList())
     /** Note ids the user bookmarked (NIP-51 kind 10003), newest first. */
@@ -159,6 +177,17 @@ class NostrRepository private constructor(private val context: Context) {
         onLoggedIn()
     }
 
+    /** Logs in through a NIP-46 bunker:// link; waits for the signer to approve. */
+    suspend fun loginWithBunker(uri: String) {
+        val bunker = com.example.btcwidget.nostr.core.Nip46.parseBunker(uri)
+            ?: throw IllegalArgumentException("That isn't a bunker:// link")
+        val client = com.example.btcwidget.nostr.core.Schnorr.newSecretKey()
+        val pairing = BunkerSigner("", bunker.signerPubkey, bunker.relays, client)
+        val user = try { pairing.connect(bunker.secret) } finally { pairing.close() }
+        NostrAccountStore.saveBunker(context, user, bunker.signerPubkey, bunker.relays, client)
+        onLoggedIn()
+    }
+
     /** Accepts an nsec (or 64-char hex). Throws IllegalArgumentException if invalid. */
     fun loginWithSecret(input: String) {
         val trimmed = input.trim()
@@ -180,14 +209,57 @@ class NostrRepository private constructor(private val context: Context) {
     }
 
     private fun onLoggedIn() {
-        _account.value = NostrAccountStore.account(context)
+        val account = NostrAccountStore.account(context)
+        // Another account was active: drop everything loaded for it first.
+        if (_account.value != null && _account.value?.pubkey != account?.pubkey) resetSession()
+        _account.value = account
+        (signer as? BunkerSigner)?.close()
         signer = NostrAccountStore.signer(context)
+        _nwc.value = NostrAccountStore.nwc(context)?.let { com.example.btcwidget.nostr.core.Nwc.parse(it) }
+        _savedAccounts.value = NostrAccountStore.savedAccounts(context)
+    }
+
+    private val _savedAccounts = MutableStateFlow(NostrAccountStore.savedAccounts(context))
+    /** Other accounts on this phone that the user can switch to. */
+    val savedAccounts: StateFlow<List<NostrAccount>> = _savedAccounts.asStateFlow()
+
+    /** Switches to a saved account; the current one is saved aside. */
+    fun switchAccount(pubkey: String) {
+        NostrAccountStore.switchTo(context, pubkey)
+        resetSession()
+        onLoggedIn()
+    }
+
+    /** Saves the current account aside so another can log in (Add account). */
+    fun stashForNewLogin() {
+        if (_account.value == null) return
+        NostrAccountStore.stashActive(context)
+        resetSession()
+        _savedAccounts.value = NostrAccountStore.savedAccounts(context)
+    }
+
+    fun removeSavedAccount(pubkey: String) {
+        NostrAccountStore.removeSaved(context, pubkey)
+        Drafts.clear(context, pubkey)
+        _savedAccounts.value = NostrAccountStore.savedAccounts(context)
     }
 
     fun logout() {
+        pubkey?.let { Drafts.clear(context, it) }
+        NostrAccountStore.clear(context)
+        resetSession()
+        _savedAccounts.value = NostrAccountStore.savedAccounts(context)
+    }
+
+    /** Forgets everything loaded for the active account (not what's stored for it). */
+    private fun resetSession() {
+        (signer as? BunkerSigner)?.close()
         dms.reset()
         _nwc.value = null
-        NostrAccountStore.clear(context)
+        pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)
+        relayList = null
+        mediaServerList = null
+        mediaServers = emptyList()
         cache.clear()
         accountFresh = false
         _account.value = null
@@ -195,9 +267,15 @@ class NostrRepository private constructor(private val context: Context) {
         contactsEvent = null
         muteEvent = null
         bookmarkEvent = null
+        pinEvent = null
+        _pinned.value = emptyList()
+        emojiListEvent = null
+        _emojis.value = emptyMap()
         _bookmarks.value = emptyList()
         _following.value = emptySet()
         _muted.value = emptySet()
+        _mutes.value = com.example.btcwidget.nostr.core.MuteRules()
+        trust = null
         _stats.value = emptyMap()
     }
 
@@ -208,19 +286,22 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun loadAccount() {
         val me = pubkey ?: return
         val events = queryEverywhere(
-            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.RELAY_LIST, MEDIA_SERVER_LIST))),
+            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.PINNED, Kind.RELAY_LIST, MEDIA_SERVER_LIST, Kind.EMOJI_LIST))),
             timeoutMs = 6_000
         )
         applyAccountEvents(events, fromRelays = true)
         saveAccount()
+        scope.launch { runCatching { loadTrust() } }
     }
 
     private fun applyAccountEvents(events: List<Event>, fromRelays: Boolean) {
         fun latest(kind: Int) = events.filter { it.kind == kind }.maxByOrNull { it.createdAt }
         latest(Kind.METADATA)?.let { remember(it) }
         latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = it.tagValues("p").toSet() } }
+        latest(Kind.PINNED)?.let { if (it.createdAt >= (pinEvent?.createdAt ?: 0)) { pinEvent = it; _pinned.value = it.tagValues("e") } }
+        latest(Kind.EMOJI_LIST)?.let { if (it.createdAt >= (emojiListEvent?.createdAt ?: 0)) { emojiListEvent = it; _emojis.value = com.example.btcwidget.nostr.core.CustomEmoji.of(it) } }
         latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { bookmarkEvent = it; _bookmarks.value = it.tagValues("e").reversed() } }
-        latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { muteEvent = it; _muted.value = it.tagValues("p").toSet() } }
+        latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { muteEvent = it; _muted.value = it.tagValues("p").toSet(); _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(it) } }
         latest(MEDIA_SERVER_LIST)?.let { mediaServerList = it; mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(it) }
         latest(Kind.RELAY_LIST)?.let { list ->
             relayList = list
@@ -235,13 +316,13 @@ class NostrRepository private constructor(private val context: Context) {
 
     private fun saveAccount() {
         val me = pubkey ?: return
-        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, relayList, mediaServerList)
+        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList, emojiListEvent)
         scope.launch(Dispatchers.IO) { cache.saveEvents(ACCOUNT_CACHE, events) }
     }
 
     /** The home timeline saved last time, for an instant first screen. */
     suspend fun cachedHome(): List<FeedItem> = withContext(Dispatchers.IO) {
-        cache.loadFeed(HOME_CACHE).filter { it.note.pubkey !in _muted.value }.also { items ->
+        cache.loadFeed(HOME_CACHE).filter { !hidden(it.note) }.also { items ->
             items.forEach { remember(it.note) }
         }
     }
@@ -264,17 +345,17 @@ class NostrRepository private constructor(private val context: Context) {
         // Following nobody yet: show your own notes plus #bitcoin, so the timeline isn't empty.
         if (_following.value.isEmpty()) {
             return timeline(
-                Filter(authors = listOf(me), kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit),
+                Filter(authors = listOf(me), kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit),
                 Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("t" to listOf("bitcoin")), until = until, limit = limit)
             )
         }
         val authors = (_following.value + me).toList()
-        return authoredTimeline(authors) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit) }
+        return authoredTimeline(authors) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }
     }
 
     /** A profile's notes and reposts. */
     suspend fun profileFeed(pubkey: String, until: Long? = null, limit: Int = 30): List<FeedItem> =
-        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit) }
+        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }
 
     // ---- Outbox model (NIP-65): read people from the relays they write to ----
 
@@ -300,8 +381,12 @@ class NostrRepository private constructor(private val context: Context) {
      * Notes by [authors], from our relays and, at the same time, from the relays each of
      * them writes to (at most 12 extra relays, two per person). Merged into one timeline.
      */
-    private suspend fun authoredTimeline(authors: List<String>, filterFor: (List<String>) -> Filter): List<FeedItem> {
-        val events = coroutineScope {
+    private suspend fun authoredTimeline(authors: List<String>, filterFor: (List<String>) -> Filter): List<FeedItem> =
+        buildTimeline(authoredEvents(authors, filterFor = filterFor))
+
+    /** Events by [authors] from our relays, their write relays (outbox) and any [hints]. */
+    private suspend fun authoredEvents(authors: List<String>, hints: List<String> = emptyList(), filterFor: (List<String>) -> Filter): List<Event> =
+        coroutineScope {
             val ours = async { pool.query(listOf(filterFor(authors))) }
             val theirs = async {
                 runCatching {
@@ -314,9 +399,46 @@ class NostrRepository private constructor(private val context: Context) {
                     }.awaitAll().flatten()
                 }.getOrDefault(emptyList())
             }
-            (ours.await() + theirs.await()).distinctBy { it.id }
+            val hinted = async {
+                val urls = hints.filter { it.startsWith("wss://") && it !in pool.urls }.take(3).toSet()
+                if (urls.isEmpty()) emptyList() else runCatching {
+                    outbox.addRelays(urls)
+                    outbox.query(listOf(filterFor(authors)), timeoutMs = 5_000, only = urls)
+                }.getOrDefault(emptyList())
+            }
+            (ours.await() + theirs.await() + hinted.await()).distinctBy { it.id }
         }
-        return buildTimeline(events)
+
+    // ---- Long-form articles (NIP-23) ----
+
+    /** The latest version of the article at [address]. */
+    suspend fun article(address: com.example.btcwidget.nostr.core.Nip19.Address): com.example.btcwidget.nostr.core.Article? {
+        val events = authoredEvents(listOf(address.pubkey), address.relays) {
+            Filter(authors = it, kinds = listOf(address.kind), tags = mapOf("d" to listOf(address.identifier)), limit = 3)
+        }
+        val latest = events.filter { it.pubkey == address.pubkey && it.firstTag("d")?.get(1).orEmpty() == address.identifier }
+            .maxByOrNull { it.createdAt } ?: return null
+        enrich(listOf(latest.pubkey), listOf(latest.id))
+        return com.example.btcwidget.nostr.core.Article.of(latest)
+    }
+
+    /** Articles [pubkey] has written, newest first (one per identifier). */
+    suspend fun articlesBy(pubkey: String): List<com.example.btcwidget.nostr.core.Article> =
+        authoredEvents(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.ARTICLE), limit = 30) }
+            .filter { it.pubkey == pubkey }
+            .groupBy { it.firstTag("d")?.get(1).orEmpty() }
+            .mapNotNull { (_, versions) -> com.example.btcwidget.nostr.core.Article.of(versions.maxBy { it.createdAt }) }
+            .sortedByDescending { it.publishedAt }
+
+    /**
+     * Recent notes from everyone, for discovering people: from all our relays, or only from
+     * [relay] (which needn't be one of ours).
+     */
+    suspend fun globalFeed(relay: String? = null, until: Long? = null): List<FeedItem> {
+        val filter = Filter(kinds = listOf(Kind.TEXT_NOTE, Kind.POLL), until = until, limit = 40)
+        if (relay == null) return timeline(filter)
+        outbox.addRelays(listOf(relay))
+        return buildTimeline(outbox.query(listOf(filter), timeoutMs = 6_000, only = setOf(relay)))
     }
 
     /** Notes tagged with [hashtag]. */
@@ -342,12 +464,12 @@ class NostrRepository private constructor(private val context: Context) {
         }
         val items = events.mapNotNull { e ->
             when (e.kind) {
-                Kind.TEXT_NOTE -> FeedItem(e)
+                Kind.TEXT_NOTE, Kind.POLL -> FeedItem(e)
                 Kind.REPOST -> (embedded[e] ?: e.tagValues("e").firstOrNull()?.let { notes[it] })
                     ?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
                 else -> null
             }
-        }.filter { it.note.pubkey !in _muted.value && it.repostedBy !in _muted.value }
+        }.filter { !hidden(it.note) && it.repostedBy !in _muted.value && (it.repostedBy != null || trusted(it.note.pubkey)) }
             .distinctBy { it.key }
             .sortedByDescending { it.sortTime }
         items.forEach { remember(it.note) }
@@ -372,6 +494,19 @@ class NostrRepository private constructor(private val context: Context) {
 
     fun cachedNote(id: String): Event? = notes[id]
 
+    /** Hashtags starting with [prefix] in notes seen so far, most used first (for autocomplete). */
+    fun hashtagSuggestions(prefix: String, limit: Int = 5): List<String> {
+        val p = prefix.lowercase()
+        return notes.values.asSequence()
+            .flatMap { it.tagValues("t").asSequence() }
+            .map { it.lowercase() }
+            .filter { it.startsWith(p) && it != p && it.length <= 40 }
+            .groupingBy { it }.eachCount()
+            .entries.sortedByDescending { it.value }
+            .take(limit).map { it.key }
+            .ifEmpty { DEFAULT_TAGS.filter { it.startsWith(p) && it != p }.take(limit) }
+    }
+
     /** A thread around [noteId]: ancestors (oldest first), the note, and direct and nested replies. */
     suspend fun thread(noteId: String): Thread? {
         val focus = note(noteId) ?: return null
@@ -384,15 +519,16 @@ class NostrRepository private constructor(private val context: Context) {
         }
         val rootId = ThreadRef.of(focus).root ?: focus.id
         val replies = pool.query(listOf(Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("e" to listOf(rootId, focus.id).distinct()), limit = 200)))
-            .filter { it.pubkey !in _muted.value }
+            .filter { !hidden(it, threadMuteApplies = false) && trusted(it.pubkey) }
         replies.forEach { remember(it) }
-        val below = replies.filter { ThreadRef.of(it).parent == focus.id }.sortedBy { it.createdAt }
-        val all = ancestors + focus + below
+        val below = ReplyTree.flatten(focus.id, replies)
+        val all = ancestors + focus + below.map { it.event }
         enrich(all.map { it.pubkey }, all.map { it.id })
         return Thread(ancestors, focus, below)
     }
 
-    data class Thread(val ancestors: List<Event>, val focus: Event, val replies: List<Event>)
+    /** [replies] holds every reply below [focus], nested, in reading order. */
+    data class Thread(val ancestors: List<Event>, val focus: Event, val replies: List<ReplyTree.Row>)
 
     /** Replies, mentions, reposts, likes and zaps involving the user. */
     suspend fun notifications(limit: Int = 100): List<NostrNotification> {
@@ -418,7 +554,7 @@ class NostrRepository private constructor(private val context: Context) {
                 }
                 else -> null
             }
-        }.filter { it.actor !in _muted.value }
+        }.filter { it.actor !in _muted.value && !hidden(it.event) && trusted(it.actor) }
         enrich(out.map { it.actor }, emptyList())
         return out.sortedByDescending { it.event.createdAt }
     }
@@ -433,6 +569,7 @@ class NostrRepository private constructor(private val context: Context) {
         data class ProfileTarget(val pubkey: String) : Direct
         data class NoteTarget(val id: String) : Direct
         data class HashtagTarget(val tag: String) : Direct
+        data class ArticleTarget(val address: com.example.btcwidget.nostr.core.Nip19.Address) : Direct
     }
 
     /** npub/nprofile/note/nevent/hex, "#tag" or a NIP-05 address; null for free text. */
@@ -441,6 +578,7 @@ class NostrRepository private constructor(private val context: Context) {
         when (val e = com.example.btcwidget.nostr.core.Nip19.decode(q)) {
             is com.example.btcwidget.nostr.core.Nip19.Pubkey -> return Direct.ProfileTarget(e.hex)
             is com.example.btcwidget.nostr.core.Nip19.Note -> return Direct.NoteTarget(e.id)
+            is com.example.btcwidget.nostr.core.Nip19.Address -> if (e.kind == Kind.ARTICLE) return Direct.ArticleTarget(e)
             else -> Unit
         }
         if (q.startsWith("#") && q.length > 1 && q.drop(1).all { it.isLetterOrDigit() || it == '_' }) return Direct.HashtagTarget(q.drop(1))
@@ -458,7 +596,7 @@ class NostrRepository private constructor(private val context: Context) {
         val events = searchPool.query(listOf(Filter(kinds = listOf(Kind.METADATA), search = query.trim(), limit = 30)), 6_000)
         events.forEach { remember(it) }
         val wanted = events.map { it.pubkey }.distinct()
-        return wanted.mapNotNull { _profiles.value[it] }.filter { it.pubkey !in _muted.value }
+        return wanted.mapNotNull { _profiles.value[it] }.filter { it.pubkey !in _muted.value && trusted(it.pubkey) }
     }
 
     /** Notes matching [query] (NIP-50). */
@@ -655,7 +793,10 @@ class NostrRepository private constructor(private val context: Context) {
             update[target] = when (e.kind) {
                 Kind.TEXT_NOTE -> s.copy(replies = s.replies + 1)
                 Kind.REPOST -> s.copy(reposts = s.reposts + 1, repostedByMe = s.repostedByMe || e.pubkey == me)
-                Kind.REACTION -> if (e.content == "-") s else s.copy(likes = s.likes + 1, likedByMe = s.likedByMe || e.pubkey == me)
+                Kind.REACTION -> if (e.content == "-") s else s.copy(
+                    likes = s.likes + 1, likedByMe = s.likedByMe || e.pubkey == me,
+                    myReaction = if (e.pubkey == me) e.content else s.myReaction
+                )
                 Kind.ZAP_RECEIPT -> s.copy(zapMsat = s.zapMsat + (Zaps.parseReceipt(e)?.amountMsat ?: 0))
                 else -> s
             }
@@ -668,7 +809,8 @@ class NostrRepository private constructor(private val context: Context) {
         likes = maxOf(new.likes, if (old.likedByMe && !new.likedByMe) new.likes + 1 else new.likes),
         likedByMe = new.likedByMe || old.likedByMe,
         reposts = if (old.repostedByMe && !new.repostedByMe) new.reposts + 1 else new.reposts,
-        repostedByMe = new.repostedByMe || old.repostedByMe
+        repostedByMe = new.repostedByMe || old.repostedByMe,
+        myReaction = new.myReaction ?: old.myReaction
     )
 
     private fun remember(e: Event, save: Boolean = true) {
@@ -716,15 +858,88 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun quote(content: String, quoted: Event, extraTags: List<List<String>> = emptyList()): Event =
         publish(Events.quote(requireMe(), content, quoted, relayHint(), extraTags))
 
+    // ---- Media servers (Blossom, kind 10063) ----
+
+    /** The user's media servers, or empty when they use the default. */
+    fun mediaServerUrls(): List<String> = mediaServers
+
+    /** Publishes the media server list; empty goes back to the default server. */
+    suspend fun setMediaServers(urls: List<String>) {
+        val me = requireMe()
+        val clean = urls.map { it.trim().trimEnd('/') }.filter { it.startsWith("https://") }.distinct()
+        val event = publish(UnsignedEvent(me, Events.now(), MEDIA_SERVER_LIST, clean.map { listOf("server", it) }, ""))
+        mediaServerList = event
+        mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(event)
+        saveAccount()
+    }
+
+    // ---- Polls (NIP-88) ----
+
+    /** Votes on [poll], from the relays it names and ours. */
+    suspend fun pollTally(poll: com.example.btcwidget.nostr.core.Poll): com.example.btcwidget.nostr.core.Poll.Tally {
+        val filter = Filter(kinds = listOf(Kind.POLL_RESPONSE), tags = mapOf("e" to listOf(poll.event.id)), limit = 500)
+        val responses = coroutineScope {
+            val ours = async { pool.query(listOf(filter), 5_000, graceMs = 700) }
+            val theirs = async {
+                val urls = poll.relays.filter { it !in pool.urls }.take(4).toSet()
+                if (urls.isEmpty()) emptyList() else runCatching {
+                    outbox.addRelays(urls)
+                    outbox.query(listOf(filter), timeoutMs = 5_000, only = urls)
+                }.getOrDefault(emptyList())
+            }
+            (ours.await() + theirs.await()).distinctBy { it.id }.filter { it.verify() }
+        }
+        return poll.tally(responses, pubkey)
+    }
+
+    /** Votes for [optionIds]; sent to our relays and the ones the poll reads from. */
+    suspend fun vote(poll: com.example.btcwidget.nostr.core.Poll, optionIds: List<String>) {
+        val signed = requireSigner().sign(com.example.btcwidget.nostr.core.Poll.response(requireMe(), poll, optionIds))
+        val extra = poll.relays.filter { it !in pool.urls }.take(4).toSet()
+        val results = coroutineScope {
+            val ours = async { pool.publish(signed) }
+            val theirs = async {
+                if (extra.isEmpty()) emptyList() else runCatching { outbox.addRelays(extra); outbox.publish(signed, only = extra) }.getOrDefault(emptyList())
+            }
+            ours.await() + theirs.await()
+        }
+        if (results.none { it.accepted }) throw IllegalStateException("No relay accepted the vote")
+    }
+
+    /** Publishes a poll; votes are collected on our relays. */
+    suspend fun createPoll(question: String, options: List<String>, multipleChoice: Boolean, endsAt: Long?): Event =
+        publish(com.example.btcwidget.nostr.core.Poll.create(requireMe(), question, options, multipleChoice, endsAt, pool.urls.take(4).toList()))
+
     /**
      * Uploads [image] to the user's Blossom servers (or the default), trying up to three.
      * Signing the upload permission goes through the user's signer.
      */
     suspend fun uploadImage(image: PreparedImage): com.example.btcwidget.nostr.core.Blossom.Blob {
+        val sha = com.example.btcwidget.nostr.core.Blossom.sha256Hex(image.bytes)
+        return uploadBlob(sha, image.bytes.size.toLong()) { image.bytes.toRequestBody(image.mime.toMediaType()) }
+    }
+
+    /** Uploads already-encrypted bytes (a photo for a private message). */
+    suspend fun uploadEncrypted(bytes: ByteArray): com.example.btcwidget.nostr.core.Blossom.Blob {
+        val sha = com.example.btcwidget.nostr.core.Blossom.sha256Hex(bytes)
+        return uploadBlob(sha, bytes.size.toLong()) { bytes.toRequestBody("application/octet-stream".toMediaType()) }
+    }
+
+    /** Uploads a video as-is; the cached copy is deleted afterwards. */
+    suspend fun uploadVideo(video: PreparedVideo): com.example.btcwidget.nostr.core.Blossom.Blob = try {
+        uploadBlob(video.sha256, video.size) { video.file.asRequestBody(video.mime.toMediaType()) }
+    } finally {
+        video.file.delete()
+    }
+
+    /**
+     * Uploads a file to the user's Blossom servers (or the default), trying up to three.
+     * Signing the upload permission goes through the user's signer.
+     */
+    private suspend fun uploadBlob(sha: String, size: Long, body: () -> okhttp3.RequestBody): com.example.btcwidget.nostr.core.Blossom.Blob {
         val me = requireMe()
         val blossom = com.example.btcwidget.nostr.core.Blossom
-        val sha = blossom.sha256Hex(image.bytes)
-        val auth = requireSigner().sign(blossom.uploadAuth(me, sha, image.bytes.size.toLong()))
+        val auth = requireSigner().sign(blossom.uploadAuth(me, sha, size))
         val header = blossom.authHeader(auth)
         val servers = mediaServers.ifEmpty { listOf(blossom.DEFAULT_SERVER) }.take(3)
         var failure: Exception? = null
@@ -734,9 +949,9 @@ class NostrRepository private constructor(private val context: Context) {
                     val request = Request.Builder()
                         .url(blossom.uploadUrl(server))
                         .header("Authorization", header)
-                        .put(image.bytes.toRequestBody(image.mime.toMediaType()))
+                        .put(body())
                         .build()
-                    RelayPool.defaultClient.newCall(request).execute().use { r ->
+                    RelayPool.uploadClient.newCall(request).execute().use { r ->
                         if (!r.isSuccessful) {
                             error(r.header("X-Reason") ?: "${server.removePrefix("https://")} refused the upload (HTTP ${r.code})")
                         }
@@ -757,12 +972,16 @@ class NostrRepository private constructor(private val context: Context) {
         bump(note.id) { it.copy(reposts = it.reposts + 1, repostedByMe = true) }
     }
 
-    suspend fun like(note: Event) {
+    suspend fun like(note: Event) = react(note, "+")
+
+    /** Reacts with "+" (a like), an emoji, or ":code:" with [emojiUrl] (NIP-30). One reaction per note. */
+    suspend fun react(note: Event, content: String, emojiUrl: String? = null) {
         if (_stats.value[note.id]?.likedByMe == true) return
-        bump(note.id) { it.copy(likes = it.likes + 1, likedByMe = true) }
-        runCatching { publish(Events.reaction(requireMe(), note)) }
-            .onFailure { bump(note.id) { s -> s.copy(likes = (s.likes - 1).coerceAtLeast(0), likedByMe = false) }; throw it }
+        bump(note.id) { it.copy(likes = it.likes + 1, likedByMe = true, myReaction = content) }
+        runCatching { publish(Events.reaction(requireMe(), note, content, emojiUrl)) }
+            .onFailure { bump(note.id) { s -> s.copy(likes = (s.likes - 1).coerceAtLeast(0), likedByMe = false, myReaction = null) }; throw it }
     }
+
 
     suspend fun setFollowing(target: String, follow: Boolean) {
         val me = requireMe()
@@ -777,15 +996,75 @@ class NostrRepository private constructor(private val context: Context) {
     }
 
     /** Mutes (or unmutes) [target] with a public NIP-51 mute list. */
-    suspend fun setMuted(target: String, mute: Boolean) {
+    suspend fun setMuted(target: String, mute: Boolean) = setMuteEntry("p", target, mute)
+
+    /**
+     * Adds or removes one entry ("p" account, "word", "t" hashtag or "e" thread) on the mute
+     * list, keeping everything else on it (including other apps' private entries).
+     */
+    suspend fun setMuteEntry(type: String, value: String, mute: Boolean) {
         val me = requireMe()
         if (!accountFresh) loadAccount()
-        val others = muteEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "p" && it[1] == target }
-        val tags = if (mute) others + listOf(listOf("p", target)) else others
+        val v = if (type == "word" || type == "t") value.trim().lowercase().removePrefix("#") else value
+        if (v.isEmpty()) return
+        val others = muteEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == type && it[1].equals(v, ignoreCase = true) }
+        val tags = if (mute) others + listOf(listOf(type, v)) else others
         val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, muteEvent?.content.orEmpty()))
         muteEvent = event
         _muted.value = event.tagValues("p").toSet()
+        _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(event)
         saveAccount()
+    }
+
+    /** Removes every muted conversation ("e" entries) in one update. */
+    suspend fun unmuteAllThreads() {
+        val me = requireMe()
+        if (!accountFresh) loadAccount()
+        val tags = muteEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "e" }
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, muteEvent?.content.orEmpty()))
+        muteEvent = event
+        _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(event)
+        saveAccount()
+    }
+
+    /** Hidden by the mute list. [threadMuteApplies] is false inside a thread the user opened on purpose. */
+    private fun hidden(e: Event, threadMuteApplies: Boolean = true): Boolean {
+        if (e.pubkey in _muted.value) return true
+        val rules = _mutes.value
+        return if (threadMuteApplies) rules.hides(e) else rules.copy(threads = emptySet()).hides(e)
+    }
+
+    /** False for strangers when the web-of-trust filter is on (always true until it has loaded). */
+    fun trusted(pubkey: String): Boolean {
+        if (pubkey == this.pubkey) return true
+        val net = trust ?: return true
+        return pubkey in _following.value || net.contains(pubkey)
+    }
+
+    /**
+     * Loads the web of trust: the user's follows and whom they follow (up to 400 follows'
+     * lists), when the filter is on. Cheap to call again.
+     */
+    suspend fun loadTrust() {
+        val me = pubkey ?: return
+        if (!NostrAccountStore.wotFilter(context)) { trust = null; return }
+        if (trust != null) return
+        val follows = _following.value.toList()
+        val lists = coroutineScope {
+            follows.take(400).chunked(100).map { chunk ->
+                async { queryEverywhere(listOf(Filter(authors = chunk, kinds = listOf(Kind.CONTACTS))), timeoutMs = 6_000) }
+            }.awaitAll().flatten()
+        }
+        val second = lists.groupBy { it.pubkey }.values.asSequence()
+            .map { versions -> versions.maxBy { it.createdAt } }
+            .flatMap { it.tagValues("p").asSequence() }
+            .toList()
+        trust = com.example.btcwidget.nostr.core.TrustNetwork(me, follows, second)
+    }
+
+    fun setWotFilter(on: Boolean) {
+        NostrAccountStore.setWotFilter(context, on)
+        if (!on) trust = null
     }
 
     /**
@@ -801,6 +1080,28 @@ class NostrRepository private constructor(private val context: Context) {
         bookmarkEvent = event
         _bookmarks.value = event.tagValues("e").reversed()
         saveAccount()
+    }
+
+    /** Pins [note] to the top of the user's profile (first in their kind-10001 list), or unpins it. */
+    suspend fun setPinned(note: Event, on: Boolean) {
+        val me = requireMe()
+        require(note.pubkey == me) { "Only your own notes can be pinned" }
+        if (!accountFresh) loadAccount()
+        val others = pinEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "e" && it[1] == note.id }
+        val tags = if (on) listOf(listOf("e", note.id, relayHint())) + others else others
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.PINNED, tags, pinEvent?.content.orEmpty()))
+        pinEvent = event
+        _pinned.value = event.tagValues("e")
+        saveAccount()
+    }
+
+    /** The note [pubkey] pinned first, if any. */
+    suspend fun pinnedNoteOf(pubkey: String): Event? {
+        val ids = if (pubkey == this.pubkey) _pinned.value
+            else queryEverywhere(listOf(Filter(authors = listOf(pubkey), kinds = listOf(Kind.PINNED), limit = 1)))
+                .maxByOrNull { it.createdAt }?.tagValues("e").orEmpty()
+        val id = ids.firstOrNull() ?: return null
+        return note(id)?.takeIf { it.pubkey == pubkey }
     }
 
     /** The bookmarked notes, in bookmark order (newest first). */
@@ -819,8 +1120,8 @@ class NostrRepository private constructor(private val context: Context) {
      * "new posts" pill). Call the returned function to stop.
      */
     fun liveFeed(authors: List<String>, since: Long, onItem: (FeedItem) -> Unit): () -> Unit =
-        pool.subscribe(listOf(Filter(authors = authors, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), since = since + 1)), { e, _ ->
-            if (e.pubkey in _muted.value) return@subscribe
+        pool.subscribe(listOf(Filter(authors = authors, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), since = since + 1)), { e, _ ->
+            if (hidden(e)) return@subscribe
             val item = when (e.kind) {
                 Kind.TEXT_NOTE -> FeedItem(e)
                 else -> runCatching { Event.fromJson(e.content) }.getOrNull()
@@ -914,3 +1215,6 @@ class NostrRepository private constructor(private val context: Context) {
             }
     }
 }
+
+/** Suggested when no seen note has a matching hashtag yet. */
+private val DEFAULT_TAGS = listOf("bitcoin", "nostr", "lightning", "zap", "photography", "art", "music", "news", "plebchain", "grownostr", "thailand", "food", "travel", "memes", "introductions")
