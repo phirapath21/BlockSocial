@@ -63,6 +63,9 @@ class NoteActions(
     val report: (Event) -> Unit,
     val delete: (Event) -> Unit,
     val share: (Event) -> Unit,
+    val bookmark: (Event) -> Unit,
+    val isBookmarked: (String) -> Boolean,
+    val openImage: (String) -> Unit,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
     val me: String?
@@ -154,6 +157,10 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
             )
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Share") }, onClick = { menu = false; actions.share(note) })
+                DropdownMenuItem(
+                    text = { Text(if (actions.isBookmarked(note.id)) "Remove bookmark" else "Bookmark") },
+                    onClick = { menu = false; actions.bookmark(note) }
+                )
                 if (note.pubkey == actions.me) {
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; actions.delete(note) })
                 } else {
@@ -168,6 +175,30 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
 /** Note text with tappable links, hashtags and mentions; images and quoted notes below it. */
 @Composable
 fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int = 0) {
+    // NIP-36: hide behind a warning until the reader chooses to see it.
+    val warning = note.firstTag("content-warning") ?: note.tags.firstOrNull { it.firstOrNull() == "content-warning" }
+    var revealed by remember(note.id) { mutableStateOf(false) }
+    if (warning != null && !revealed) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(EInk.Body)
+                .padding(12.dp)
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("⚠ Sensitive content", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                warning.getOrNull(1)?.takeIf { it.isNotBlank() }?.let { Text(it, color = EInk.Label, fontSize = 13.sp) }
+            }
+            Text(
+                "Show", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable(onClickLabel = "Show sensitive content") { revealed = true }.padding(8.dp)
+            )
+        }
+        return
+    }
     val segments = remember(note.id) {
         // Links that imeta tags mark as images show as images even without a file extension.
         val images = com.example.btcwidget.nostr.core.Imeta.imageUrls(note)
@@ -214,7 +245,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 .heightIn(max = 320.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
-                .clickable { uriHandler.openUri(img.url) }
+                .clickable(onClickLabel = "View image") { actions.openImage(img.url) }
         )
     }
     if (depth == 0) {
