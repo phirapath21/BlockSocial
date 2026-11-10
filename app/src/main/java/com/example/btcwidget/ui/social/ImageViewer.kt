@@ -179,8 +179,8 @@ fun ImageViewer(
                     Avatar(author, note.pubkey, size = 44, onClick = { onDismiss(); actions.openProfile(note.pubkey) })
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                         Text(author?.bestName ?: Profile.shortNpub(note.pubkey), color = OnDark, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val handle = author?.nip05?.removePrefix("_@") ?: author?.name?.let { "@$it" }
-                        if (handle != null) Text(handle, color = OnDarkDim, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val handle = handleText(author, note.pubkey)
+                        Text(handle, color = OnDarkDim, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (!isMe) {
                         Text(

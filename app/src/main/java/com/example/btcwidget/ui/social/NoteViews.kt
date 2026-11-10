@@ -148,7 +148,7 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
         )
-        val handle = author?.nip05?.removePrefix("_@") ?: author?.name?.let { "@$it" }
+        val handle = handleText(author, note.pubkey)
         Text(
             text = listOfNotNull(handle, relativeTime(note.createdAt)).joinToString(" · ", prefix = " "),
             color = EInk.Caption,

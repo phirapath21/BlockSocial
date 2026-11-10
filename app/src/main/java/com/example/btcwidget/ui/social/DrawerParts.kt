@@ -38,7 +38,7 @@ fun DrawerAccountHeader(vm: SocialViewModel, onLogin: () -> Unit) {
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp)
         )
         Text(
-            profile?.nip05?.removePrefix("_@") ?: Profile.shortNpub(me),
+            handleText(profile, me),
             color = EInk.Caption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
         )
         Text("${compactCount(following.size)} Following", color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))

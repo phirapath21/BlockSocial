@@ -406,6 +406,31 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun searchNotes(query: String): List<FeedItem> =
         timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), search = query.trim(), limit = 40), source = searchPool)
 
+    // ---- NIP-05 verification ----
+
+    private val _nip05 = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    /** "pubkey|name@domain" → whether the domain's nostr.json really maps the name to that key. */
+    val nip05Verified: StateFlow<Map<String, Boolean>> = _nip05.asStateFlow()
+    private val nip05InFlight = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Checks [identifier] against https://domain/.well-known/nostr.json once per session.
+     * Until it's confirmed, the app doesn't show the address as verified.
+     */
+    fun verifyNip05(pubkey: String, identifier: String) {
+        val key = "$pubkey|$identifier"
+        if (_nip05.value.containsKey(key) || !nip05InFlight.add(key)) return
+        scope.launch(Dispatchers.IO) {
+            val ok = runCatching {
+                val url = com.example.btcwidget.nostr.core.Nip05.url(identifier) ?: return@runCatching false
+                val name = com.example.btcwidget.nostr.core.Nip05.parts(identifier)?.first ?: return@runCatching false
+                com.example.btcwidget.nostr.core.Nip05.pubkeyFrom(httpGet(url), name) == pubkey
+            }.getOrDefault(false)
+            _nip05.update { it + (key to ok) }
+            nip05InFlight.remove(key)
+        }
+    }
+
     /** Pubkeys whose profiles are being fetched, so concurrent screens don't ask twice. */
     private val profilesInFlight = ConcurrentHashMap.newKeySet<String>()
 

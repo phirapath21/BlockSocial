@@ -7,7 +7,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 
 ## 🔴 Important (do first)
 
-- [ ] **Verify NIP-05** (S): check `name@domain` against the domain's `nostr.json` before showing ✓; today it's shown unverified, so impersonation is easy.
+- [x] **Verify NIP-05** (S): check `name@domain` against the domain's `nostr.json` before showing ✓; today it's shown unverified, so impersonation is easy.
 - [ ] **Outbox model / per-author NIP-65** (M–L): read each person's notes from the relays they write to, so notes on other relays aren't missed.
 - [ ] **Link previews** (M): card with title and image for links in notes (OpenGraph).
 - [ ] **Video / GIF playback** (M): play videos and animated GIFs in notes; today only still images show.

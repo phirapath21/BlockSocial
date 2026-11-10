@@ -175,7 +175,7 @@ internal fun PersonRow(profile: Profile, isFollowing: Boolean, onClick: () -> Un
                 Text(profile.bestName, color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (isFollowing) Text("  · Following", color = EInk.Caption, fontSize = 12.sp)
             }
-            Text(profile.nip05?.removePrefix("_@") ?: Profile.shortNpub(profile.pubkey), color = EInk.Caption, fontSize = 13.sp, maxLines = 1)
+            Text(handleText(profile, profile.pubkey), color = EInk.Caption, fontSize = 13.sp, maxLines = 1)
             profile.about?.let {
                 Spacer(Modifier.height(2.dp))
                 Text(it, color = EInk.Label, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
