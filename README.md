@@ -55,6 +55,8 @@ Blockface is also a Nostr client with a familiar timeline layout.
 
 Code: `nostr/core` is plain Kotlin (events, NIP-19, Schnorr via ACINQ's secp256k1, relay protocol, zaps) with unit tests; `nostr/` holds the signers, key storage, the OkHttp relay pool and the repository; `ui/social` holds the screens.
 
+
+Planned work: see [`docs/TODO.md`](docs/TODO.md).
 ---
 
 ## ✨ Premium Features
