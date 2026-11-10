@@ -112,7 +112,13 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
             notesLoading = true
             articlesLoading = true
             val p = async { vm.searchPeople(q) }
-            val n = async { vm.searchNotes(q) }
+            val n = async {
+                // "#tag": notes with that hashtag (tag lookup on more relays), plus full-text matches.
+                val tag = com.example.btcwidget.nostr.core.HomeFeed.cleanTag(q).takeIf { q.startsWith("#") }
+                val tagged = if (tag != null) async { vm.hashtagFeed(tag) } else null
+                val text = vm.searchNotes(q)
+                ((tagged?.await().orEmpty()) + text).distinctBy { it.key }.sortedByDescending { it.sortTime }
+            }
             val a = async { vm.searchArticles(q) }
             people = (p.await() + local).distinctBy { it.pubkey }
             loading = false
