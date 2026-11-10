@@ -107,6 +107,8 @@ dependencies {
   testImplementation(libs.kotlinx.coroutines.test)
   // Real org.json for parser tests (android.jar only has stubs)
   testImplementation("org.json:json:20240303")
+  // Real SQLite on the JVM, to test the local event database's SQL
+  testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)

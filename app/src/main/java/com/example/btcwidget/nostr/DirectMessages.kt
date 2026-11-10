@@ -62,7 +62,16 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
         started = true
         _loading.value = true
         try {
-            open(repo.cache.loadEvents(WRAP_CACHE).filter { it.tagValues("p").contains(me) || (it.kind == Nip17.LEGACY_DM && it.pubkey == me) })
+            // Stored wraps (still encrypted), plus the file earlier versions wrote.
+            val legacyFile = repo.cache.loadEvents(WRAP_CACHE)
+            if (legacyFile.isNotEmpty()) { repo.events.insert(legacyFile); repo.cache.delete(WRAP_CACHE) }
+            val stored = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                repo.events.query(listOf(
+                    Filter(kinds = listOf(Nip17.GIFT_WRAP, Nip17.LEGACY_DM), tags = mapOf("p" to listOf(me)), limit = 3_000),
+                    Filter(kinds = listOf(Nip17.LEGACY_DM), authors = listOf(me), limit = 1_000)
+                ))
+            }
+            open(stored.filter { it.tagValues("p").contains(me) || (it.kind == Nip17.LEGACY_DM && it.pubkey == me) })
             val myList = repo.queryEverywhere(listOf(Filter(authors = listOf(me), kinds = listOf(Nip17.DM_RELAYS), limit = 1)))
                 .maxByOrNull { it.createdAt }
             val inboxRelays = Nip17.relaysFrom(myList)
@@ -118,7 +127,7 @@ class DirectMessages internal constructor(private val repo: NostrRepository) {
         opened.forEach { byId[it.id] = it }
         publishState()
         repo.loadProfiles(opened.flatMap { it.recipients + it.sender })
-        repo.scope.launch { repo.cache.saveEvents(WRAP_CACHE, wraps.values.sortedByDescending { it.createdAt }.take(2_000)) }
+        fresh.forEach { repo.store(it) }
     }
 
     private class Locked : Exception()

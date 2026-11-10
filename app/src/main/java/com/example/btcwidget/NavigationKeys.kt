@@ -43,3 +43,12 @@ import kotlinx.serialization.Serializable
 
 /** Account, notification, media server and inbox settings for Nostr. */
 @Serializable data object NostrSettingsKey : NavKey
+
+/** A NIP-72 community, by its coordinate "34550:<owner>:<id>". */
+@Serializable data class CommunityKey(val coordinate: String) : NavKey
+
+/** A NIP-28 public chat channel, by its creation event id. */
+@Serializable data class ChannelKey(val id: String) : NavKey
+
+/** A NIP-29 group, as "host'id". */
+@Serializable data class GroupKey(val address: String) : NavKey

@@ -1,6 +1,8 @@
 package com.example.btcwidget.ui.social
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -426,6 +428,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
         value = vm.pinnedNoteOf(pubkey)
     }
     var tab by androidx.compose.runtime.saveable.rememberSaveable(pubkey) { mutableStateOf(0) }
+    val badges by produceState<List<com.example.btcwidget.nostr.core.Badges.Definition>>(emptyList(), pubkey) { value = vm.badgesOf(pubkey) }
     // Loaded the first time the Articles tab opens.
     var articles by remember(pubkey) { mutableStateOf<List<com.example.btcwidget.nostr.core.Article>?>(null) }
     LaunchedEffect(pubkey, tab) { if (tab == 3 && articles == null) articles = vm.articlesBy(pubkey) }
@@ -483,6 +486,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         onUnmute = { vm.mute(pubkey, false) },
                         actions = actions
                     )
+                    BadgesRow(badges)
                     FeedTabs(listOf("Posts", "Replies", "Media", "Articles"), selected = tab) { tab = it }
                     pinnedNote?.takeIf { tab == 0 }?.let { pin ->
                         Text("📌 Pinned", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 8.dp))
@@ -588,3 +592,32 @@ private fun ProfileHeader(
 /** Zapping a profile (no note): a stand-in event that only carries the recipient. */
 private fun fakeProfileNote(pubkey: String) =
     com.example.btcwidget.nostr.core.Event("", pubkey, 0, -1, emptyList(), "", "")
+
+/** NIP-58 badges the person shows; tap one for its name and description. */
+@Composable
+private fun BadgesRow(badges: List<com.example.btcwidget.nostr.core.Badges.Definition>) {
+    if (badges.isEmpty()) return
+    var open by remember { mutableStateOf<com.example.btcwidget.nostr.core.Badges.Definition?>(null) }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
+        badges.forEach { b ->
+            Box(
+                Modifier.size(32.dp).clip(CircleShape).background(EInk.Body).clickable(onClickLabel = b.name) { open = b },
+                contentAlignment = Alignment.Center
+            ) {
+                if (b.image != null) coil3.compose.AsyncImage(model = b.image, contentDescription = b.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                else Text("🏅", fontSize = 16.sp)
+            }
+        }
+    }
+    open?.let { b ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { open = null },
+            title = { Text(b.name) },
+            text = { Text(b.description ?: "A badge awarded on Nostr.") },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { open = null }) { Text("OK") } }
+        )
+    }
+}

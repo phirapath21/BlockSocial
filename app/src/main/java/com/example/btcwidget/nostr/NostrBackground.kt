@@ -57,7 +57,9 @@ object NostrBackground {
     }
 
     private fun cachedNames(context: Context): Map<String, String> =
-        NostrCache(java.io.File(context.cacheDir, "nostr")).loadEvents("profiles")
+        runCatching {
+            EventStore(context).let { db -> try { db.query(listOf(Filter(kinds = listOf(Kind.METADATA), limit = 3_000))) } finally { db.close() } }
+        }.getOrDefault(emptyList())
             .mapNotNull { Profile.fromEvent(it) }.associate { it.pubkey to it.bestName }
 
     private fun name(names: Map<String, String>, pubkey: String) = names[pubkey] ?: Profile.shortNpub(pubkey)

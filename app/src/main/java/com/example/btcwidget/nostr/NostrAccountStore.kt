@@ -226,6 +226,7 @@ object NostrAccountStore {
     private const val PUSH = "push_enabled"
     private const val NOTIF_OFF = "notif_off"
     private const val WOT = "wot_filter"
+    private const val GROUPS = "groups"
     private const val DM_INBOX = "dm_inbox"
 
     /** Newest notification time the user has seen in the app (seconds). */
@@ -252,6 +253,10 @@ object NostrAccountStore {
     /** Phone notification types the user turned off: "reply", "mention", "repost", "like", "zap", "dm". */
     fun notificationsOff(context: Context): Set<String> = prefs(context).getStringSet(NOTIF_OFF, null)?.toSet().orEmpty()
     fun setNotificationsOff(context: Context, off: Set<String>) = prefs(context).edit().putStringSet(NOTIF_OFF, off).apply()
+
+    /** NIP-29 groups the user opened or joined, as "host'id". */
+    fun groups(context: Context): Set<String> = prefs(context).getStringSet(GROUPS, null)?.toSet().orEmpty()
+    fun setGroups(context: Context, groups: Set<String>) = prefs(context).edit().putStringSet(GROUPS, groups).apply()
 
     /** Hide replies, mentions and search results from accounts outside the user's network. */
     fun wotFilter(context: Context): Boolean = prefs(context).getBoolean(WOT, false)

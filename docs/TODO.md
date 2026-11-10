@@ -53,11 +53,11 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 
 ## 🟢 Advanced / extras
 
-- [ ] Communities (NIP-72), public chats (NIP-28), groups (NIP-29)
-- [ ] Badges (NIP-58)
-- [ ] Who to follow suggestions
+- [x] Communities (NIP-72), public chats (NIP-28), groups (NIP-29)
+- [x] Badges (NIP-58)
+- [x] Who to follow suggestions
 - [ ] "For you" feeds via DVMs (NIP-90)
-- [ ] Local event database (SQLite) instead of today's small cache
+- [x] Local event database (SQLite) instead of today's small cache
 - [ ] Instant notifications (needs a push server; today it checks every 15–60 min)
 - [ ] Scheduled posts
 

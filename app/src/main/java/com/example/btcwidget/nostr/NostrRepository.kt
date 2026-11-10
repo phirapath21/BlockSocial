@@ -78,10 +78,15 @@ class NostrRepository private constructor(private val context: Context) {
     /** Background work (profiles, counts, cache writes) that screens don't wait for. */
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     internal val cache = NostrCache(java.io.File(context.cacheDir, "nostr"))
+    /** The local event database (SQLite): what was seen, for instant and offline screens. */
+    internal val events = EventStore(context)
+    private val toStore = java.util.concurrent.ConcurrentLinkedQueue<Event>()
+    @Volatile private var storeJob: Job? = null
 
     /** Private messages (NIP-17). */
     val dms: DirectMessages by lazy { DirectMessages(this) }
-    private var saveProfilesJob: Job? = null
+    /** Communities, public chats and groups. */
+    val spaces: Spaces by lazy { Spaces(this) }
 
     /** True once the account's lists were read from relays this session (not just the cache). */
     @Volatile private var accountFresh = false
@@ -140,7 +145,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     // Outbox state: declared before init, whose cache loader fills it.
     /** Connections to other people's write relays (separate from the user's own relays). */
-    private val outbox = RelayPool()
+    internal val outbox = RelayPool()
 
     /** pubkey → write relays from their kind-10002 list; an empty list means "has none". */
     private val writeRelays = ConcurrentHashMap<String, List<String>>()
@@ -153,12 +158,20 @@ class NostrRepository private constructor(private val context: Context) {
         pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)
         // Show what we knew last time straight away; relays refresh it.
         cacheReady = scope.launch(Dispatchers.IO) {
-            cache.loadEvents(PROFILES_CACHE).forEach { remember(it, save = false) }
-            cache.loadEvents(RELAY_LIST_CACHE).forEach { e ->
+            // The database, plus the JSON files earlier versions wrote (moved into it once).
+            val legacyProfiles = cache.loadEvents(PROFILES_CACHE)
+            val legacyRelayLists = cache.loadEvents(RELAY_LIST_CACHE)
+            if (legacyProfiles.isNotEmpty() || legacyRelayLists.isNotEmpty()) {
+                events.insert(legacyProfiles + legacyRelayLists)
+                cache.delete(PROFILES_CACHE); cache.delete(RELAY_LIST_CACHE)
+            }
+            events.query(listOf(Filter(kinds = listOf(Kind.METADATA), limit = 3_000))).forEach { remember(it, save = false) }
+            events.query(listOf(Filter(kinds = listOf(Kind.RELAY_LIST), limit = 3_000))).forEach { e ->
                 relayListEvents[e.pubkey] = e
                 writeRelays[e.pubkey] = com.example.btcwidget.nostr.core.Outbox.writeRelays(e)
             }
             pubkey?.let { me -> applyAccountEvents(cache.loadEvents(ACCOUNT_CACHE).filter { it.pubkey == me }, fromRelays = false) }
+            events.prune(keep = 50_000, me = pubkey)
         }
     }
 
@@ -255,12 +268,15 @@ class NostrRepository private constructor(private val context: Context) {
     private fun resetSession() {
         (signer as? BunkerSigner)?.close()
         dms.reset()
+        spaces.reset()
         _nwc.value = null
         pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)
         relayList = null
         mediaServerList = null
         mediaServers = emptyList()
         cache.clear()
+        toStore.clear()
+        scope.launch(Dispatchers.IO) { this@NostrRepository.events.clear() }
         accountFresh = false
         _account.value = null
         signer = null
@@ -276,6 +292,7 @@ class NostrRepository private constructor(private val context: Context) {
         _muted.value = emptySet()
         _mutes.value = com.example.btcwidget.nostr.core.MuteRules()
         trust = null
+        followsLists = null
         _stats.value = emptyMap()
     }
 
@@ -318,6 +335,7 @@ class NostrRepository private constructor(private val context: Context) {
         val me = pubkey ?: return
         val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList, emojiListEvent)
         scope.launch(Dispatchers.IO) { cache.saveEvents(ACCOUNT_CACHE, events) }
+        events.forEach { store(it) }
     }
 
     /** The home timeline saved last time, for an instant first screen. */
@@ -372,9 +390,9 @@ class NostrRepository private constructor(private val context: Context) {
             val latest = lists.maxBy { it.createdAt }
             relayListEvents[pk] = latest
             writeRelays[pk] = com.example.btcwidget.nostr.core.Outbox.writeRelays(latest)
+            store(latest)
         }
         missing.forEach { writeRelays.putIfAbsent(it, emptyList()) }
-        scope.launch(Dispatchers.IO) { cache.saveEvents(RELAY_LIST_CACHE, relayListEvents.values.sortedByDescending { it.createdAt }.take(3_000)) }
     }
 
     /**
@@ -406,7 +424,8 @@ class NostrRepository private constructor(private val context: Context) {
                     outbox.query(listOf(filterFor(authors)), timeoutMs = 5_000, only = urls)
                 }.getOrDefault(emptyList())
             }
-            (ours.await() + theirs.await() + hinted.await()).distinctBy { it.id }
+            val stored = async(Dispatchers.IO) { events.query(listOf(filterFor(authors))) }
+            (ours.await() + theirs.await() + hinted.await() + stored.await()).distinctBy { it.id }
         }
 
     // ---- Long-form articles (NIP-23) ----
@@ -462,6 +481,7 @@ class NostrRepository private constructor(private val context: Context) {
         if (missing.isNotEmpty()) {
             pool.query(listOf(Filter(ids = missing)), 3_000, graceMs = 500).forEach { remember(it) }
         }
+        events.filter { it.kind == Kind.REPOST }.forEach { store(it) }
         val items = events.mapNotNull { e ->
             when (e.kind) {
                 Kind.TEXT_NOTE, Kind.POLL -> FeedItem(e)
@@ -486,6 +506,10 @@ class NostrRepository private constructor(private val context: Context) {
     /** A note by id, from cache or relays. */
     suspend fun note(id: String): Event? {
         notes[id]?.let { return it }
+        withContext(Dispatchers.IO) { events.query(listOf(Filter(ids = listOf(id)))) }.firstOrNull()?.let {
+            remember(it, save = false)
+            return it
+        }
         return pool.query(listOf(Filter(ids = listOf(id))), 4_000, graceMs = 400).firstOrNull()?.also {
             remember(it)
             enrich(listOf(it.pubkey), emptyList())
@@ -518,7 +542,9 @@ class NostrRepository private constructor(private val context: Context) {
             cursor = ThreadRef.of(parent).parent
         }
         val rootId = ThreadRef.of(focus).root ?: focus.id
-        val replies = pool.query(listOf(Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("e" to listOf(rootId, focus.id).distinct()), limit = 200)))
+        val replyFilter = Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("e" to listOf(rootId, focus.id).distinct()), limit = 200)
+        val stored = withContext(Dispatchers.IO) { events.query(listOf(replyFilter)) }
+        val replies = (pool.query(listOf(replyFilter)) + stored).distinctBy { it.id }
             .filter { !hidden(it, threadMuteApplies = false) && trusted(it.pubkey) }
         replies.forEach { remember(it) }
         val below = ReplyTree.flatten(focus.id, replies)
@@ -736,6 +762,12 @@ class NostrRepository private constructor(private val context: Context) {
     private val profilesInFlight = ConcurrentHashMap.newKeySet<String>()
 
     /** Fetches kind-0 profiles not yet known, from the user's relays and the indexers at once. */
+    /** [loadProfiles] in the background, for people seen in a live stream. */
+    fun loadProfilesLater(pubkeys: Collection<String>) {
+        val missing = pubkeys.filter { it !in _profiles.value }
+        if (missing.isNotEmpty()) scope.launch { runCatching { loadProfiles(missing) } }
+    }
+
     suspend fun loadProfiles(pubkeys: Collection<String>) {
         val missing = pubkeys.distinct().filter { !profileEvents.containsKey(it) && profilesInFlight.add(it) }
         if (missing.isEmpty()) return
@@ -820,19 +852,25 @@ class NostrRepository private constructor(private val context: Context) {
                 if (old == null || e.createdAt > old.createdAt) {
                     profileEvents[e.pubkey] = e
                     Profile.fromEvent(e)?.let { p -> _profiles.update { it + (e.pubkey to p) } }
-                    if (save) scheduleProfileSave()
+                    if (save) store(e)
                 }
             }
-            else -> notes[e.id] = e
+            else -> {
+                val isNew = notes.put(e.id, e) == null
+                if (save && isNew) store(e)
+            }
         }
     }
 
-    /** Writes profiles to disk a few seconds after the last change (newest 2,000 kept). */
-    private fun scheduleProfileSave() {
-        saveProfilesJob?.cancel()
-        saveProfilesJob = scope.launch(Dispatchers.IO) {
-            delay(3_000)
-            cache.saveEvents(PROFILES_CACHE, profileEvents.values.sortedByDescending { it.createdAt }.take(2_000))
+    /** Queues [e] for the local database; written in batches a moment later. */
+    internal fun store(e: Event) {
+        toStore.add(e)
+        if (storeJob?.isActive == true) return
+        storeJob = scope.launch(Dispatchers.IO) {
+            delay(1_500)
+            while (toStore.isNotEmpty()) {
+                events.insert(generateSequence { toStore.poll() }.take(2_000).toList())
+            }
         }
     }
 
@@ -1049,17 +1087,59 @@ class NostrRepository private constructor(private val context: Context) {
         val me = pubkey ?: return
         if (!NostrAccountStore.wotFilter(context)) { trust = null; return }
         if (trust != null) return
+        val lists = followsContactLists()
+        trust = com.example.btcwidget.nostr.core.TrustNetwork(me, _following.value, lists.values.flatten())
+    }
+
+    /** Whom each followed account follows (up to 400 of them), loaded once per session. */
+    @Volatile private var followsLists: Map<String, List<String>>? = null
+
+    private suspend fun followsContactLists(): Map<String, List<String>> {
+        followsLists?.let { return it }
         val follows = _following.value.toList()
         val lists = coroutineScope {
             follows.take(400).chunked(100).map { chunk ->
                 async { queryEverywhere(listOf(Filter(authors = chunk, kinds = listOf(Kind.CONTACTS))), timeoutMs = 6_000) }
             }.awaitAll().flatten()
         }
-        val second = lists.groupBy { it.pubkey }.values.asSequence()
-            .map { versions -> versions.maxBy { it.createdAt } }
-            .flatMap { it.tagValues("p").asSequence() }
-            .toList()
-        trust = com.example.btcwidget.nostr.core.TrustNetwork(me, follows, second)
+        val out = lists.groupBy { it.pubkey }.mapValues { (_, versions) -> versions.maxBy { it.createdAt }.tagValues("p") }
+        if (out.isNotEmpty()) followsLists = out
+        return out
+    }
+
+    /** People followed by several of the people you follow, most shared first, with that count. */
+    suspend fun followSuggestions(): List<Pair<Profile, Int>> {
+        val me = pubkey ?: return emptyList()
+        if (_following.value.isEmpty()) return emptyList()
+        val ranked = com.example.btcwidget.nostr.core.FollowSuggestions.rank(me, _following.value, followsContactLists(), exclude = _muted.value)
+        loadProfiles(ranked.map { it.first })
+        return ranked.mapNotNull { (pk, n) -> _profiles.value[pk]?.let { it to n } }
+    }
+
+    // ---- Badges (NIP-58) ----
+
+    /** Badges [pubkey] shows on their profile, verified against the issuers' awards. */
+    suspend fun badgesOf(pubkey: String): List<com.example.btcwidget.nostr.core.Badges.Definition> {
+        val profile = queryEverywhere(listOf(Filter(authors = listOf(pubkey), kinds = listOf(com.example.btcwidget.nostr.core.Badges.PROFILE), tags = mapOf("d" to listOf(com.example.btcwidget.nostr.core.Badges.PROFILE_D)), limit = 2)))
+            .maxByOrNull { it.createdAt }
+        val shown = com.example.btcwidget.nostr.core.Badges.shown(profile).take(30)
+        if (shown.isEmpty()) return emptyList()
+        val (awards, definitions) = coroutineScope {
+            val a = async { queryEverywhere(listOf(Filter(ids = shown.map { it.second }))) }
+            val d = async {
+                queryEverywhere(listOf(Filter(
+                    authors = shown.map { it.first.issuer }.distinct(), kinds = listOf(com.example.btcwidget.nostr.core.Badges.DEFINITION),
+                    tags = mapOf("d" to shown.map { it.first.id }.distinct())
+                )))
+            }
+            a.await() to d.await()
+        }
+        val awardById = awards.associateBy { it.id }
+        val defs = definitions.mapNotNull { com.example.btcwidget.nostr.core.Badges.Definition.of(it) }.groupBy { it.ref }.mapValues { it.value.first() }
+        return shown.mapNotNull { (ref, awardId) ->
+            val award = awardById[awardId] ?: return@mapNotNull null
+            if (!com.example.btcwidget.nostr.core.Badges.isValidAward(award, ref, pubkey)) null else defs[ref]
+        }
     }
 
     fun setWotFilter(on: Boolean) {
