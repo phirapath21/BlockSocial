@@ -34,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -47,6 +48,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.btcwidget.AppTheme
+import com.example.btcwidget.PriceData
+import com.example.btcwidget.ShareCard
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.DataSources
 import com.example.btcwidget.MetricCategory
@@ -83,6 +86,7 @@ fun MainScreen(
     // Notifications may have been allowed or blocked in system settings meanwhile.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationPermission() }
 
+    val context = LocalContext.current
     MainScreenContent(
         state = state,
         selectedTab = selectedTab,
@@ -105,6 +109,7 @@ fun MainScreen(
         dataSources = settings.dataSources,
         onDataSourcesChange = viewModel::setDataSources,
         history = history,
+        onShare = { key, data -> ShareCard.share(context, key, data, settings.currency, EInk.theme.palette) },
         onModeToggle = viewModel::setModeEnabled,
         onRefresh = viewModel::refreshData,
         isRefreshing = isRefreshing,
@@ -153,7 +158,8 @@ fun MainScreenContent(
     onStackChange: (Long, StackUnit) -> Unit = { _, _ -> },
     dataSources: DataSources = DataSources(PriceSource.COINBASE, ThbSource.CONVERTED),
     onDataSourcesChange: (DataSources) -> Unit = {},
-    history: List<PricePoint> = emptyList()
+    history: List<PricePoint> = emptyList(),
+    onShare: (String, PriceData) -> Unit = { _, _ -> }
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
     val stackValue = data?.takeIf { stackSats > 0 }?.let {
@@ -199,7 +205,8 @@ fun MainScreenContent(
                                 currencySetting = currencySetting,
                                 stackSats = stackSats,
                                 onSetUpStack = { onTabSelected(MainTab.SETTINGS) },
-                                history = history
+                                history = history,
+                                onShare = { key -> onShare(key, currentState.data) }
                             )
                             else -> Column(
                                 modifier = Modifier

@@ -1,6 +1,7 @@
 package com.example.btcwidget.ui.main
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,12 +23,13 @@ import androidx.compose.ui.unit.sp
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.PriceData
 import com.example.btcwidget.PricePoint
+import com.example.btcwidget.ShareText
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /** Metrics that can be pinned to the large panel at the top of the dashboard. */
-private val HERO_CHOICES = listOf("BLOCK", "PRICE", "SATS", "FEES")
+private val HERO_CHOICES = listOf("BLOCK", "PRICE", "HALVING", "SATS", "FEES")
 
 /**
  * The dashboard: one large panel for the chosen metric and the BTC price chart.
@@ -42,6 +44,8 @@ fun DashboardContent(
     stackSats: Long = 0,
     onSetUpStack: () -> Unit = {},
     history: List<PricePoint> = emptyList(),
+    /** Shares the hero metric (key) through the system share sheet. */
+    onShare: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val hasStack = stackSats > 0
@@ -77,8 +81,28 @@ fun DashboardContent(
             EInkDevice(
                 display = BlockclockMetrics.forKey(hero, data, currencySetting, stackSats),
                 aspectRatio = 2f,
-                stale = !data.lastFetchSuccessful
+                stale = !data.lastFetchSuccessful,
+                progress = if (hero == "HALVING") BlockclockMetrics.halvingProgress(data.blockHeight).toFloat() else null
             )
+        }
+
+        // Your stack is never shared: holdings stay private.
+        if (hero in ShareText.SHAREABLE) {
+            item(key = "share") {
+                Text(
+                    text = "SHARE ›",
+                    color = EInk.Value,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClickLabel = "Share ${BlockclockMetrics.MODE_NAMES.getOrElse(BlockclockMetrics.MODE_KEYS.indexOf(hero)) { hero }}") { onShare(hero) }
+                        .padding(vertical = 6.dp, horizontal = 4.dp)
+                )
+            }
         }
 
         item(key = "hero_choices") {

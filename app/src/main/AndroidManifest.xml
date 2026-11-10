@@ -23,6 +23,17 @@
 
         <!-- Lets the user pick what a widget shows when placing it (and later via
              long-press > reconfigure on Android 12+). -->
+        <!-- Hands the shared metric image to the app the user picks in the share sheet. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths" />
+        </provider>
+
         <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
