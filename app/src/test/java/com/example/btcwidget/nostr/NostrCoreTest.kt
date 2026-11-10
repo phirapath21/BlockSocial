@@ -255,3 +255,73 @@ class NostrCoreTest {
         assertEquals(listOf<Byte>(1, 2, 3), data.toList())
     }
 }
+
+class Nip05AndSearchTest {
+    @org.junit.Test
+    fun nip05Parsing() {
+        org.junit.Assert.assertEquals("bob" to "example.com", com.example.btcwidget.nostr.core.Nip05.parts("Bob@Example.com"))
+        org.junit.Assert.assertEquals("_" to "example.com", com.example.btcwidget.nostr.core.Nip05.parts("example.com"))
+        org.junit.Assert.assertNull(com.example.btcwidget.nostr.core.Nip05.parts("hello world"))
+        org.junit.Assert.assertNull(com.example.btcwidget.nostr.core.Nip05.parts("bitcoin"))
+        org.junit.Assert.assertEquals("https://example.com/.well-known/nostr.json?name=bob", com.example.btcwidget.nostr.core.Nip05.url("bob@example.com"))
+        val pk = "ab".repeat(32)
+        org.junit.Assert.assertEquals(pk, com.example.btcwidget.nostr.core.Nip05.pubkeyFrom("{\"names\":{\"bob\":\"$pk\"}}", "Bob"))
+        org.junit.Assert.assertNull(com.example.btcwidget.nostr.core.Nip05.pubkeyFrom("{\"names\":{\"bob\":\"xyz\"}}", "bob"))
+        org.junit.Assert.assertNull(com.example.btcwidget.nostr.core.Nip05.pubkeyFrom("not json", "bob"))
+    }
+
+    @org.junit.Test
+    fun searchFilterIsSentAndNotCheckedLocally() {
+        val f = com.example.btcwidget.nostr.core.Filter(kinds = listOf(0), search = "satoshi", limit = 20)
+        org.junit.Assert.assertEquals("satoshi", f.toJson().getString("search"))
+        val e = com.example.btcwidget.nostr.core.Event("i", "p", 0, 0, emptyList(), "{}", "")
+        org.junit.Assert.assertTrue(f.matches(e))
+    }
+}
+
+class BlossomTest {
+    private val sec = com.example.btcwidget.nostr.core.Schnorr.newSecretKey()
+    private val pub = com.example.btcwidget.nostr.core.Schnorr.publicKey(sec)
+
+    @org.junit.Test
+    fun uploadAuthAndHeader() {
+        val bytes = "hello".toByteArray()
+        val sha = com.example.btcwidget.nostr.core.Blossom.sha256Hex(bytes)
+        org.junit.Assert.assertEquals("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", sha)
+        val u = com.example.btcwidget.nostr.core.Blossom.uploadAuth(pub, sha, bytes.size.toLong(), now = 1000)
+        org.junit.Assert.assertEquals(24242, u.kind)
+        org.junit.Assert.assertTrue(listOf("t", "upload") in u.tags && listOf("x", sha) in u.tags && listOf("expiration", "1300") in u.tags)
+        val signed = u.signed(com.example.btcwidget.nostr.core.Schnorr.sign(u.id, sec))
+        val header = com.example.btcwidget.nostr.core.Blossom.authHeader(signed)
+        org.junit.Assert.assertTrue(header.startsWith("Nostr "))
+        val decoded = String(java.util.Base64.getDecoder().decode(header.removePrefix("Nostr ")))
+        org.junit.Assert.assertTrue(com.example.btcwidget.nostr.core.Event.fromJson(decoded).verify())
+    }
+
+    @org.junit.Test
+    fun parseUploadChecksHash() {
+        val sha = "ab".repeat(32)
+        val ok = com.example.btcwidget.nostr.core.Blossom.parseUpload("{\"url\":\"https://b.example/$sha.jpg\",\"sha256\":\"$sha\",\"size\":10,\"type\":\"image/jpeg\"}", sha)
+        org.junit.Assert.assertEquals("https://b.example/$sha.jpg", ok.getOrThrow().url)
+        org.junit.Assert.assertTrue(com.example.btcwidget.nostr.core.Blossom.parseUpload("{\"url\":\"https://b/x\",\"sha256\":\"${"cd".repeat(32)}\"}", sha).isFailure)
+        org.junit.Assert.assertTrue(com.example.btcwidget.nostr.core.Blossom.parseUpload("<html>", sha).isFailure)
+    }
+
+    @org.junit.Test
+    fun serverListAndImeta() {
+        val list = com.example.btcwidget.nostr.core.Event("i", pub, 0, 10063, listOf(listOf("server", "https://a.example/"), listOf("server", "http://insecure"), listOf("r", "x")), "", "")
+        org.junit.Assert.assertEquals(listOf("https://a.example"), com.example.btcwidget.nostr.core.Blossom.serversFrom(list))
+        val tag = com.example.btcwidget.nostr.core.Imeta.tag("https://a.example/h", "image/jpeg", "ab".repeat(32), 800, 600)
+        org.junit.Assert.assertEquals(listOf("imeta", "url https://a.example/h", "m image/jpeg", "x ${"ab".repeat(32)}", "dim 800x600"), tag)
+        val note = com.example.btcwidget.nostr.core.Events.note(pub, "look https://a.example/h", listOf(tag))
+        val e = note.signed("")
+        org.junit.Assert.assertEquals(setOf("https://a.example/h"), com.example.btcwidget.nostr.core.Imeta.imageUrls(e))
+    }
+
+    @org.junit.Test
+    fun replyCarriesExtraTags() {
+        val parent = com.example.btcwidget.nostr.core.Events.note(pub, "p").let { it.signed(com.example.btcwidget.nostr.core.Schnorr.sign(it.id, sec)) }
+        val tag = com.example.btcwidget.nostr.core.Imeta.tag("https://a/b.jpg", "image/jpeg", "ab".repeat(32))
+        org.junit.Assert.assertTrue(tag in com.example.btcwidget.nostr.core.Events.reply(pub, "r", parent, extraTags = listOf(tag)).tags)
+    }
+}

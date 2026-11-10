@@ -20,5 +20,11 @@ import kotlinx.serialization.Serializable
 /** Logging in or creating a Nostr account. */
 @Serializable data object LoginKey : NavKey
 
+/** The community rules. */
+@Serializable data object RulesKey : NavKey
+
+/** Search for people, notes and hashtags. */
+@Serializable data object SearchKey : NavKey
+
 /** Editing the user's own profile. */
 @Serializable data object EditProfileKey : NavKey

@@ -11,7 +11,9 @@ With Nostr, the app sends what the user posts to Nostr relays (third parties the
   - **Personal info › User IDs:** the Nostr public key. Purpose: App functionality. Optional (only with a Nostr account).
   - **Personal info › Name:** the profile name the user sets. App functionality. Optional.
   - **Messages › Other in-app messages** and **App activity › Other user-generated content:** notes, replies, reposts, likes, follows, mutes, reports, zap comments. App functionality. Optional.
+  - **Photos and videos › Photos:** images the user attaches to a post, uploaded to a Blossom media server. App functionality. Optional. EXIF metadata (including location) is removed before upload.
   - **App activity › Other actions** is not needed beyond the above.
+  - **App activity › In-app search history:** search words are sent to NIP-50 search relays when the user searches. App functionality. Optional. Not stored by the developer.
 - **Is data processed ephemerally?** No (relays store public notes).
 - **Is all of the user data collected by your app encrypted in transit?** Yes: relays use wss:// (TLS), APIs use HTTPS. (Users can add a plain ws:// relay themselves; mention this if the form asks.)
 - **Can users request deletion?** The app sends NIP-09 deletion requests for the user's own notes, and logging out deletes the key from the phone. Relays are third parties; the developer can't delete data from them. Answer per the form's options and point to the privacy policy.
@@ -19,7 +21,7 @@ With Nostr, the app sends what the user posts to Nostr relays (third parties the
 
 ## User-generated content (Google Play UGC policy)
 
-Apps where users post content must, in the app: let users **report** objectionable content (Report on each note → NIP-56 report), let users **block** abusive users (Mute account → NIP-51 mute list, hides them everywhere in the app), and publish **terms that forbid objectionable content**. Still to do before release: add a short "Community rules" page (link in Settings › About and at sign-up) stating that illegal content, harassment and spam are not allowed and that reported accounts may be muted by default.
+Apps where users post content must, in the app: let users **report** objectionable content (Report on each note → NIP-56 report), let users **block** abusive users (Mute account → NIP-51 mute list, hides them everywhere in the app), and publish **terms that forbid objectionable content**: the **Community rules** page (Settings › Nostr › Community rules, and linked at sign-up; same text in `docs/community-rules.md`).
 
 ## App access
 

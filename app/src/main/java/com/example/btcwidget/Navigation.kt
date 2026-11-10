@@ -32,8 +32,10 @@ fun MainNavigation() {
         entry<ProfileKey> { key -> ProfileScreen(social, key.pubkey, navigate, back) }
         entry<HashtagKey> { key -> HashtagScreen(social, key.tag, navigate, back) }
         entry<ComposeKey> { key -> ComposeScreen(social, key.replyTo, key.quote, back) }
-        entry<LoginKey> { LoginScreen(social, onBack = back, onDone = back) }
+        entry<LoginKey> { LoginScreen(social, onBack = back, onDone = back, onOpenRules = { navigate(RulesKey) }) }
         entry<EditProfileKey> { EditProfileScreen(social, back) }
+        entry<RulesKey> { com.example.btcwidget.ui.social.CommunityRulesScreen(back) }
+        entry<SearchKey> { com.example.btcwidget.ui.social.SearchScreen(social, navigate, back) }
       },
   )
 }

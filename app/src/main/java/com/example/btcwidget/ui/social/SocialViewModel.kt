@@ -171,6 +171,29 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun followingOf(pubkey: String) = runCatching { repo.followingOf(pubkey) }.getOrDefault(emptySet())
     fun loadProfiles(pubkeys: Collection<String>) = viewModelScope.launch { runCatching { repo.loadProfiles(pubkeys) } }
 
+    // ---- Images ----
+
+    /** An uploaded image waiting to be posted. */
+    data class Attachment(val url: String, val mime: String, val sha256: String, val width: Int, val height: Int)
+
+    /** Prepares (strips metadata) and uploads a picked image; [onResult] gets it, or null on failure. */
+    fun uploadImage(uri: android.net.Uri, onResult: (Attachment?) -> Unit) {
+        var result: Attachment? = null
+        act("Couldn't upload the image", finally = { onResult(result) }) {
+            val prepared = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                com.example.btcwidget.nostr.ImagePrep.prepare(getApplication(), uri)
+            }
+            val blob = repo.uploadImage(prepared)
+            result = Attachment(blob.url, prepared.mime, blob.sha256, prepared.width, prepared.height)
+        }
+    }
+
+    // ---- Search ----
+
+    suspend fun resolve(query: String) = runCatching { repo.resolve(query) }.getOrNull()
+    suspend fun searchPeople(query: String) = runCatching { repo.searchPeople(query) }.getOrDefault(emptyList())
+    suspend fun searchNotes(query: String) = runCatching { repo.searchNotes(query) }.getOrDefault(emptyList())
+
     // ---- Actions ----
 
     fun like(note: Event) = act("Couldn't like") { repo.like(note) }
@@ -189,14 +212,17 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     }
     fun updateProfile(profile: Profile, onDone: () -> Unit) = act("Couldn't save your profile") { repo.updateProfile(profile); onDone() }
 
-    /** Posts a note, reply or quote; [onResult] gets whether it was published. */
-    fun send(text: String, replyTo: Event?, quote: Event?, onResult: (Boolean) -> Unit) {
+    /** Posts a note, reply or quote with any uploaded images; [onResult] gets whether it was published. */
+    fun send(text: String, replyTo: Event?, quote: Event?, images: List<Attachment> = emptyList(), onResult: (Boolean) -> Unit) {
         var ok = false
         act("Couldn't post", finally = { onResult(ok) }) {
+            // Image URLs go in the text (so every client shows them) with imeta tags (NIP-92).
+            val body = (listOf(text.trim()) + images.map { it.url }).filter { it.isNotEmpty() }.joinToString("\n")
+            val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height) }
             val event = when {
-                replyTo != null -> repo.reply(text, replyTo)
-                quote != null -> repo.quote(text, quote)
-                else -> repo.post(text)
+                replyTo != null -> repo.reply(body, replyTo, tags)
+                quote != null -> repo.quote(body, quote, tags)
+                else -> repo.post(body, tags)
             }
             if (replyTo == null) _home.update { it.copy(items = listOf(FeedItem(event)) + it.items) }
             ok = true

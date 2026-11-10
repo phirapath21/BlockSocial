@@ -19,7 +19,9 @@ Blockface is also a Nostr client with a familiar timeline layout. The bottom bar
 - **Notes:** reply (NIP-10 threads), repost (kind 6), quote (NIP-18 `q` tag), like (kind 7), zap (NIP-57, pays through your Lightning wallet app), share link, delete your own (NIP-09).
 - **Profiles:** banner, avatar, bio, NIP-05, Lightning address, follow/unfollow (kind 3, keeps your other follows), edit your own (kind 0).
 - **Notifications:** replies, mentions, reposts, likes and zaps.
-- **Safety:** mute accounts (NIP-51 mute list) and report notes (NIP-56).
+- **Safety:** mute accounts (NIP-51 mute list) and report notes (NIP-56); in-app Community rules (`docs/community-rules.md`).
+- **Search:** people, posts and #hashtags via NIP-50 search relays; an npub, note id, nevent or name@domain (NIP-05) opens directly.
+- **Photos:** attach up to 4 images per post with the system photo picker. They're re-encoded on the phone (EXIF and GPS removed), uploaded to Blossom (your kind-10063 servers or blossom.primal.net), and posted with NIP-92 `imeta` tags.
 - **Relays:** relay.damus.io, nos.lol and relay.primal.net by default, your NIP-65 relay list when you have one, or your own list in Settings.
 
 Code: `nostr/core` is plain Kotlin (events, NIP-19, Schnorr via ACINQ's secp256k1, relay protocol, zaps) with unit tests; `nostr/` holds the signers, key storage, the OkHttp relay pool and the repository; `ui/social` holds the screens.
