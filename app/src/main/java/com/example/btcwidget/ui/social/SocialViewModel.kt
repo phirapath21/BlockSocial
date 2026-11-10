@@ -400,6 +400,25 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     val pinned get() = repo.pinned
 
+    // ---- Polls (NIP-88) ----
+
+    suspend fun pollTally(poll: com.example.btcwidget.nostr.core.Poll) = runCatching { repo.pollTally(poll) }.getOrNull()
+
+    fun vote(poll: com.example.btcwidget.nostr.core.Poll, optionIds: List<String>, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't vote", finally = { onResult(ok) }) { repo.vote(poll, optionIds); ok = true }
+    }
+
+    fun createPoll(question: String, options: List<String>, multipleChoice: Boolean, durationSeconds: Long?, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't post the poll", finally = { onResult(ok) }) {
+            val endsAt = durationSeconds?.let { System.currentTimeMillis() / 1000 + it }
+            val event = repo.createPoll(question, options, multipleChoice, endsAt)
+            _home.update { it.copy(items = listOf(FeedItem(event)) + it.items) }
+            ok = true
+        }
+    }
+
     // ---- Translation (on the device, ML Kit) ----
 
     sealed interface Translation {

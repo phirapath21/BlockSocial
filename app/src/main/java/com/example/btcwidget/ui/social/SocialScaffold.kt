@@ -90,6 +90,8 @@ fun SocialScaffold(
         openEngagement = { n, tab -> navigate(com.example.btcwidget.EngagementKey(n.id, tab)) },
         profileOf = { profiles[it] },
         resolveNote = { vm.note(it) },
+        pollTally = { vm.pollTally(it) },
+        vote = { poll, ids, done -> if (account == null) { navigate(LoginKey); done(false) } else vm.vote(poll, ids, done) },
         translate = { n, text -> vm.toggleTranslation(n, text) },
         translation = { translations[it] },
         resolveArticle = { vm.article(it) },

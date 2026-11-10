@@ -500,4 +500,22 @@ class OutboxTest {
         assertEquals(Markdown.Block.Image("https://x/y.png", "alt"), blocks[6])
         assertEquals(Markdown.Block.Rule, blocks[7])
     }
+
+    @Test
+    fun pollTallyCountsLatestVotePerPerson() {
+        val unsigned = com.example.btcwidget.nostr.core.Poll.create("pk", "Best?", listOf("A", " B ", ""), false, endsAt = 100, relays = listOf("wss://r"), now = 1)
+        val poll = com.example.btcwidget.nostr.core.Poll.of(unsigned.signed("s"))!!
+        assertEquals(listOf("A", "B"), poll.options.map { it.label })
+        fun vote(who: String, at: Long, vararg ids: String) = com.example.btcwidget.nostr.core.Poll.response(who, poll, ids.toList(), now = at).signed("s")
+        val t = poll.tally(listOf(
+            vote("x", 10, "opt0"), vote("x", 20, "opt1"),   // changed mind: B
+            vote("y", 30, "opt0"),
+            vote("z", 200, "opt0"),                        // after the end
+            Event("i", "w", 5, Kind.POLL_RESPONSE, listOf(listOf("e", poll.event.id), listOf("response", "opt0"), listOf("response", "opt1")), "", "s")
+        ), me = "x")
+        assertEquals(1 + 1, t.count("opt0"))   // y and w (single choice keeps w's first)
+        assertEquals(1, t.count("opt1"))
+        assertEquals(3, t.voters)
+        assertEquals(setOf("opt1"), t.mine)
+    }
 }

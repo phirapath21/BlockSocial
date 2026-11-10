@@ -27,7 +27,7 @@ Uninstalling the app or clearing its storage deletes all of this.
 
 ## Nostr: what you publish is public
 
-When you post, reply, quote, repost, like, follow, mute, report, zap or edit your profile, the app signs an event with your key and sends it to your Nostr relays (by default relay.damus.io, nos.lol and relay.primal.net, or the list you set). These events are **public**, are signed by your public key, and may be copied by other relays and apps. Deleting a note sends a deletion request; relays and people who already have a copy may keep it. The developer does not operate these relays and cannot remove content from them.
+When you post, reply, quote, repost, like, follow, mute, report, zap, vote in a poll or edit your profile, the app signs an event with your key and sends it to your Nostr relays (by default relay.damus.io, nos.lol and relay.primal.net, or the list you set). These events are **public**, are signed by your public key, and may be copied by other relays and apps. Deleting a note sends a deletion request; relays and people who already have a copy may keep it. The developer does not operate these relays and cannot remove content from them.
 
 To show your timeline, profiles, threads and notifications, the app requests public events from your relays. To show notes from people you follow, the app also asks the relays those people say they publish to (their NIP-65 lists), so those relays see your IP address and whose notes you load. Profiles, follow lists and relay lists are also requested from public indexer relays (purplepag.es, user.kindpag.es and indexer.coracle.social), so people's names and pictures load even when they publish elsewhere. Relays see your IP address and which events you ask for (for example, whose notes you load). Each relay's own policy applies.
 
@@ -50,6 +50,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 **Link previews:** to show a card for a web link in a note, the app reads the start of that page (title, description and image) from the linked site, which can see your IP address. Nothing about you is sent beyond a normal web request.
 
 **Translating notes:** when you tap Translate, the note is translated on your phone with Google's ML Kit; its text is not sent anywhere. The first time you translate from a language, the app downloads that language's model (about 30 MB) from Google's servers. ML Kit, a Google library inside the app, also sends Google basic information about how the translation feature runs (such as device type, app version and performance), never the text of notes; see Google's ML Kit terms and privacy information. Nothing is downloaded or sent to Google until you first translate.
+
+**Polls:** your vote is a public event signed by your key, sent to your relays and to the relays the poll names (where its votes are collected). Anyone can see how you voted.
 
 **Long-form articles:** to open an article, the app asks your relays, the author's relays and any relay named in the link.
 

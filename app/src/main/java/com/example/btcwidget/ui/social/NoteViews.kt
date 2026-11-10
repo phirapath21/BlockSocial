@@ -77,6 +77,9 @@ class NoteActions(
     val isFollowing: (String) -> Boolean,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
+    val pollTally: suspend (com.example.btcwidget.nostr.core.Poll) -> com.example.btcwidget.nostr.core.Poll.Tally?,
+    /** Votes; the callback gets whether it was sent. Logged out, goes to log in instead. */
+    val vote: (com.example.btcwidget.nostr.core.Poll, List<String>, (Boolean) -> Unit) -> Unit,
     /** Translates the note (text without links), or shows the original if it is translated. */
     val translate: (Event, String) -> Unit,
     val translation: (String) -> SocialViewModel.Translation?,
@@ -285,6 +288,9 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 modifier = Modifier.padding(top = 6.dp).clickable { actions.translate(note, translatableText(note, actions)) }
             )
         }
+    }
+    if (note.kind == com.example.btcwidget.nostr.core.Kind.POLL) {
+        com.example.btcwidget.nostr.core.Poll.of(note)?.let { PollView(it, actions) }
     }
     segments.filterIsInstance<Content.Segment.Image>().take(4).forEach { img ->
         AsyncImage(

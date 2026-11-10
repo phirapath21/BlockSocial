@@ -217,6 +217,11 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     var images by remember { mutableStateOf<List<SocialViewModel.Attachment>>(emptyList()) }
     var uploading by remember { mutableStateOf(0) }
     var sensitive by remember { mutableStateOf(false) }
+    // A poll (NIP-88) instead of a note: only for new posts.
+    var poll by remember { mutableStateOf(false) }
+    var pollOptions by remember { mutableStateOf(listOf("", "")) }
+    var pollMulti by remember { mutableStateOf(false) }
+    var pollDays by remember { mutableStateOf(1) }
     // "@name" picked from suggestions → pubkey; turned into nostr:npub links when sending.
     var mentions by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val following by vm.following.collectAsState()
@@ -300,6 +305,26 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     }
                 }
             }
+            if (poll) {
+                Column(Modifier.fillMaxWidth().padding(top = 8.dp).border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(12.dp)).padding(10.dp)) {
+                    pollOptions.forEachIndexed { i, value ->
+                        OutlinedTextField(
+                            value = value,
+                            onValueChange = { v -> pollOptions = pollOptions.toMutableList().also { it[i] = v.take(25) } },
+                            placeholder = { Text("Choice ${i + 1}" + if (i >= 2) " (optional)" else "") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState())) {
+                        if (pollOptions.size < 4) com.example.btcwidget.ui.main.EInkChip(text = "+ CHOICE", selected = false, onClick = { pollOptions = pollOptions + "" })
+                        com.example.btcwidget.ui.main.EInkChip(text = if (pollMulti) "MULTIPLE" else "ONE CHOICE", selected = pollMulti, onClick = { pollMulti = !pollMulti })
+                        listOf(1, 3, 7).forEach { d ->
+                            com.example.btcwidget.ui.main.EInkChip(text = "${d}D", selected = pollDays == d, onClick = { pollDays = d })
+                        }
+                    }
+                }
+            }
             if (images.isNotEmpty() || uploading > 0) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -337,9 +362,18 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     color = EInk.Value, fontSize = 22.sp,
                     modifier = Modifier
                         .clip(CircleShape)
-                        .clickable(enabled = images.size + uploading < 4, onClickLabel = "Add image") {
+                        .clickable(enabled = !poll && images.size + uploading < 4, onClickLabel = "Add image") {
                             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                         }
+                        .padding(8.dp)
+                )
+                if (replyTo == null && quote == null) Text(
+                    "📊",
+                    color = EInk.Value, fontSize = 20.sp,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(if (poll) EInk.Body else EInk.Background)
+                        .clickable(enabled = images.isEmpty() && uploading == 0, onClickLabel = if (poll) "Remove poll" else "Add poll") { poll = !poll }
                         .padding(8.dp)
                 )
                 Text(
@@ -356,13 +390,18 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
                 )
                 val canSend = !sending && uploading == 0 && (text.isNotBlank() || images.isNotEmpty() || quote != null) &&
-                    (replyTo == null && quote == null || target != null)
+                    (replyTo == null && quote == null || target != null) &&
+                    (!poll || text.isNotBlank() && pollOptions.count { it.isNotBlank() } >= 2)
                 PillButton(if (sending) "Posting…" else if (replyTo != null) "Reply" else "Post", filled = canSend) {
                     if (!canSend) return@PillButton
                     sending = true
                     // "@handle" → nostr:npub… so it links and notifies them (and gets a "p" tag).
                     val body = mentions.entries.fold(text.trim()) { acc, (handle, pk) ->
                         acc.replace(Regex("@" + Regex.escape(handle) + "(?![\\p{L}\\p{M}\\p{N}_])"), "nostr:" + com.example.btcwidget.nostr.core.Nip19.npub(pk))
+                    }
+                    if (poll) {
+                        vm.createPoll(body, pollOptions, pollMulti, pollDays * 86_400L) { ok -> if (ok) onBack() else sending = false }
+                        return@PillButton
                     }
                     vm.send(body, replyTo?.let { target }, quote?.let { target }, images, if (sensitive) "Sensitive content" else null) { ok ->
                         // Success closes the screen; a failure re-enables the button.

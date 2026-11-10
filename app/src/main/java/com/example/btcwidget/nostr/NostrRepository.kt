@@ -273,17 +273,17 @@ class NostrRepository private constructor(private val context: Context) {
         // Following nobody yet: show your own notes plus #bitcoin, so the timeline isn't empty.
         if (_following.value.isEmpty()) {
             return timeline(
-                Filter(authors = listOf(me), kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit),
+                Filter(authors = listOf(me), kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit),
                 Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("t" to listOf("bitcoin")), until = until, limit = limit)
             )
         }
         val authors = (_following.value + me).toList()
-        return authoredTimeline(authors) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit) }
+        return authoredTimeline(authors) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }
     }
 
     /** A profile's notes and reposts. */
     suspend fun profileFeed(pubkey: String, until: Long? = null, limit: Int = 30): List<FeedItem> =
-        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit) }
+        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }
 
     // ---- Outbox model (NIP-65): read people from the relays they write to ----
 
@@ -363,7 +363,7 @@ class NostrRepository private constructor(private val context: Context) {
      * [relay] (which needn't be one of ours).
      */
     suspend fun globalFeed(relay: String? = null, until: Long? = null): List<FeedItem> {
-        val filter = Filter(kinds = listOf(Kind.TEXT_NOTE), until = until, limit = 40)
+        val filter = Filter(kinds = listOf(Kind.TEXT_NOTE, Kind.POLL), until = until, limit = 40)
         if (relay == null) return timeline(filter)
         outbox.addRelays(listOf(relay))
         return buildTimeline(outbox.query(listOf(filter), timeoutMs = 6_000, only = setOf(relay)))
@@ -392,7 +392,7 @@ class NostrRepository private constructor(private val context: Context) {
         }
         val items = events.mapNotNull { e ->
             when (e.kind) {
-                Kind.TEXT_NOTE -> FeedItem(e)
+                Kind.TEXT_NOTE, Kind.POLL -> FeedItem(e)
                 Kind.REPOST -> (embedded[e] ?: e.tagValues("e").firstOrNull()?.let { notes[it] })
                     ?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
                 else -> null
@@ -769,6 +769,43 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun quote(content: String, quoted: Event, extraTags: List<List<String>> = emptyList()): Event =
         publish(Events.quote(requireMe(), content, quoted, relayHint(), extraTags))
 
+    // ---- Polls (NIP-88) ----
+
+    /** Votes on [poll], from the relays it names and ours. */
+    suspend fun pollTally(poll: com.example.btcwidget.nostr.core.Poll): com.example.btcwidget.nostr.core.Poll.Tally {
+        val filter = Filter(kinds = listOf(Kind.POLL_RESPONSE), tags = mapOf("e" to listOf(poll.event.id)), limit = 500)
+        val responses = coroutineScope {
+            val ours = async { pool.query(listOf(filter), 5_000, graceMs = 700) }
+            val theirs = async {
+                val urls = poll.relays.filter { it !in pool.urls }.take(4).toSet()
+                if (urls.isEmpty()) emptyList() else runCatching {
+                    outbox.addRelays(urls)
+                    outbox.query(listOf(filter), timeoutMs = 5_000, only = urls)
+                }.getOrDefault(emptyList())
+            }
+            (ours.await() + theirs.await()).distinctBy { it.id }.filter { it.verify() }
+        }
+        return poll.tally(responses, pubkey)
+    }
+
+    /** Votes for [optionIds]; sent to our relays and the ones the poll reads from. */
+    suspend fun vote(poll: com.example.btcwidget.nostr.core.Poll, optionIds: List<String>) {
+        val signed = requireSigner().sign(com.example.btcwidget.nostr.core.Poll.response(requireMe(), poll, optionIds))
+        val extra = poll.relays.filter { it !in pool.urls }.take(4).toSet()
+        val results = coroutineScope {
+            val ours = async { pool.publish(signed) }
+            val theirs = async {
+                if (extra.isEmpty()) emptyList() else runCatching { outbox.addRelays(extra); outbox.publish(signed, only = extra) }.getOrDefault(emptyList())
+            }
+            ours.await() + theirs.await()
+        }
+        if (results.none { it.accepted }) throw IllegalStateException("No relay accepted the vote")
+    }
+
+    /** Publishes a poll; votes are collected on our relays. */
+    suspend fun createPoll(question: String, options: List<String>, multipleChoice: Boolean, endsAt: Long?): Event =
+        publish(com.example.btcwidget.nostr.core.Poll.create(requireMe(), question, options, multipleChoice, endsAt, pool.urls.take(4).toList()))
+
     /**
      * Uploads [image] to the user's Blossom servers (or the default), trying up to three.
      * Signing the upload permission goes through the user's signer.
@@ -894,7 +931,7 @@ class NostrRepository private constructor(private val context: Context) {
      * "new posts" pill). Call the returned function to stop.
      */
     fun liveFeed(authors: List<String>, since: Long, onItem: (FeedItem) -> Unit): () -> Unit =
-        pool.subscribe(listOf(Filter(authors = authors, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), since = since + 1)), { e, _ ->
+        pool.subscribe(listOf(Filter(authors = authors, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), since = since + 1)), { e, _ ->
             if (e.pubkey in _muted.value) return@subscribe
             val item = when (e.kind) {
                 Kind.TEXT_NOTE -> FeedItem(e)

@@ -123,8 +123,8 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
     }
 
     /** Sends [event] to every relay and waits for their OK (or [timeoutMs]). */
-    suspend fun publish(event: Event, timeoutMs: Long = 8_000): List<PublishResult> {
-        val targets = relays.values.toList()
+    suspend fun publish(event: Event, timeoutMs: Long = 8_000, only: Set<String>? = null): List<PublishResult> {
+        val targets = relays.values.filter { only == null || it.url in only }
         val waiters = targets.associateWith { r ->
             CompletableDeferred<PublishResult>().also { okWaiters[r.url + " " + event.id] = it }
         }

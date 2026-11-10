@@ -23,7 +23,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Nested reply threads (today: one level)
 - [x] Long-form articles (NIP-23)
 - [x] Translate notes (e.g. into Thai)
-- [ ] Polls (NIP-88)
+- [x] Polls (NIP-88)
 
 ### Writing
 - [ ] Drafts (NIP-37)
