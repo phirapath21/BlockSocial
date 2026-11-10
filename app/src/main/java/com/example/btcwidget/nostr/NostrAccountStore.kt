@@ -13,7 +13,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** How the account signs. */
-enum class SignerType { AMBER, LOCAL }
+enum class SignerType { AMBER, LOCAL, BUNKER }
 
 /** The logged-in account as stored on the device. */
 data class NostrAccount(val pubkey: String, val type: SignerType, val signerPackage: String? = null)
@@ -62,6 +62,24 @@ object NostrAccountStore {
         return NostrAccount(pubkey, SignerType.LOCAL)
     }
 
+    private const val BUNKER_SIGNER = "bunker_signer"
+    private const val BUNKER_RELAYS = "bunker_relays"
+
+    /**
+     * Stores a NIP-46 bunker account: the user's [pubkey], the remote signer and its relays,
+     * and this app's throwaway client key (sealed like a private key; it can't sign as the user).
+     */
+    fun saveBunker(context: Context, pubkey: String, signerPubkey: String, relays: List<String>, clientSeckey: String) {
+        stashIfOther(context, pubkey)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, keystoreKey()) }
+        val sealed = cipher.iv + cipher.doFinal(Hex.decode(clientSeckey))
+        prefs(context).edit().clear()
+            .putString(PUBKEY, pubkey).putString(TYPE, SignerType.BUNKER.name)
+            .putString(BUNKER_SIGNER, signerPubkey).putString(BUNKER_RELAYS, relays.joinToString("\n"))
+            .putString(SECRET, Base64.encodeToString(sealed, Base64.NO_WRAP))
+            .commit()
+    }
+
     /** The decrypted private key of a LOCAL account; null if missing or unreadable. */
     fun secretKey(context: Context): String? = runCatching {
         val sealed = Base64.decode(prefs(context).getString(SECRET, null) ?: return null, Base64.NO_WRAP)
@@ -94,6 +112,18 @@ object NostrAccountStore {
         return when (account.type) {
             SignerType.LOCAL -> secretKey(context)?.let { LocalSigner(it) }
             SignerType.AMBER -> account.signerPackage?.let { AmberSigner(context.applicationContext, account.pubkey, it) }
+            SignerType.BUNKER -> {
+                val p = prefs(context)
+                val remote = p.getString(BUNKER_SIGNER, null) ?: return null
+                val relays = p.getString(BUNKER_RELAYS, null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+                val client = secretKey(context) ?: return null
+                val app = context.applicationContext
+                BunkerSigner(account.pubkey, remote, relays, client) { url ->
+                    runCatching {
+                        app.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                }
+            }
         }
     }
 
@@ -103,7 +133,7 @@ object NostrAccountStore {
      */
     fun clear(context: Context) {
         prefs(context).edit().clear().commit()
-        if (savedAccounts(context).none { it.type == SignerType.LOCAL }) {
+        if (savedAccounts(context).none { it.type != SignerType.AMBER }) {
             runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KEY_ALIAS) }
         }
     }
@@ -174,7 +204,7 @@ object NostrAccountStore {
     /** Removes a saved (inactive) account from this phone, including its encrypted key. */
     fun removeSaved(context: Context, pubkey: String) {
         saved(context).edit().remove(pubkey).commit()
-        if (account(context)?.type != SignerType.LOCAL && savedAccounts(context).none { it.type == SignerType.LOCAL }) {
+        if ((account(context)?.type ?: SignerType.AMBER) == SignerType.AMBER && savedAccounts(context).none { it.type != SignerType.AMBER }) {
             runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KEY_ALIAS) }
         }
     }

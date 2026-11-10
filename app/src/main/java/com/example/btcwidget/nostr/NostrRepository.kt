@@ -172,6 +172,17 @@ class NostrRepository private constructor(private val context: Context) {
         onLoggedIn()
     }
 
+    /** Logs in through a NIP-46 bunker:// link; waits for the signer to approve. */
+    suspend fun loginWithBunker(uri: String) {
+        val bunker = com.example.btcwidget.nostr.core.Nip46.parseBunker(uri)
+            ?: throw IllegalArgumentException("That isn't a bunker:// link")
+        val client = com.example.btcwidget.nostr.core.Schnorr.newSecretKey()
+        val pairing = BunkerSigner("", bunker.signerPubkey, bunker.relays, client)
+        val user = try { pairing.connect(bunker.secret) } finally { pairing.close() }
+        NostrAccountStore.saveBunker(context, user, bunker.signerPubkey, bunker.relays, client)
+        onLoggedIn()
+    }
+
     /** Accepts an nsec (or 64-char hex). Throws IllegalArgumentException if invalid. */
     fun loginWithSecret(input: String) {
         val trimmed = input.trim()
@@ -197,6 +208,7 @@ class NostrRepository private constructor(private val context: Context) {
         // Another account was active: drop everything loaded for it first.
         if (_account.value != null && _account.value?.pubkey != account?.pubkey) resetSession()
         _account.value = account
+        (signer as? BunkerSigner)?.close()
         signer = NostrAccountStore.signer(context)
         _nwc.value = NostrAccountStore.nwc(context)?.let { com.example.btcwidget.nostr.core.Nwc.parse(it) }
         _savedAccounts.value = NostrAccountStore.savedAccounts(context)
@@ -236,6 +248,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     /** Forgets everything loaded for the active account (not what's stored for it). */
     private fun resetSession() {
+        (signer as? BunkerSigner)?.close()
         dms.reset()
         _nwc.value = null
         pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)

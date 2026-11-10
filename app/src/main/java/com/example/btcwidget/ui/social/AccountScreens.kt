@@ -91,7 +91,7 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val hasSigner = remember { AmberSigner.isInstalled(context) }
-    var mode by remember { mutableStateOf("choose") }   // choose | nsec | create | backup
+    var mode by remember { mutableStateOf("choose") }   // choose | bunker | nsec | create | backup
     var input by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -117,7 +117,7 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                     if (saved.isNotEmpty()) {
                         Text("On this phone", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         saved.forEach { a ->
-                            AccountRow(profiles[a.pubkey], a.pubkey, if (a.type == com.example.btcwidget.nostr.SignerType.AMBER) "Signer app" else "Key on this phone") {
+                            AccountRow(profiles[a.pubkey], a.pubkey, when (a.type) { com.example.btcwidget.nostr.SignerType.AMBER -> "Signer app"; com.example.btcwidget.nostr.SignerType.BUNKER -> "Remote signer"; else -> "Key on this phone" }) {
                                 com.example.btcwidget.ui.main.EInkChip(text = "USE", selected = true, onClick = { vm.switchAccount(a.pubkey); onDone() })
                             }
                         }
@@ -132,6 +132,9 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                     ) {
                         if (hasSigner) vm.loginWithAmber(onDone) else uriHandler.openUri("https://github.com/greenart7c3/Amber")
                     }
+                    Option("Remote signer (bunker)", "Use a NIP-46 signer such as nsec.app: paste its bunker:// link. Your key stays with that signer.", "Use bunker", false) {
+                        mode = "bunker"; error = null; input = ""
+                    }
                     Option("Log in with nsec", "Paste your private key. It's encrypted with this phone's secure hardware and never backed up or sent anywhere.", "Use nsec", false) {
                         mode = "nsec"; error = null
                     }
@@ -143,6 +146,34 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                         color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 16.dp).clickable(onClickLabel = "Open community rules", onClick = onOpenRules).padding(vertical = 6.dp)
                     )
+                }
+                "bunker" -> {
+                    var connecting by remember { mutableStateOf(false) }
+                    Text("Remote signer", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "In your signer (nsec.app, nsecBunker…) create a connection for Blockface and paste its bunker:// link. " +
+                            "You may need to approve the connection there.",
+                        color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                    )
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it.trim(); error = null },
+                        label = { Text("bunker://…") },
+                        singleLine = true,
+                        isError = error != null,
+                        colors = fieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    error?.let { Text(it, color = EInk.Alert, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
+                    Spacer(Modifier.height(14.dp))
+                    PillButton(if (connecting) "Waiting for the signer…" else "Connect", filled = input.startsWith("bunker://") && !connecting) {
+                        if (!input.startsWith("bunker://") || connecting) return@PillButton
+                        connecting = true
+                        vm.loginWithBunker(input) { e ->
+                            connecting = false
+                            if (e == null) onDone() else error = e
+                        }
+                    }
                 }
                 "nsec" -> {
                     val focus = remember { FocusRequester() }

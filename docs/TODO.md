@@ -34,7 +34,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 
 ### Account and settings
 - [x] Multiple accounts and switching
-- [ ] NIP-46 remote signer (bunker), for people not using Amber
+- [x] NIP-46 remote signer (bunker), for people not using Amber
 - [x] Export nsec, with a warning, for accounts using an nsec or created in the app
 - [x] Settings for media servers (Blossom list) and DM inbox relays
 - [x] Notification settings by type (e.g. turn off likes)

@@ -228,7 +228,7 @@ fun NostrSettingsPanel(
             val npub = Nip19.npub(account.pubkey)
             SettingRow(
                 npub.take(12) + "…" + npub.takeLast(6),
-                note = if (account.type == SignerType.AMBER) "Signed by your signer app" else "Key encrypted on this device"
+                note = when (account.type) { SignerType.AMBER -> "Signed by your signer app"; SignerType.BUNKER -> "Signed by your remote signer (bunker)"; else -> "Key encrypted on this device" }
             ) {
                 EInkChip(text = if (confirmLogout) "SURE?" else "LOG OUT", selected = confirmLogout, onClick = {
                     if (confirmLogout) onLogout() else confirmLogout = true

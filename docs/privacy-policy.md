@@ -15,6 +15,7 @@ The app keeps the following only on your device, in its private app storage:
 - **Widget state** — the mode, range or quote each placed widget shows.
 - **Your Nostr account** — your public key and, depending on how you log in:
   - **with a signer app** (such as Amber): which signer app to use. Your private key stays in that app and is never seen by Blockface.
+  - **with a remote signer (NIP-46 bunker, such as nsec.app)**: the signer's public key and relays, and a throwaway "client" key the app uses only to talk to that signer, encrypted like a private key. Your private key stays with the signer. Each signing request goes, encrypted, through the signer's relays, which see that your app and the signer are talking; if the signer asks you to approve on a web page, the app opens it in your browser.
   - **with an nsec or a new account**: your private key, encrypted with a key held in the phone's Android Keystore that cannot be exported. It is never sent anywhere, is excluded from Android backup and device transfer, and is deleted when you log out.
 - **Other accounts you add** — if you add more than one Nostr account, the inactive ones are kept the same way (keys still encrypted with the Keystore key), excluded from backup and device transfer, until you remove them from the phone.
 - **Your relay list**, if you edit it.

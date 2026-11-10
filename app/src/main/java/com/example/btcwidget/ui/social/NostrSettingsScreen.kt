@@ -96,7 +96,7 @@ private fun AccountsSection(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     Section("Accounts", "Switch between Nostr accounts on this phone.")
     account?.let { AccountRow(profiles[it.pubkey], it.pubkey, "Active") {} }
     saved.forEach { a ->
-        AccountRow(profiles[a.pubkey], a.pubkey, if (a.type == SignerType.AMBER) "Signer app" else "Key on this phone") {
+        AccountRow(profiles[a.pubkey], a.pubkey, when (a.type) { SignerType.AMBER -> "Signer app"; SignerType.BUNKER -> "Remote signer"; else -> "Key on this phone" }) {
             EInkChip(text = "SWITCH", selected = true, onClick = { vm.switchAccount(a.pubkey) })
             EInkChip(text = "REMOVE", selected = false, onClick = { removing = a.pubkey })
         }

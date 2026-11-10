@@ -130,6 +130,23 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         afterLogin(); onDone()
     }
 
+    /** Logs in with a bunker:// link; [onResult] gets an error message, or null on success. */
+    fun loginWithBunker(uri: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val error = try {
+                repo.loginWithBunker(uri); afterLogin(); null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SignerRejected) {
+                "The signer declined"
+            } catch (e: Exception) {
+                Log.d("SocialViewModel", "bunker login failed", e)
+                e.message ?: "Couldn't connect to the signer"
+            }
+            onResult(error)
+        }
+    }
+
     /** Returns an error message, or null on success. */
     fun loginWithSecret(input: String): String? = try {
         repo.loginWithSecret(input)
@@ -188,7 +205,9 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /** The nsec of an account whose key is on this phone; null for signer-app accounts. */
-    fun exportNsec(): String? = store.secretKey(getApplication())?.let { com.example.btcwidget.nostr.core.Nip19.nsec(it) }
+    fun exportNsec(): String? = store.secretKey(getApplication())
+        ?.takeIf { store.account(getApplication())?.type == com.example.btcwidget.nostr.SignerType.LOCAL }
+        ?.let { com.example.btcwidget.nostr.core.Nip19.nsec(it) }
 
     fun mediaServers(): List<String> = repo.mediaServerUrls()
     fun setMediaServers(urls: List<String>, onDone: () -> Unit) =
