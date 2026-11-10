@@ -48,8 +48,8 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Create group chats from the UI (groups already work underneath)
 
 ### Safety
-- [ ] Mute words, hashtags and threads (today: accounts only)
-- [ ] Web-of-trust spam filter: hide accounts nobody in your network follows
+- [x] Mute words, hashtags and threads (today: accounts only)
+- [x] Web-of-trust spam filter: hide accounts nobody in your network follows
 
 ## 🟢 Advanced / extras
 

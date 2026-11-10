@@ -92,6 +92,7 @@ fun SocialScaffold(
         profileOf = { profiles[it] },
         resolveNote = { vm.note(it) },
         react = { n, content, url -> signedIn { vm.react(n, content, url) } },
+        muteThread = { n -> signedIn { vm.muteThread(n) } },
         customEmojis = customEmojis,
         pollTally = { vm.pollTally(it) },
         vote = { poll, ids, done -> if (account == null) { navigate(LoginKey); done(false) } else vm.vote(poll, ids, done) },

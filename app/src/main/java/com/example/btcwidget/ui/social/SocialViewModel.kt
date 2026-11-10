@@ -209,6 +209,27 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         ?.takeIf { store.account(getApplication())?.type == com.example.btcwidget.nostr.SignerType.LOCAL }
         ?.let { com.example.btcwidget.nostr.core.Nip19.nsec(it) }
 
+    // ---- Safety: muted words, hashtags, threads; web of trust ----
+
+    val mutes get() = repo.mutes
+
+    fun muteEntry(type: String, value: String, mute: Boolean) =
+        act("Couldn't update mutes") { repo.setMuteEntry(type, value, mute); if (mute) say("Muted") }
+
+    fun unmuteAllThreads() = act("Couldn't update mutes") { repo.unmuteAllThreads() }
+
+    /** Mutes the conversation [note] belongs to (its root note). */
+    fun muteThread(note: Event) = muteEntry("e", com.example.btcwidget.nostr.core.ThreadRef.of(note).root ?: note.id, true)
+
+    private val _wot = MutableStateFlow(store.wotFilter(application))
+    val wotFilter: StateFlow<Boolean> = _wot.asStateFlow()
+
+    fun setWotFilter(on: Boolean) {
+        repo.setWotFilter(on)
+        _wot.value = on
+        if (on) act("Couldn't load your network") { repo.loadTrust(); say("Showing replies and mentions from your network only") }
+    }
+
     fun mediaServers(): List<String> = repo.mediaServerUrls()
     fun setMediaServers(urls: List<String>, onDone: () -> Unit) =
         act("Couldn't save media servers") { repo.setMediaServers(urls); say("Media servers saved"); onDone() }
@@ -263,6 +284,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         _dmRead.value = store.dmRead(app)
         _push.value = store.pushEnabled(app)
         _notifOff.value = store.notificationsOff(app)
+        _wot.value = store.wotFilter(app)
     }
 
     private fun afterLogin() {

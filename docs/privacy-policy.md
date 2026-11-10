@@ -66,7 +66,7 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Verified addresses (NIP-05):** to show a ✓ next to a name@domain address, the app asks that domain whether the address belongs to the account.
 
-**Moderation:** you can mute accounts (published as your mute list) and report notes (published as a NIP-56 report to your relays). The Community rules (in the app, and at docs/community-rules.md) say what isn't allowed.
+**Moderation:** you can mute accounts, words, hashtags and conversations (published as your public mute list) and report notes (published as a NIP-56 report to your relays). The Community rules (in the app, and at docs/community-rules.md) say what isn't allowed. If you turn on the web-of-trust filter, the app downloads the follow lists of the people you follow from your relays and indexers, keeps a compact summary in memory only, and uses it to hide replies, mentions and search results from accounts outside that network.
 
 ## Network requests
 

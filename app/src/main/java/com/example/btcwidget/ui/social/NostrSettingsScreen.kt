@@ -80,6 +80,8 @@ fun NostrSettingsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack:
                 valid = { it.startsWith("wss://") }
             ) { urls, done -> if (urls.isNotEmpty()) vm.setDmInbox(urls, done) }
 
+            SafetySection(vm)
+
             if (acct.type == SignerType.LOCAL) ExportKeySection(vm)
         }
     }
@@ -124,6 +126,47 @@ internal fun AccountRow(profile: com.example.btcwidget.nostr.core.Profile?, pubk
             Text(note, color = EInk.Caption, fontSize = 12.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { actions() }
+    }
+}
+
+/** Muted words and hashtags (public, on the NIP-51 mute list) and the web-of-trust filter. */
+@Composable
+private fun SafetySection(vm: SocialViewModel) {
+    val mutes by vm.mutes.collectAsState()
+    val wot by vm.wotFilter.collectAsState()
+    var input by remember { mutableStateOf("") }
+    Section("Muted words and hashtags", "Posts containing these are hidden everywhere. Your mute list is public, like your follows.")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        mutes.words.sorted().forEach { w -> EInkChip(text = "$w ✕", selected = false, onClick = { vm.muteEntry("word", w, false) }) }
+        mutes.hashtags.sorted().forEach { t -> EInkChip(text = "#$t ✕", selected = false, onClick = { vm.muteEntry("t", t, false) }) }
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = input, onValueChange = { input = it.take(60) },
+            placeholder = { Text("word or #hashtag") }, singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EInk.Value, unfocusedBorderColor = EInk.BodyStroke, cursorColor = EInk.Value, focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value),
+            modifier = Modifier.weight(1f)
+        )
+        androidx.compose.foundation.layout.Spacer(Modifier.padding(start = 8.dp))
+        EInkChip(text = "MUTE", selected = input.isNotBlank(), onClick = {
+            val v = input.trim()
+            if (v.isNotEmpty()) {
+                if (v.startsWith("#")) vm.muteEntry("t", v.removePrefix("#"), true) else vm.muteEntry("word", v, true)
+                input = ""
+            }
+        })
+    }
+    if (mutes.threads.isNotEmpty()) {
+        Row(Modifier.padding(top = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("${mutes.threads.size} muted conversations", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            EInkChip(text = "UNMUTE ALL", selected = false, onClick = { vm.unmuteAllThreads() })
+        }
+    }
+
+    Section("Web of trust", "Hide replies, mentions and search results from accounts that nobody you follow follows. Cuts most spam; people new to Nostr may be hidden too.")
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(if (wot) "On: your network only" else "Off: everyone", color = EInk.Value, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        EInkChip(text = if (wot) "TURN OFF" else "TURN ON", selected = !wot, onClick = { vm.setWotFilter(!wot) })
     }
 }
 

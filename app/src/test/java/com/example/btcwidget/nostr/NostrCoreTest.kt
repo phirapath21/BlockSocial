@@ -531,4 +531,21 @@ class OutboxTest {
         assertTrue(listOf("emoji", "blob", "https://e/blob.png") in r.tags)
         assertFalse(Events.reaction("me", e, "🔥", "https://x").tags.any { it[0] == "emoji" })
     }
+
+    @Test
+    fun muteRulesHideWordsTagsAndThreads() {
+        val list = Event("m", "me", 1, Kind.MUTE_LIST, listOf(listOf("p", "bad"), listOf("word", "Scam"), listOf("word", "สแปม"), listOf("t", "NSFW"), listOf("e", "root1")), "", "")
+        val rules = com.example.btcwidget.nostr.core.MuteRules.of(list)
+        fun note(content: String, tags: List<List<String>> = emptyList(), pk: String = "ok") = Event("n" + content.hashCode(), pk, 1, Kind.TEXT_NOTE, tags, content, "")
+        assertTrue(rules.hides(note("hi", pk = "bad")))
+        assertTrue(rules.hides(note("free SCAM inside")))
+        assertFalse(rules.hides(note("scampi for dinner")))
+        assertTrue(rules.hides(note("ข้อความสแปมนะ")))
+        assertTrue(rules.hides(note("pic", listOf(listOf("t", "nsfw")))))
+        assertTrue(rules.hides(note("reply", listOf(listOf("e", "root1", "", "root"), listOf("e", "x", "", "reply")))))
+        assertFalse(rules.hides(note("fine")))
+        val net = com.example.btcwidget.nostr.core.TrustNetwork("a".repeat(64), listOf("b".repeat(64)), listOf("c".repeat(64)))
+        assertTrue(net.contains("c".repeat(64)))
+        assertFalse(net.contains("d".repeat(64)))
+    }
 }

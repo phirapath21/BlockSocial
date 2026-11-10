@@ -83,6 +83,8 @@ class NoteActions(
     val isFollowing: (String) -> Boolean,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
+    /** Hides the conversation this note belongs to (NIP-51 mute list, by its root note). */
+    val muteThread: (Event) -> Unit,
     /** Reacts with an emoji, or ":code:" plus its image URL for a custom emoji (NIP-30). */
     val react: (Event, String, String?) -> Unit,
     /** The user's own custom emoji (kind 10030), shortcode to image. */
@@ -210,6 +212,7 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; actions.delete(note) })
                 } else {
                     DropdownMenuItem(text = { Text("Mute this account") }, onClick = { menu = false; actions.mute(note.pubkey) })
+                    DropdownMenuItem(text = { Text("Mute this conversation") }, onClick = { menu = false; actions.muteThread(note) })
                     DropdownMenuItem(text = { Text("Report") }, onClick = { menu = false; actions.report(note) })
                 }
             }
