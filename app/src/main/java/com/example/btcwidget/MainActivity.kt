@@ -11,6 +11,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.btcwidget.theme.BTCWidgetTheme
 import com.example.btcwidget.ui.main.EInk
@@ -22,6 +26,7 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    CrashLog.install(this)
     SignerBridge.launch = { signerLauncher.launch(it) }
     EInk.theme = AppPrefs.theme(this)
 
@@ -32,7 +37,16 @@ class MainActivity : ComponentActivity() {
     )
     setContent {
       BTCWidgetTheme(darkTheme = true, dynamicColor = false) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { MainNavigation() }
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+          // After a crash, show what happened (to copy into a bug report) before the app.
+          var crash by remember { mutableStateOf(CrashLog.read(this)) }
+          val report = crash
+          if (report != null) {
+            CrashReportScreen(report, onContinue = { CrashLog.clear(this); crash = null })
+          } else {
+            MainNavigation()
+          }
+        }
       }
     }
   }

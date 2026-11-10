@@ -332,15 +332,17 @@ fun MainScreenContent(
 enum class MainTab(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
     NOTIFICATIONS("Notifications", Icons.Default.Notifications),
-    DASHBOARD("Dashboard", BitcoinIcon),
-    WIDGETS("Widgets", WidgetsIcon),
+    DASHBOARD("Dashboard", TabIcons.Bitcoin),
+    WIDGETS("Widgets", TabIcons.Widgets),
     ALERTS("Alerts", Icons.Default.Notifications),
     PROFILE("Profile", Icons.Default.Person),
     SETTINGS("Settings", Icons.Default.Settings)
 }
 
-private val BITCOIN_PAGES = setOf(MainTab.DASHBOARD, MainTab.WIDGETS, MainTab.ALERTS)
-private val BAR_TABS = listOf(MainTab.HOME, MainTab.NOTIFICATIONS, MainTab.DASHBOARD, MainTab.PROFILE, MainTab.SETTINGS)
+// Getters, not stored values: a top-level val that touches MainTab would initialize the
+// enum while this file's other top-level vals (the icons it uses) are still null.
+private val BITCOIN_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS, MainTab.ALERTS)
+private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.NOTIFICATIONS, MainTab.DASHBOARD, MainTab.PROFILE, MainTab.SETTINGS)
 
 /** Dashboard / Widgets / Alerts switch at the top of the Bitcoin pages. */
 @Composable
@@ -357,8 +359,13 @@ private fun BitcoinPageChips(selected: MainTab, onSelect: (MainTab) -> Unit) {
     }
 }
 
+/**
+ * Custom tab glyphs. In their own object so they initialize on first use, independent of
+ * this file's top-level values (MainTab reads them while being created).
+ */
+private object TabIcons {
 /** "₿"-like glyph for the Bitcoin tab: a B with two strokes. */
-private val BitcoinIcon: ImageVector = ImageVector.Builder(
+val Bitcoin: ImageVector = ImageVector.Builder(
     name = "Bitcoin",
     defaultWidth = 24.dp,
     defaultHeight = 24.dp,
@@ -375,7 +382,7 @@ private val BitcoinIcon: ImageVector = ImageVector.Builder(
 ).build()
 
 /** Material "widgets" glyph (not in the core icon set). */
-private val WidgetsIcon: ImageVector = ImageVector.Builder(
+val Widgets: ImageVector = ImageVector.Builder(
     name = "Widgets",
     defaultWidth = 24.dp,
     defaultHeight = 24.dp,
@@ -385,4 +392,4 @@ private val WidgetsIcon: ImageVector = ImageVector.Builder(
     pathData = addPathNodes("M13,13v8h8v-8h-8zM3,21h8v-8L3,13v8zM3,3v8h8L11,3L3,3zM16.66,1.69L11,7.34 16.66,13l5.66,-5.66 -5.66,-5.65z"),
     fill = SolidColor(Color.Black)
 ).build()
-
+}
