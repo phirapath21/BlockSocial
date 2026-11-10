@@ -227,6 +227,8 @@ object NostrAccountStore {
     private const val NOTIF_OFF = "notif_off"
     private const val WOT = "wot_filter"
     private const val GROUPS = "groups"
+    private const val HOME_FEEDS = "home_feeds"
+    private const val HOME_FEED = "home_feed"
     private const val DM_INBOX = "dm_inbox"
 
     /** Newest notification time the user has seen in the app (seconds). */
@@ -253,6 +255,13 @@ object NostrAccountStore {
     /** Phone notification types the user turned off: "reply", "mention", "repost", "like", "zap", "dm". */
     fun notificationsOff(context: Context): Set<String> = prefs(context).getStringSet(NOTIF_OFF, null)?.toSet().orEmpty()
     fun setNotificationsOff(context: Context, off: Set<String>) = prefs(context).edit().putStringSet(NOTIF_OFF, off).apply()
+
+    /** Home feeds in menu order, as [com.example.btcwidget.nostr.core.HomeFeed] ids; null means the defaults. */
+    fun homeFeeds(context: Context): List<String>? = prefs(context).getString(HOME_FEEDS, null)?.split('\n')?.filter { it.isNotBlank() }
+    fun setHomeFeeds(context: Context, ids: List<String>) = prefs(context).edit().putString(HOME_FEEDS, ids.joinToString("\n")).apply()
+
+    fun homeFeed(context: Context): String? = prefs(context).getString(HOME_FEED, null)
+    fun setHomeFeed(context: Context, id: String) = prefs(context).edit().putString(HOME_FEED, id).apply()
 
     /** NIP-29 groups the user opened or joined, as "host'id". */
     fun groups(context: Context): Set<String> = prefs(context).getStringSet(GROUPS, null)?.toSet().orEmpty()

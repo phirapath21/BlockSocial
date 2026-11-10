@@ -372,6 +372,17 @@ class NostrRepository private constructor(private val context: Context) {
         return authoredTimeline(authors) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }
     }
 
+    /** One page of [feed] for Home; [until] pages back (DVM feeds come as one page). */
+    suspend fun feed(feed: com.example.btcwidget.nostr.core.HomeFeed, until: Long? = null): List<FeedItem> = when (feed) {
+        is com.example.btcwidget.nostr.core.HomeFeed.Following -> homeFeed(until).let { items ->
+            if (feed.replies) items else items.filter { it.repostedBy != null || !ThreadRef.of(it.note).isReply }
+        }
+        is com.example.btcwidget.nostr.core.HomeFeed.Global -> globalFeed(feed.relay, until)
+        is com.example.btcwidget.nostr.core.HomeFeed.Hashtag -> hashtagFeed(feed.tag, until)
+        is com.example.btcwidget.nostr.core.HomeFeed.Dvm ->
+            if (until != null) emptyList() else dvmFeed(com.example.btcwidget.nostr.core.Dvm.Service(feed.pubkey, feed.dvmId, feed.name, null, null, false))
+    }
+
     /** A profile's notes and reposts. */
     suspend fun profileFeed(pubkey: String, until: Long? = null, limit: Int = 30): List<FeedItem> =
         authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }

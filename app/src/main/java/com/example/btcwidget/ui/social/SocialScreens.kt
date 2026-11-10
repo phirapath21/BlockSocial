@@ -1,6 +1,9 @@
 package com.example.btcwidget.ui.social
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
@@ -168,7 +171,10 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 WelcomeScreen(vm, actions, onLogin = { navigate(LoginKey) })
             } else {
                 val shown = home.items
+                val feed by vm.homeFeed.collectAsState()
+                var feedMenu by remember { mutableStateOf(false) }
                 Column(Modifier.fillMaxSize()) {
+                    FeedHeader(feed, open = feedMenu) { feedMenu = true }
                     PullToRefreshBox(isRefreshing = home.refreshing, onRefresh = vm::refreshHome, modifier = Modifier.fillMaxSize()) {
                         when {
                             home.loading && home.items.isEmpty() -> Spinner(Modifier.padding(top = 40.dp))
@@ -206,6 +212,7 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                         )
                     }
                 }
+                if (feedMenu) FeedMenu(vm, onClose = { feedMenu = false })
                 FloatingActionButton(
                     onClick = { navigate(ComposeKey()) },
                     containerColor = EInk.Value,
@@ -336,6 +343,121 @@ private fun NotificationRow(n: NostrNotification, actor: Profile?, actions: Note
         }
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+}
+
+// ---- Home feed menu ----
+
+/** "Latest ⌄ / Latest notes by your follows": tap to pick another feed. */
+@Composable
+private fun FeedHeader(feed: com.example.btcwidget.nostr.core.HomeFeed, open: Boolean, onOpen: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clickable(onClickLabel = "Choose feed", onClick = onOpen).padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(feed.title + if (open) "  ⌃" else "  ⌄", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(feed.subtitle, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+}
+
+/** Pick a feed; Edit to reorder, remove, or add hashtag, relay and DVM feeds. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun FeedMenu(vm: SocialViewModel, onClose: () -> Unit) {
+    val feeds by vm.homeFeeds.collectAsState()
+    val current by vm.homeFeed.collectAsState()
+    var editing by remember { mutableStateOf(false) }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onClose, containerColor = EInk.Background) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            feeds.forEachIndexed { i, f ->
+                val selected = f == current
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (selected) EInk.Body else EInk.Background)
+                        .clickable(enabled = !editing) { vm.selectFeed(f); onClose() }.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(f.title, color = EInk.Value, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(f.subtitle, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (editing) {
+                        MenuGlyph("↑", "Move up", enabled = i > 0) { vm.moveFeed(f, -1) }
+                        MenuGlyph("↓", "Move down", enabled = i < feeds.lastIndex) { vm.moveFeed(f, 1) }
+                        MenuGlyph("✕", "Remove", enabled = feeds.size > 1) { vm.removeFeed(f) }
+                    } else if (selected) Text("✓", color = EInk.Value, fontSize = 18.sp)
+                }
+            }
+            if (editing) AddFeed(vm, feeds)
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    if (editing) "Done" else "Edit", color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { editing = !editing }.padding(8.dp)
+                )
+                if (editing) Text("Reset", color = EInk.Caption, fontSize = 16.sp, modifier = Modifier.clickable { vm.resetFeeds() }.padding(8.dp))
+                Text("Close", color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onClose).padding(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuGlyph(glyph: String, label: String, enabled: Boolean, onClick: () -> Unit) {
+    Text(
+        glyph, color = if (enabled) EInk.Value else EInk.BodyStroke, fontSize = 18.sp,
+        modifier = Modifier.clip(CircleShape).clickable(enabled = enabled, onClickLabel = label, onClick = onClick).padding(horizontal = 10.dp, vertical = 4.dp)
+    )
+}
+
+/** Adds a hashtag, relay (global on one relay) or DVM feed to the menu. */
+@Composable
+private fun AddFeed(vm: SocialViewModel, existing: List<com.example.btcwidget.nostr.core.HomeFeed>) {
+    var kind by remember { mutableStateOf(0) }
+    var input by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+        Text("Add a feed", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("#HASHTAG", "RELAY", "DVM").forEachIndexed { i, t ->
+                com.example.btcwidget.ui.main.EInkChip(text = t, selected = kind == i, onClick = { kind = i; input = ""; error = null })
+            }
+        }
+        // Built-in feeds that were removed can come back.
+        com.example.btcwidget.nostr.core.HomeFeed.DEFAULTS.filter { it !in existing }.forEach { f ->
+            Text("+ " + f.title, color = EInk.Value, fontSize = 14.sp, modifier = Modifier.clickable { vm.addFeed(f) }.padding(vertical = 6.dp))
+        }
+        if (kind == 2) {
+            val services by produceState<List<com.example.btcwidget.nostr.core.Dvm.Service>?>(null) { value = vm.feedServices() }
+            when (val l = services) {
+                null -> Spinner()
+                else -> if (l.isEmpty()) Text("No feed services found on your relays.", color = EInk.Caption, fontSize = 13.sp)
+                else Column(Modifier.heightIn(max = 260.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                    l.forEach { svc ->
+                        Text(
+                            "+ " + svc.name + (svc.about?.let { " · $it" } ?: ""), color = EInk.Value, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth().clickable { vm.addFeed(com.example.btcwidget.nostr.core.HomeFeed.Dvm(svc.pubkey, svc.id, svc.name)) }.padding(vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+            return@Column
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.OutlinedTextField(
+                value = input, onValueChange = { input = it; error = null },
+                placeholder = { Text(if (kind == 0) "siamstr" else "wss://relay.example.com") },
+                singleLine = true, isError = error != null,
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = EInk.Value, unfocusedBorderColor = EInk.BodyStroke, focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = EInk.Value),
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            com.example.btcwidget.ui.main.EInkChip(text = "ADD", selected = input.isNotBlank(), onClick = {
+                val feed = if (kind == 0) com.example.btcwidget.nostr.core.HomeFeed.cleanTag(input)?.let { com.example.btcwidget.nostr.core.HomeFeed.Hashtag(it) }
+                else com.example.btcwidget.nostr.core.normalizeRelayUrl(input.trim().let { if (it.startsWith("ws")) it else "wss://$it" })?.let { com.example.btcwidget.nostr.core.HomeFeed.Global(it) }
+                if (feed == null) error = if (kind == 0) "One word, letters and numbers only" else "Not a relay address"
+                else { vm.addFeed(feed); input = "" }
+            })
+        }
+        error?.let { Text(it, color = EInk.Alert, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+    }
 }
 
 // ---- Thread ----
