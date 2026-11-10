@@ -143,7 +143,8 @@ fun MainScreen(
                 relays = social.repo.pool.urls.toList(),
                 onLogin = { onItemClick(com.example.btcwidget.LoginKey) },
                 onLogout = social::logout,
-                onRelaysChange = social::setRelays
+                onRelaysChange = social::setRelays,
+                onOpenRules = { onItemClick(com.example.btcwidget.RulesKey) }
             )
         }
     )

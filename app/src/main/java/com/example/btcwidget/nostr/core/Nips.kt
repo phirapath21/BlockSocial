@@ -95,7 +95,7 @@ object Events {
         UnsignedEvent(pubkey, now(), Kind.TEXT_NOTE, extraTags + contentTags(content), content)
 
     /** A reply with NIP-10 marked tags, tagging everyone in the thread. */
-    fun reply(pubkey: String, content: String, parent: Event, relayHint: String = ""): UnsignedEvent {
+    fun reply(pubkey: String, content: String, parent: Event, relayHint: String = "", extraTags: List<List<String>> = emptyList()): UnsignedEvent {
         val thread = ThreadRef.of(parent)
         val tags = ArrayList<List<String>>()
         val rootId = thread.root ?: parent.id
@@ -107,14 +107,14 @@ object Events {
         }
         val people = (listOf(parent.pubkey) + parent.tagValues("p")).filter { it != pubkey && Hex.isKey(it) }.distinct()
         people.forEach { tags += listOf("p", it) }
-        return note(pubkey, content, tags)
+        return note(pubkey, content, tags + extraTags)
     }
 
     /** A quote (NIP-18): the note's nevent is appended to the text, with a "q" tag. */
-    fun quote(pubkey: String, content: String, quoted: Event, relayHint: String = ""): UnsignedEvent {
+    fun quote(pubkey: String, content: String, quoted: Event, relayHint: String = "", extraTags: List<List<String>> = emptyList()): UnsignedEvent {
         val ref = "nostr:" + Nip19.nevent(quoted.id, listOfNotNull(relayHint.takeIf { it.isNotEmpty() }), quoted.pubkey)
         val text = if (content.isBlank()) ref else content.trimEnd() + "\n\n" + ref
-        return note(pubkey, text, listOf(listOf("p", quoted.pubkey)))
+        return note(pubkey, text, listOf(listOf("p", quoted.pubkey)) + extraTags)
     }
 
     /** A repost (kind 6) carrying the reposted note's JSON. */

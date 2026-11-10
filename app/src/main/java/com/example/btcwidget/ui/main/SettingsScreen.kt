@@ -202,7 +202,8 @@ fun NostrSettingsPanel(
     relays: List<String>,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
-    onRelaysChange: (List<String>?) -> Unit
+    onRelaysChange: (List<String>?) -> Unit,
+    onOpenRules: () -> Unit = {}
 ) {
     var confirmLogout by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
@@ -229,6 +230,9 @@ fun NostrSettingsPanel(
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
             }
+        }
+        SettingRow("Community rules", note = "What isn't allowed; mute and report") {
+            EInkChip(text = "OPEN", selected = false, onClick = onOpenRules)
         }
         SettingRow("Relays", note = "${relays.size} connected") {
             EInkChip(text = if (editing) "CLOSE" else "EDIT", selected = editing, onClick = { editing = !editing })

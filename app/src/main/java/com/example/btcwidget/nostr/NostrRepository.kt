@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.ConcurrentHashMap
 
 /** Likes, reposts, replies and zaps on a note, and whether the user did each. */
@@ -76,6 +78,8 @@ class NostrRepository private constructor(private val context: Context) {
     private val profileEvents = ConcurrentHashMap<String, Event>()
     private var contactsEvent: Event? = null
     private var muteEvent: Event? = null
+    /** The user's Blossom servers (BUD-03 kind 10063), empty for the default. */
+    private var mediaServers: List<String> = emptyList()
     private var signer: NostrSigner? = NostrAccountStore.signer(context)
 
     val pubkey: String? get() = _account.value?.pubkey
@@ -131,11 +135,12 @@ class NostrRepository private constructor(private val context: Context) {
     /** Loads the user's relay list, contacts, mutes and profile. */
     suspend fun loadAccount() {
         val me = pubkey ?: return
-        val events = pool.query(listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.RELAY_LIST))))
+        val events = pool.query(listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.RELAY_LIST, MEDIA_SERVER_LIST))))
         fun latest(kind: Int) = events.filter { it.kind == kind }.maxByOrNull { it.createdAt }
         latest(Kind.METADATA)?.let { remember(it) }
         latest(Kind.CONTACTS)?.let { contactsEvent = it; _following.value = it.tagValues("p").toSet() }
         latest(Kind.MUTE_LIST)?.let { muteEvent = it; _muted.value = it.tagValues("p").toSet() }
+        mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(latest(MEDIA_SERVER_LIST))
         if (NostrAccountStore.relays(context) == null) {
             latest(Kind.RELAY_LIST)?.let { list ->
                 // NIP-65: use the user's relays (both read and write) when they have some.
@@ -175,8 +180,8 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun hashtagFeed(hashtag: String, until: Long? = null): List<FeedItem> =
         timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("t" to listOf(hashtag.lowercase())), until = until, limit = 40))
 
-    private suspend fun timeline(vararg filters: Filter): List<FeedItem> {
-        val events = pool.query(filters.toList())
+    private suspend fun timeline(vararg filters: Filter, source: RelayPool = pool): List<FeedItem> {
+        val events = source.query(filters.toList())
         val items = events.mapNotNull { e ->
             when (e.kind) {
                 Kind.TEXT_NOTE -> FeedItem(e)
@@ -262,6 +267,48 @@ class NostrRepository private constructor(private val context: Context) {
         return out.sortedByDescending { it.event.createdAt }
     }
 
+    // ---- Search ----
+
+    /** Relays that support NIP-50 search; opened on first search. */
+    private val searchPool by lazy { RelayPool().also { it.setRelays(SEARCH_RELAYS) } }
+
+    /** What a search box entry points straight at, if anything. */
+    sealed interface Direct {
+        data class ProfileTarget(val pubkey: String) : Direct
+        data class NoteTarget(val id: String) : Direct
+        data class HashtagTarget(val tag: String) : Direct
+    }
+
+    /** npub/nprofile/note/nevent/hex, "#tag" or a NIP-05 address; null for free text. */
+    suspend fun resolve(query: String): Direct? {
+        val q = query.trim()
+        when (val e = com.example.btcwidget.nostr.core.Nip19.decode(q)) {
+            is com.example.btcwidget.nostr.core.Nip19.Pubkey -> return Direct.ProfileTarget(e.hex)
+            is com.example.btcwidget.nostr.core.Nip19.Note -> return Direct.NoteTarget(e.id)
+            else -> Unit
+        }
+        if (q.startsWith("#") && q.length > 1 && q.drop(1).all { it.isLetterOrDigit() || it == '_' }) return Direct.HashtagTarget(q.drop(1))
+        if (com.example.btcwidget.nostr.core.Nip05.looks(q) && q.contains('@')) {
+            val url = com.example.btcwidget.nostr.core.Nip05.url(q) ?: return null
+            val name = com.example.btcwidget.nostr.core.Nip05.parts(q)!!.first
+            val pubkey = runCatching { withContext(Dispatchers.IO) { com.example.btcwidget.nostr.core.Nip05.pubkeyFrom(httpGet(url), name) } }.getOrNull()
+            if (pubkey != null) return Direct.ProfileTarget(pubkey)
+        }
+        return null
+    }
+
+    /** People matching [query] (NIP-50 on profile metadata), most followed first per the relay. */
+    suspend fun searchPeople(query: String): List<Profile> {
+        val events = searchPool.query(listOf(Filter(kinds = listOf(Kind.METADATA), search = query.trim(), limit = 30)), 6_000)
+        events.forEach { remember(it) }
+        val wanted = events.map { it.pubkey }.distinct()
+        return wanted.mapNotNull { _profiles.value[it] }.filter { it.pubkey !in _muted.value }
+    }
+
+    /** Notes matching [query] (NIP-50). */
+    suspend fun searchNotes(query: String): List<FeedItem> =
+        timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), search = query.trim(), limit = 40), source = searchPool)
+
     /** Fetches kind-0 profiles not yet cached. */
     suspend fun loadProfiles(pubkeys: Collection<String>) {
         val missing = pubkeys.filter { !profileEvents.containsKey(it) }.distinct()
@@ -345,9 +392,48 @@ class NostrRepository private constructor(private val context: Context) {
         return signed
     }
 
-    suspend fun post(content: String): Event = publish(Events.note(requireMe(), content))
-    suspend fun reply(content: String, parent: Event): Event = publish(Events.reply(requireMe(), content, parent, relayHint()))
-    suspend fun quote(content: String, quoted: Event): Event = publish(Events.quote(requireMe(), content, quoted, relayHint()))
+    suspend fun post(content: String, extraTags: List<List<String>> = emptyList()): Event =
+        publish(Events.note(requireMe(), content, extraTags))
+    suspend fun reply(content: String, parent: Event, extraTags: List<List<String>> = emptyList()): Event =
+        publish(Events.reply(requireMe(), content, parent, relayHint(), extraTags))
+    suspend fun quote(content: String, quoted: Event, extraTags: List<List<String>> = emptyList()): Event =
+        publish(Events.quote(requireMe(), content, quoted, relayHint(), extraTags))
+
+    /**
+     * Uploads [image] to the user's Blossom servers (or the default), trying up to three.
+     * Signing the upload permission goes through the user's signer.
+     */
+    suspend fun uploadImage(image: PreparedImage): com.example.btcwidget.nostr.core.Blossom.Blob {
+        val me = requireMe()
+        val blossom = com.example.btcwidget.nostr.core.Blossom
+        val sha = blossom.sha256Hex(image.bytes)
+        val auth = requireSigner().sign(blossom.uploadAuth(me, sha, image.bytes.size.toLong()))
+        val header = blossom.authHeader(auth)
+        val servers = mediaServers.ifEmpty { listOf(blossom.DEFAULT_SERVER) }.take(3)
+        var failure: Exception? = null
+        for (server in servers) {
+            try {
+                return withContext(Dispatchers.IO) {
+                    val request = Request.Builder()
+                        .url(blossom.uploadUrl(server))
+                        .header("Authorization", header)
+                        .put(image.bytes.toRequestBody(image.mime.toMediaType()))
+                        .build()
+                    RelayPool.defaultClient.newCall(request).execute().use { r ->
+                        if (!r.isSuccessful) {
+                            error(r.header("X-Reason") ?: "${server.removePrefix("https://")} refused the upload (HTTP ${r.code})")
+                        }
+                        blossom.parseUpload(r.body.string(), sha).getOrThrow()
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failure = e
+            }
+        }
+        throw failure ?: IllegalStateException("Upload failed")
+    }
 
     suspend fun repost(note: Event) {
         publish(Events.repost(requireMe(), note, relayHint()))
@@ -438,6 +524,12 @@ class NostrRepository private constructor(private val context: Context) {
         _stats.update { it + (id to change(it[id] ?: NoteStats())) }
 
     companion object {
+        /** BUD-03 list of the user's Blossom media servers. */
+        const val MEDIA_SERVER_LIST = 10063
+
+        /** Public relays that implement NIP-50 search. */
+        val SEARCH_RELAYS = listOf("wss://relay.nostr.band", "wss://search.nos.today")
+
         @Volatile private var instance: NostrRepository? = null
 
         fun get(context: Context): NostrRepository =

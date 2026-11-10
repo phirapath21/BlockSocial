@@ -7,7 +7,21 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.PersistableBundle
 import android.view.WindowManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -69,7 +83,7 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
 
 /** Log in with a signer app (recommended), an nsec, or create a new account. */
 @Composable
-fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit) {
+fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onOpenRules: () -> Unit = {}) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val hasSigner = remember { AmberSigner.isInstalled(context) }
@@ -108,6 +122,11 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit) {
                     Option("New to Nostr?", "Create a new account in seconds. You'll be shown your private key once to save.", "Create account", false) {
                         mode = "create"; error = null
                     }
+                    Text(
+                        "By posting you agree to the Community rules ›",
+                        color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 16.dp).clickable(onClickLabel = "Open community rules", onClick = onOpenRules).padding(vertical = 6.dp)
+                    )
                 }
                 "nsec" -> {
                     val focus = remember { FocusRequester() }
@@ -191,8 +210,20 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     val target by produceState<Event?>(null, replyTo, quote) { value = (replyTo ?: quote)?.let { vm.note(it) } }
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    var images by remember { mutableStateOf<List<SocialViewModel.Attachment>>(emptyList()) }
+    var uploading by remember { mutableStateOf(0) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // System photo picker: no storage permission needed.
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            uploading++
+            vm.uploadImage(uri) { attachment ->
+                uploading--
+                if (attachment != null) images = images + attachment
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar(
@@ -236,17 +267,58 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     }
                 }
             }
+            if (images.isNotEmpty() || uploading > 0) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState())
+                ) {
+                    images.forEach { img ->
+                        Box {
+                            AsyncImage(
+                                model = img.url, contentDescription = "Attached image", contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body)
+                            )
+                            Text(
+                                "✕", color = EInk.Value, fontSize = 14.sp,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .clip(CircleShape)
+                                    .background(EInk.Background.copy(alpha = 0.7f))
+                                    .clickable(onClickLabel = "Remove image") { images = images - img }
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    repeat(uploading) {
+                        Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = EInk.Value, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Public and permanent: notes can't be fully deleted from every relay.",
-                    color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(end = 10.dp)
+                    "🖼",
+                    color = EInk.Value, fontSize = 22.sp,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable(enabled = images.size + uploading < 4, onClickLabel = "Add image") {
+                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }
+                        .padding(8.dp)
                 )
-                val canSend = !sending && (text.isNotBlank() || quote != null) && (replyTo == null && quote == null || target != null)
+                Text(
+                    "Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed.",
+                    color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
+                )
+                val canSend = !sending && uploading == 0 && (text.isNotBlank() || images.isNotEmpty() || quote != null) &&
+                    (replyTo == null && quote == null || target != null)
                 PillButton(if (sending) "Posting…" else if (replyTo != null) "Reply" else "Post", filled = canSend) {
                     if (!canSend) return@PillButton
                     sending = true
-                    vm.send(text.trim(), replyTo?.let { target }, quote?.let { target }) { ok ->
+                    vm.send(text.trim(), replyTo?.let { target }, quote?.let { target }, images) { ok ->
                         // Success closes the screen; a failure re-enables the button.
                         if (ok) onBack() else sending = false
                     }

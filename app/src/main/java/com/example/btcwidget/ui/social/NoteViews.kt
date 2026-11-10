@@ -168,7 +168,13 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
 /** Note text with tappable links, hashtags and mentions; images and quoted notes below it. */
 @Composable
 fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int = 0) {
-    val segments = remember(note.id) { Content.parse(note.content.trim()) }
+    val segments = remember(note.id) {
+        // Links that imeta tags mark as images show as images even without a file extension.
+        val images = com.example.btcwidget.nostr.core.Imeta.imageUrls(note)
+        Content.parse(note.content.trim()).map { seg ->
+            if (seg is Content.Segment.Link && seg.url in images) Content.Segment.Image(seg.url) else seg
+        }
+    }
     val uriHandler = LocalUriHandler.current
     val linkStyle = TextLinkStyles(SpanStyle(color = EInk.Value, fontWeight = FontWeight.Bold))
     val text: AnnotatedString = buildAnnotatedString {

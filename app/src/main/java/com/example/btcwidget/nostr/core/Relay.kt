@@ -12,7 +12,9 @@ data class Filter(
     val tags: Map<String, List<String>> = emptyMap(),
     val since: Long? = null,
     val until: Long? = null,
-    val limit: Int? = null
+    val limit: Int? = null,
+    /** NIP-50 full-text search; only search relays understand it. */
+    val search: String? = null
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         ids?.let { put("ids", Json.stringArray(it)) }
@@ -22,9 +24,13 @@ data class Filter(
         since?.let { put("since", it) }
         until?.let { put("until", it) }
         limit?.let { put("limit", it) }
+        search?.let { put("search", it) }
     }
 
-    /** Whether [event] passes this filter (used to route events to local subscriptions). */
+    /**
+     * Whether [event] passes this filter (used to route events to local subscriptions).
+     * A search term is left to the relay: relevance can't be checked locally.
+     */
     fun matches(event: Event): Boolean =
         (ids == null || event.id in ids) &&
             (authors == null || event.pubkey in authors) &&

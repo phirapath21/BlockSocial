@@ -33,9 +33,13 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Zaps:** when you zap, the app asks the recipient's Lightning address provider (the domain in their Lightning address, for example getalby.com) for an invoice and passes it to your Lightning wallet app. That provider sees your IP address, the amount and your signed zap request (who you zapped, and any comment, which become public in the zap receipt). Payment happens in your wallet app; Blockface never holds funds.
 
+**Search:** words you search for (anything that isn't an npub, note id, #hashtag or name@domain) are sent to public search relays, relay.nostr.band and search.nos.today, which see the search and your IP address. A name@domain lookup asks that domain's server.
+
+**Photos you post:** when you attach a photo, the app first re-encodes it on your phone, which removes EXIF metadata such as GPS location, camera model and time. It then uploads the photo to a Blossom media server: by default blossom.primal.net, or the servers in your own media server list (kind 10063). The upload is signed with your key. The photo becomes public at its address, and the server's own policy applies. Only photos you pick are read; the app asks for no storage or photo permission (it uses Android's photo picker).
+
 **Images:** pictures in notes and profiles are loaded from the addresses they point to, which can see your IP address.
 
-**Moderation:** you can mute accounts (published as your mute list) and report notes (published as a NIP-56 report to your relays).
+**Moderation:** you can mute accounts (published as your mute list) and report notes (published as a NIP-56 report to your relays). The Community rules (in the app, and at docs/community-rules.md) say what isn't allowed.
 
 ## Network requests
 
