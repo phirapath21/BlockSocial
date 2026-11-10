@@ -378,3 +378,56 @@ class VideoSegmentTest {
         org.junit.Assert.assertEquals(setOf("https://b/x"), com.example.btcwidget.nostr.core.Imeta.videoUrls(e))
     }
 }
+
+class Nip04NwcTest {
+    private val n04 = com.example.btcwidget.nostr.core.Nip04
+    private val nwc = com.example.btcwidget.nostr.core.Nwc
+    private val schnorr = com.example.btcwidget.nostr.core.Schnorr
+
+    @org.junit.Test
+    fun nip04InteropVector() {
+        // Made independently with Python's `cryptography` (secp256k1 ECDH + AES-256-CBC).
+        val payload = "W7JcHJiSz8qnq1wBWZm6OTPw40gqeD6OmtWGmu0qOLw=?iv=AAECAwQFBgcICQoLDA0ODw=="
+        val sk1 = "00".repeat(31) + "01"
+        val pub2 = "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        org.junit.Assert.assertEquals("nostr wallet connect ⚡", n04.decrypt(payload, sk1, pub2))
+        // And the other side, with sk2 and pub1.
+        val sk2 = "00".repeat(31) + "02"
+        org.junit.Assert.assertEquals("nostr wallet connect ⚡", n04.decrypt(payload, sk2, schnorr.publicKey(sk1)))
+    }
+
+    @org.junit.Test
+    fun parseConnectionString() {
+        val wallet = "ab".repeat(32); val secret = schnorr.newSecretKey()
+        val c = nwc.parse("nostr+walletconnect://$wallet?relay=wss%3A%2F%2Frelay.getalby.com%2Fv1&secret=$secret&lud16=me%40getalby.com")!!
+        org.junit.Assert.assertEquals(wallet, c.walletPubkey)
+        org.junit.Assert.assertEquals(listOf("wss://relay.getalby.com/v1"), c.relays)
+        org.junit.Assert.assertEquals("me@getalby.com", c.lud16)
+        org.junit.Assert.assertNull(nwc.parse("nostr+walletconnect://$wallet?relay=wss://r.example"))   // no secret
+        org.junit.Assert.assertNull(nwc.parse("https://example.com"))
+    }
+
+    @org.junit.Test
+    fun payInvoiceRoundTripWithBothEncryptions() {
+        val walletSec = schnorr.newSecretKey(); val walletPub = schnorr.publicKey(walletSec)
+        val c = nwc.parse("nostr+walletconnect://$walletPub?relay=wss://r.example&secret=${schnorr.newSecretKey()}")!!
+        for (nip44 in listOf(false, true)) {
+            val req = nwc.payInvoiceRequest(c, "lnbc10n1test", nip44)
+            org.junit.Assert.assertTrue(req.verify())
+            org.junit.Assert.assertEquals(listOf(walletPub), req.tagValues("p"))
+            // The wallet reads it…
+            val body = if (nip44) com.example.btcwidget.nostr.core.Nip44.decrypt(req.content, walletSec, c.clientPubkey)
+                       else n04.decrypt(req.content, walletSec, c.clientPubkey)
+            org.junit.Assert.assertEquals("lnbc10n1test", org.json.JSONObject(body).getJSONObject("params").getString("invoice"))
+            // …and answers.
+            fun answer(json: String): com.example.btcwidget.nostr.core.Event {
+                val content = if (nip44) com.example.btcwidget.nostr.core.Nip44.encrypt(json, walletSec, c.clientPubkey) else n04.encrypt(json, walletSec, c.clientPubkey)
+                val u = com.example.btcwidget.nostr.core.UnsignedEvent(walletPub, 1, nwc.RESPONSE, listOf(listOf("e", req.id)), content)
+                return u.signed(schnorr.sign(u.id, walletSec))
+            }
+            org.junit.Assert.assertEquals("pre", nwc.parseResponse(c, answer("{\"result_type\":\"pay_invoice\",\"result\":{\"preimage\":\"pre\"}}")).getOrThrow())
+            val err = nwc.parseResponse(c, answer("{\"result_type\":\"pay_invoice\",\"error\":{\"code\":\"INSUFFICIENT_BALANCE\",\"message\":\"Not enough sats\"}}"))
+            org.junit.Assert.assertEquals("Not enough sats", err.exceptionOrNull()?.message)
+        }
+    }
+}

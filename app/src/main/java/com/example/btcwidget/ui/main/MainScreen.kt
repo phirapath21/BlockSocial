@@ -108,6 +108,7 @@ fun MainScreen(
     val unreadNotifications by social.unreadNotifications.collectAsStateWithLifecycle()
     val unreadChats by social.unreadConversations.collectAsStateWithLifecycle()
     val pushEnabled by social.pushEnabled.collectAsStateWithLifecycle()
+    val nwcWallet by social.nwc.collectAsStateWithLifecycle()
     val notificationItems by social.notifications.collectAsStateWithLifecycle()
 
     // Badges: load notifications and messages when the account is known and on every return.
@@ -195,6 +196,9 @@ fun MainScreen(
                 onRelaysChange = social::setRelays,
                 onOpenRules = { onItemClick(com.example.btcwidget.RulesKey) },
                 pushEnabled = pushEnabled,
+                walletConnected = nwcWallet != null,
+                onConnectWallet = social::connectNwc,
+                onDisconnectWallet = social::disconnectNwc,
                 onPushChange = { on ->
                     social.setPushEnabled(on)
                     if (on && !settings.notificationsAllowed) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)

@@ -56,6 +56,7 @@ fun SocialScaffold(
     val bookmarks by vm.bookmarks.collectAsState()
     val following by vm.following.collectAsState()
     val stats by vm.stats.collectAsState()
+    val nwcWallet by vm.nwc.collectAsState()
 
     LaunchedEffect(vm) {
         vm.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -107,6 +108,7 @@ fun SocialScaffold(
 
     zapTarget?.let { note ->
         ZapDialog(
+            inApp = nwcWallet != null,
             recipientName = profiles[note.pubkey]?.bestName ?: "them",
             onDismiss = { zapTarget = null },
             onZap = { sats, comment ->
@@ -134,7 +136,7 @@ fun SocialScaffold(
 }
 
 @Composable
-private fun ZapDialog(recipientName: String, onDismiss: () -> Unit, onZap: (Long, String) -> Unit) {
+private fun ZapDialog(recipientName: String, inApp: Boolean, onDismiss: () -> Unit, onZap: (Long, String) -> Unit) {
     var amount by remember { mutableStateOf("21") }
     var comment by remember { mutableStateOf("") }
     val sats = amount.toLongOrNull()?.takeIf { it > 0 }
@@ -164,7 +166,7 @@ private fun ZapDialog(recipientName: String, onDismiss: () -> Unit, onZap: (Long
                     modifier = Modifier.padding(top = 6.dp)
                 )
                 Text(
-                    "Opens your Lightning wallet to pay.",
+                    if (inApp) "Pays from your connected wallet (NWC)." else "Opens your Lightning wallet to pay. Connect a wallet in Settings › Nostr to zap in one tap.",
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }

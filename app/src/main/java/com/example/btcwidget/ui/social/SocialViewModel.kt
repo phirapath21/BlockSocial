@@ -395,9 +395,33 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun bookmarkedNotes() = runCatching { repo.bookmarkedNotes() }.getOrDefault(emptyList())
 
-    /** Gets a zap invoice and passes it to [onInvoice] (which opens a wallet). */
+    val nwc get() = repo.nwc
+
+    /**
+     * Zaps [amountSat]: with a connected wallet (NWC) it pays right here; otherwise the
+     * invoice goes to [onInvoice], which opens a wallet app.
+     */
     fun zap(recipient: String, amountSat: Long, note: Event?, comment: String, onInvoice: (String) -> Unit) =
-        act("Couldn't zap") { onInvoice(repo.zapInvoice(recipient, amountSat, note, comment)) }
+        act("Couldn't zap") {
+            val invoice = repo.zapInvoice(recipient, amountSat, note, comment)
+            if (repo.nwc.value != null) {
+                say("⚡ Paying $amountSat sats…")
+                repo.payWithNwc(invoice)
+                say("⚡ Zapped $amountSat sats")
+                note?.let { n -> runCatching { repo.loadStats(listOf(n.id)) } }
+            } else {
+                onInvoice(invoice)
+            }
+        }
+
+    /** Returns an error message, or null when connected. */
+    fun connectNwc(uri: String): String? = try {
+        repo.connectNwc(uri); say("Wallet connected"); null
+    } catch (e: Exception) {
+        e.message ?: "Couldn't connect the wallet"
+    }
+
+    fun disconnectNwc() { repo.disconnectNwc(); say("Wallet disconnected") }
 
     private fun say(message: String) { _messages.tryEmit(message) }
 

@@ -174,6 +174,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     fun logout() {
         dms.reset()
+        _nwc.value = null
         NostrAccountStore.clear(context)
         cache.clear()
         accountFresh = false
@@ -406,6 +407,54 @@ class NostrRepository private constructor(private val context: Context) {
     /** Notes matching [query] (NIP-50). */
     suspend fun searchNotes(query: String): List<FeedItem> =
         timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), search = query.trim(), limit = 40), source = searchPool)
+
+    // ---- Nostr Wallet Connect (NIP-47) ----
+
+    private val _nwc = MutableStateFlow(NostrAccountStore.nwc(context)?.let { com.example.btcwidget.nostr.core.Nwc.parse(it) })
+    /** The connected wallet, or null: zaps then open a wallet app instead. */
+    val nwc: StateFlow<com.example.btcwidget.nostr.core.Nwc.Connection?> = _nwc.asStateFlow()
+
+    /** Saves a `nostr+walletconnect://` string (encrypted). Throws if it isn't one. */
+    fun connectNwc(uri: String) {
+        val c = com.example.btcwidget.nostr.core.Nwc.parse(uri) ?: throw IllegalArgumentException("That isn't a nostr+walletconnect:// link")
+        NostrAccountStore.setNwc(context, uri.trim())
+        _nwc.value = c
+    }
+
+    fun disconnectNwc() {
+        NostrAccountStore.setNwc(context, null)
+        _nwc.value = null
+    }
+
+    /**
+     * Pays [invoice] through the connected wallet: sends the request to the wallet's relay
+     * and waits up to 45 s for its answer. Returns the preimage; throws the wallet's error.
+     */
+    suspend fun payWithNwc(invoice: String): String {
+        val c = _nwc.value ?: error("No wallet connected")
+        val nwc = com.example.btcwidget.nostr.core.Nwc
+        val walletPool = RelayPool().also { it.setRelays(c.relays) }
+        try {
+            // NIP-44 if the wallet says it supports it, else NIP-04.
+            val info = walletPool.query(listOf(Filter(authors = listOf(c.walletPubkey), kinds = listOf(nwc.INFO), limit = 1)), 4_000).firstOrNull()
+            val request = nwc.payInvoiceRequest(c, invoice, nwc.supportsNip44(info))
+            val answer = kotlinx.coroutines.CompletableDeferred<Event>()
+            val stop = walletPool.subscribe(
+                listOf(Filter(authors = listOf(c.walletPubkey), kinds = listOf(nwc.RESPONSE), tags = mapOf("e" to listOf(request.id)))),
+                { e, _ -> answer.complete(e) }
+            )
+            try {
+                val sent = walletPool.publish(request)
+                if (sent.none { it.accepted }) error(sent.firstOrNull { it.message.isNotBlank() }?.message ?: "The wallet's relay didn't accept the request")
+                val response = kotlinx.coroutines.withTimeoutOrNull(45_000) { answer.await() } ?: error("The wallet didn't answer in time")
+                return nwc.parseResponse(c, response).getOrThrow()
+            } finally {
+                stop()
+            }
+        } finally {
+            walletPool.closeAll()
+        }
+    }
 
     // ---- Link previews ----
 
