@@ -45,7 +45,7 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Notifications while the app is closed:** if you're logged in and "Phone notifications" is on (Settings › Nostr), the background refresh (every 15, 30 or 60 minutes) also asks your relays for new replies, mentions, reposts, likes, zaps and private messages addressed to you, decrypts messages on the phone, and shows a notification. Message text is hidden on the lock screen. Turn it off at any time in Settings.
 
-**Search:** words you search for (anything that isn't an npub, note id, #hashtag or name@domain) are sent to public search relays, relay.nostr.band and search.nos.today, which see the search and your IP address. A name@domain lookup asks that domain's server.
+**Search:** words you search for (anything that isn't an npub, note id, #hashtag or name@domain) are sent to public search relays, relay.nostr.band and search.nos.today, which see the search and your IP address. Search runs as you type (after a short pause), so these relays also see the partial words you typed on the way. A name@domain lookup asks that domain's server.
 
 **Your lists:** if you change your media servers or message inbox relays in the app, the new list is published as a public event (kind 10063 or 10050).
 

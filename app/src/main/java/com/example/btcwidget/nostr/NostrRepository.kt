@@ -641,6 +641,28 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun searchNotes(query: String): List<FeedItem> =
         timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), search = query.trim(), limit = 40), source = searchPool)
 
+    /** Long-form articles matching [query] (NIP-50 on kind 30023), newest version of each. */
+    suspend fun searchArticles(query: String): List<com.example.btcwidget.nostr.core.Article> =
+        articlesFrom(searchPool.query(listOf(Filter(kinds = listOf(Kind.ARTICLE), search = query.trim(), limit = 40)), 6_000))
+
+    /** Recent articles: from the people you follow when [following], else from everyone on your relays. */
+    suspend fun recentArticles(following: Boolean, until: Long? = null): List<com.example.btcwidget.nostr.core.Article> {
+        val authors = if (following) homeAuthors().takeIf { it.isNotEmpty() } else null
+        val events = if (authors != null) authoredEvents(authors) { Filter(authors = it, kinds = listOf(Kind.ARTICLE), until = until, limit = 40) }
+            else queryEverywhere(listOf(Filter(kinds = listOf(Kind.ARTICLE), until = until, limit = 40)), timeoutMs = 6_000)
+        return articlesFrom(events)
+    }
+
+    private suspend fun articlesFrom(events: List<Event>): List<com.example.btcwidget.nostr.core.Article> {
+        val list = events.filter { it.kind == Kind.ARTICLE && !hidden(it) && trusted(it.pubkey) }
+            .groupBy { it.pubkey + ":" + it.firstTag("d")?.get(1).orEmpty() }
+            .mapNotNull { (_, v) -> com.example.btcwidget.nostr.core.Article.of(v.maxBy { it.createdAt }) }
+            .filter { it.content.isNotBlank() }
+            .sortedByDescending { it.publishedAt }
+        loadProfiles(list.map { it.pubkey })
+        return list
+    }
+
     // ---- Nostr Wallet Connect (NIP-47) ----
 
     private val _nwc = MutableStateFlow(NostrAccountStore.nwc(context)?.let { com.example.btcwidget.nostr.core.Nwc.parse(it) })

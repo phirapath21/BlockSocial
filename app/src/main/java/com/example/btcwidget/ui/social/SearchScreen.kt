@@ -75,35 +75,61 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
     var notesLoading by remember { mutableStateOf(false) }
     var people by remember { mutableStateOf<List<Profile>>(emptyList()) }
     var notes by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
+    var articles by remember { mutableStateOf<List<com.example.btcwidget.nostr.core.Article>>(emptyList()) }
+    var articlesLoading by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
     val focus = remember { FocusRequester() }
     // Opened as its own screen: start typing. As a tab, don't pop the keyboard on every visit.
     LaunchedEffect(Unit) { if (onBack != null) runCatching { focus.requestFocus() } }
 
-    fun run() {
+    val profiles by vm.profiles.collectAsState()
+
+    /**
+     * Searches [query]. [typing] is the search-as-you-type run: the keyboard stays open, and
+     * only unambiguous ids (a pasted npub, note or article link) open directly; a #tag or
+     * name@domain still being typed doesn't jump away.
+     */
+    fun run(typing: Boolean = false) {
         val q = query.trim()
         if (q.isEmpty()) return
-        keyboard?.hide()
+        if (!typing) keyboard?.hide()
         job?.cancel()
-        loading = true
         searched = q
+        // People already seen show at once; relay results replace them when they arrive.
+        val local = localPeople(profiles, q)
+        people = local
+        loading = local.isEmpty()
         job = scope.launch {
-            when (val direct = vm.resolve(q)) {
+            val looksLikeId = com.example.btcwidget.nostr.core.Nip19.decode(q) != null || com.example.btcwidget.nostr.core.Hex.isKey(q)
+            when (val direct = if (typing && !looksLikeId) null else vm.resolve(q)) {
                 is NostrRepository.Direct.ProfileTarget -> { loading = false; navigate(ProfileKey(direct.pubkey)); return@launch }
                 is NostrRepository.Direct.NoteTarget -> { loading = false; navigate(NoteKey(direct.id)); return@launch }
                 is NostrRepository.Direct.HashtagTarget -> { loading = false; navigate(HashtagKey(direct.tag)); return@launch }
                 is NostrRepository.Direct.ArticleTarget -> { loading = false; navigate(com.example.btcwidget.ArticleKey(direct.address.let { com.example.btcwidget.nostr.core.Nip19.naddr(it.kind, it.pubkey, it.identifier, it.relays) })); return@launch }
                 null -> Unit
             }
-            // Both at once; each list shows as soon as it arrives.
+            // All at once; each list shows as soon as it arrives.
             notesLoading = true
+            articlesLoading = true
             val p = async { vm.searchPeople(q) }
             val n = async { vm.searchNotes(q) }
-            people = p.await()
+            val a = async { vm.searchArticles(q) }
+            people = (p.await() + local).distinctBy { it.pubkey }
             loading = false
             notes = n.await()
             notesLoading = false
+            articles = a.await()
+            articlesLoading = false
         }
+    }
+
+    // Search as you type: a moment after the last key, from two characters on.
+    LaunchedEffect(query) {
+        val q = query.trim()
+        if (q.isEmpty()) { job?.cancel(); searched = null; loading = false; notesLoading = false; articlesLoading = false; people = emptyList(); notes = emptyList(); articles = emptyList(); return@LaunchedEffect }
+        if (q.length < 2 || q == searched) return@LaunchedEffect
+        kotlinx.coroutines.delay(450)
+        run(typing = true)
     }
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
@@ -143,26 +169,50 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
         ) {
             EInkChip(text = "PEOPLE" + if (searched != null && !loading) " ${people.size}" else "", selected = tab == "people", onClick = { tab = "people" })
             EInkChip(text = "POSTS" + if (searched != null && !notesLoading) " ${notes.size}" else "", selected = tab == "posts", onClick = { tab = "posts" })
+            EInkChip(text = "ARTICLES" + if (searched != null && !articlesLoading) " ${articles.size}" else "", selected = tab == "articles", onClick = { tab = "articles" })
         }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 
         SocialScaffold(vm, navigate) { actions ->
             when {
-                loading -> Spinner(Modifier.padding(top = 30.dp))
+                loading && tab == "people" -> Spinner(Modifier.padding(top = 30.dp))
                 // Before searching: Explore, recent notes from everyone or from one relay.
                 searched == null -> ExploreFeed(vm, actions)
-                tab == "people" -> if (people.isEmpty()) EmptyNote("No people found for \"$searched\".") else {
+                tab == "people" -> if (people.isEmpty() && searched?.startsWith("#") != true) EmptyNote("No people found for \"$searched\".") else {
                     LazyColumn(Modifier.fillMaxSize()) {
+                        com.example.btcwidget.nostr.core.HomeFeed.cleanTag(searched.orEmpty())?.takeIf { searched?.startsWith("#") == true }?.let { tag ->
+                            item(key = "tag") {
+                                Text(
+                                    "Open #$tag ›", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.fillMaxWidth().clickable { navigate(HashtagKey(tag)) }.padding(horizontal = 14.dp, vertical = 14.dp)
+                                )
+                                HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+                            }
+                        }
                         items(people, key = { it.pubkey }) { p ->
                             PersonRow(p, isFollowing = p.pubkey in following, onClick = { navigate(ProfileKey(p.pubkey)) })
                         }
                     }
+                }
+                tab == "articles" -> when {
+                    articlesLoading && articles.isEmpty() -> Spinner(Modifier.padding(top = 30.dp))
+                    articles.isEmpty() -> EmptyNote("No articles found for \"$searched\".")
+                    else -> ArticleList(articles, actions)
                 }
                 notesLoading && notes.isEmpty() -> Spinner(Modifier.padding(top = 30.dp))
                 else -> if (notes.isEmpty()) EmptyNote("No posts found for \"$searched\".") else NoteList(notes, stats, actions)
             }
         }
     }
+}
+
+/** Profiles already loaded whose name, display name or NIP-05 contains [q], best matches first. */
+private fun localPeople(profiles: Map<String, Profile>, q: String): List<Profile> {
+    val needle = q.lowercase().removePrefix("@")
+    if (needle.length < 2 || needle.startsWith("#")) return emptyList()
+    return profiles.values.filter { p -> listOfNotNull(p.name, p.displayName, p.nip05).any { it.lowercase().contains(needle) } }
+        .sortedBy { p -> if (listOfNotNull(p.name, p.displayName).any { it.lowercase().startsWith(needle) }) 0 else 1 }
+        .take(20)
 }
 
 /** Recent notes from all relays, or one chosen relay: to find people beyond your follows. */
@@ -173,6 +223,7 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
     val account by vm.account.collectAsState()
     var suggestions by rememberSaveable { mutableStateOf(false) }
     var feeds by rememberSaveable { mutableStateOf(false) }
+    var reads by rememberSaveable { mutableStateOf(false) }
     var relay by rememberSaveable { mutableStateOf<String?>(null) }
     var items by remember(relay) { mutableStateOf<List<FeedItem>?>(null) }
     var loadingMore by remember(relay) { mutableStateOf(false) }
@@ -183,16 +234,18 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            EInkChip(text = "FEEDS", selected = feeds, onClick = { feeds = true; suggestions = false })
-            if (account != null) EInkChip(text = "WHO TO FOLLOW", selected = suggestions, onClick = { suggestions = true; feeds = false })
-            EInkChip(text = "GLOBAL", selected = !suggestions && !feeds && relay == null, onClick = { suggestions = false; feeds = false; relay = null })
+            EInkChip(text = "ARTICLES", selected = reads, onClick = { reads = true; feeds = false; suggestions = false })
+            EInkChip(text = "FEEDS", selected = feeds, onClick = { feeds = true; suggestions = false; reads = false })
+            if (account != null) EInkChip(text = "WHO TO FOLLOW", selected = suggestions, onClick = { suggestions = true; feeds = false; reads = false })
+            EInkChip(text = "GLOBAL", selected = !suggestions && !feeds && !reads && relay == null, onClick = { suggestions = false; feeds = false; reads = false; relay = null })
             vm.relays.forEach { url ->
-                EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = !suggestions && !feeds && relay == url, onClick = { suggestions = false; feeds = false; relay = url })
+                EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = !suggestions && !feeds && !reads && relay == url, onClick = { suggestions = false; feeds = false; reads = false; relay = url })
             }
         }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
         if (suggestions) { WhoToFollow(vm, actions); return@Column }
         if (feeds) { DvmFeeds(vm, actions); return@Column }
+        if (reads) { RecentArticles(vm, actions); return@Column }
         when (val list = items) {
             null -> Spinner(Modifier.padding(top = 30.dp))
             else -> if (list.isEmpty()) EmptyNote("Nothing here right now.") else NoteList(
@@ -210,6 +263,47 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
                     }
                 }
             )
+        }
+    }
+}
+
+/** Articles, newest first; tap to read. */
+@Composable
+private fun ArticleList(list: List<com.example.btcwidget.nostr.core.Article>, actions: NoteActions, header: (@Composable () -> Unit)? = null) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        header?.let { h -> item(key = "header") { h() } }
+        items(list, key = { it.pubkey + ":" + it.identifier }) { a ->
+            Column {
+                Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(actions.profileOf(a.pubkey), a.pubkey, size = 20, onClick = { actions.openProfile(a.pubkey) })
+                    Text(
+                        actions.profileOf(a.pubkey)?.bestName ?: Profile.shortNpub(a.pubkey), color = EInk.Label, fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
+                ArticleRow(a, onClick = { actions.openArticle(com.example.btcwidget.nostr.core.Nip19.Address(a.event.kind, a.pubkey, a.identifier)) })
+            }
+        }
+    }
+}
+
+/** Recent long-form articles: from people you follow, or from everyone. */
+@Composable
+private fun RecentArticles(vm: SocialViewModel, actions: NoteActions) {
+    val account by vm.account.collectAsState()
+    var following by rememberSaveable { mutableStateOf(account != null) }
+    val list by androidx.compose.runtime.produceState<List<com.example.btcwidget.nostr.core.Article>?>(null, following) {
+        value = null; value = vm.recentArticles(following)
+    }
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (account != null) EInkChip(text = "FOLLOWING", selected = following, onClick = { following = true })
+            EInkChip(text = "EVERYONE", selected = !following, onClick = { following = false })
+        }
+        when (val l = list) {
+            null -> Spinner(Modifier.padding(top = 30.dp))
+            else -> if (l.isEmpty()) EmptyNote(if (following) "No articles from people you follow yet. Try EVERYONE." else "No articles found on your relays.")
+            else ArticleList(l, actions)
         }
     }
 }
