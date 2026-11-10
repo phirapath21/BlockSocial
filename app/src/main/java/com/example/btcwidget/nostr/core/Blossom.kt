@@ -77,6 +77,15 @@ object Imeta {
             fields["url"]?.takeIf { fields["m"]?.startsWith("video/") == true }
         }.toSet()
 
+    /** Width / height of [url] from [event]'s imeta "dim" field, when given. */
+    fun aspectRatio(event: Event, url: String): Float? =
+        event.tags.filter { it.firstOrNull() == "imeta" }.firstNotNullOfOrNull { tag ->
+            val fields = tag.drop(1).associate { it.substringBefore(' ') to it.substringAfter(' ', "") }
+            if (fields["url"] != url) return@firstNotNullOfOrNull null
+            val (w, h) = fields["dim"]?.split('x')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size == 2 } ?: return@firstNotNullOfOrNull null
+            if (w > 0 && h > 0) w.toFloat() / h else null
+        }
+
     /** URLs that [event]'s imeta tags mark as images (so links without a file extension still show). */
     fun imageUrls(event: Event): Set<String> =
         event.tags.filter { it.firstOrNull() == "imeta" }.mapNotNull { tag ->
