@@ -191,6 +191,7 @@ class NostrCoreTest {
                 is Content.Segment.ProfileRef -> it.raw
                 is Content.Segment.NoteRef -> it.raw
                 is Content.Segment.AddressRef -> it.raw
+                is Content.Segment.Emoji -> ":" + it.code + ":"
             }
         }.startsWith("gm nostr:$npub see https://x.com/a.jpg, and"))
     }
@@ -517,5 +518,17 @@ class OutboxTest {
         assertEquals(1, t.count("opt1"))
         assertEquals(3, t.voters)
         assertEquals(setOf("opt1"), t.mine)
+    }
+
+    @Test
+    fun customEmojiSplitsTextAndTagsReactions() {
+        val e = Event("i", "pk", 1, Kind.TEXT_NOTE, listOf(listOf("emoji", "blob", "https://e/blob.png"), listOf("emoji", "bad", "http://x")), "hi :blob: and :bad: :blob:", "s")
+        val emojis = com.example.btcwidget.nostr.core.CustomEmoji.of(e)
+        assertEquals(mapOf("blob" to "https://e/blob.png"), emojis)
+        val segs = Content.parse(e.content, emojis)
+        assertEquals(listOf(Content.Segment.Text("hi "), Content.Segment.Emoji("blob", "https://e/blob.png"), Content.Segment.Text(" and :bad: "), Content.Segment.Emoji("blob", "https://e/blob.png")), segs)
+        val r = Events.reaction("me", e, ":blob:", "https://e/blob.png")
+        assertTrue(listOf("emoji", "blob", "https://e/blob.png") in r.tags)
+        assertFalse(Events.reaction("me", e, "🔥", "https://x").tags.any { it[0] == "emoji" })
     }
 }

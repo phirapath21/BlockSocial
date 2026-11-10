@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.unit.em
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -77,6 +83,10 @@ class NoteActions(
     val isFollowing: (String) -> Boolean,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
+    /** Reacts with an emoji, or ":code:" plus its image URL for a custom emoji (NIP-30). */
+    val react: (Event, String, String?) -> Unit,
+    /** The user's own custom emoji (kind 10030), shortcode to image. */
+    val customEmojis: Map<String, String>,
     val pollTally: suspend (com.example.btcwidget.nostr.core.Poll) -> com.example.btcwidget.nostr.core.Poll.Tally?,
     /** Votes; the callback gets whether it was sent. Logged out, goes to log in instead. */
     val vote: (com.example.btcwidget.nostr.core.Poll, List<String>, (Boolean) -> Unit) -> Unit,
@@ -238,7 +248,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         // Links that imeta tags mark as images show as images even without a file extension.
         val images = com.example.btcwidget.nostr.core.Imeta.imageUrls(note)
         val videos = com.example.btcwidget.nostr.core.Imeta.videoUrls(note)
-        Content.parse(note.content.trim()).map { seg ->
+        Content.parse(note.content.trim(), com.example.btcwidget.nostr.core.CustomEmoji.of(note)).map { seg ->
             when {
                 seg is Content.Segment.Link && seg.url in images -> Content.Segment.Image(seg.url)
                 seg is Content.Segment.Link && seg.url in videos -> Content.Segment.Video(seg.url)
@@ -260,8 +270,17 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
             is Content.Segment.ProfileRef -> withLink(LinkAnnotation.Clickable("p", linkStyle) { actions.openProfile(seg.pubkey) }) {
                 append("@" + (actions.profileOf(seg.pubkey)?.bestName ?: Profile.shortNpub(seg.pubkey)))
             }
+            // Custom emoji (NIP-30) draw inline as small images.
+            is Content.Segment.Emoji -> appendInlineContent("emoji:" + seg.url, ":" + seg.code + ":")
             // Images and quoted notes are shown as blocks below.
             is Content.Segment.Image, is Content.Segment.Video, is Content.Segment.NoteRef, is Content.Segment.AddressRef -> Unit
+        }
+    }
+    val emojiContent = remember(note.id) {
+        segments.filterIsInstance<Content.Segment.Emoji>().distinctBy { it.url }.associate { e ->
+            ("emoji:" + e.url) to androidx.compose.foundation.text.InlineTextContent(
+                androidx.compose.ui.text.Placeholder(1.2.em, 1.2.em, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)
+            ) { AsyncImage(model = e.url, contentDescription = ":" + e.code + ":", modifier = Modifier.fillMaxSize()) }
         }
     }
     val shown = text.text.trim()
@@ -275,6 +294,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
     } else if (shown.isNotEmpty()) {
         Text(
             text = text,
+            inlineContent = emojiContent,
             color = EInk.Value,
             fontSize = fontSize.sp,
             lineHeight = (fontSize * 1.35).sp,
@@ -434,19 +454,30 @@ private fun ActionRow(note: Event, stats: NoteStats, actions: NoteActions) {
                 DropdownMenuItem(text = { Text("Quote") }, onClick = { repostMenu = false; actions.quote(note) })
             }
         }
-        ActionButton(if (stats.likedByMe) "♥" else "♡", stats.likes, if (stats.likedByMe) "Liked" else "Like", highlighted = stats.likedByMe) { actions.like(note) }
+        Box {
+            var picker by remember { mutableStateOf(false) }
+            val mine = stats.myReaction?.takeIf { stats.likedByMe && it != "+" && com.example.btcwidget.nostr.core.CustomEmoji.code(it) == null }
+            ActionButton(
+                if (stats.likedByMe) mine ?: "♥" else "♡", stats.likes, if (stats.likedByMe) "Liked" else "Like", highlighted = stats.likedByMe,
+                onLongClick = { if (!stats.likedByMe) picker = true }
+            ) { actions.like(note) }
+            ReactionMenu(picker, note, actions, onDismiss = { picker = false })
+        }
         ActionButton("⚡", (stats.zapMsat / 1000).toInt(), "Zap", highlighted = false) { actions.zap(note) }
         Spacer(Modifier.width(24.dp))
     }
 }
 
 @Composable
-private fun ActionButton(icon: String, count: Int, label: String, highlighted: Boolean, onClick: () -> Unit) {
+private fun ActionButton(icon: String, count: Int, label: String, highlighted: Boolean, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+            .combinedClickable(
+                onClickLabel = label, role = Role.Button, onClick = onClick,
+                onLongClickLabel = if (onLongClick != null) "React with an emoji" else null, onLongClick = onLongClick
+            )
             .padding(horizontal = 6.dp, vertical = 4.dp)
     ) {
         Text(icon, color = if (highlighted) EInk.Value else EInk.Caption, fontSize = 15.sp)
@@ -456,6 +487,32 @@ private fun ActionButton(icon: String, count: Int, label: String, highlighted: B
                 color = if (highlighted) EInk.Value else EInk.Caption,
                 fontSize = 13.sp
             )
+        }
+    }
+}
+
+/** Emoji to react with, like X's long-press: common ones, then the note's and your custom emoji. */
+private val QUICK_REACTIONS = listOf("🤙", "🔥", "😂", "🫂", "👀", "⚡", "🙏", "💯", "😢", "🧡")
+
+@Composable
+private fun ReactionMenu(expanded: Boolean, note: Event, actions: NoteActions, onDismiss: () -> Unit) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        val custom = remember(note.id) { com.example.btcwidget.nostr.core.CustomEmoji.of(note) } + actions.customEmojis
+        Column(Modifier.padding(horizontal = 8.dp).widthIn(max = 280.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                QUICK_REACTIONS.forEach { emoji ->
+                    Text(
+                        emoji, fontSize = 22.sp,
+                        modifier = Modifier.clip(CircleShape).clickable(onClickLabel = "React $emoji") { onDismiss(); actions.react(note, emoji, null) }.padding(6.dp)
+                    )
+                }
+                custom.entries.take(30).forEach { (code, url) ->
+                    AsyncImage(
+                        model = url, contentDescription = ":$code:",
+                        modifier = Modifier.size(34.dp).clip(CircleShape).clickable(onClickLabel = "React :$code:") { onDismiss(); actions.react(note, ":$code:", url) }.padding(6.dp)
+                    )
+                }
+            }
         }
     }
 }

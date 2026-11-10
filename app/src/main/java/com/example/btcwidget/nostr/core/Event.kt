@@ -20,6 +20,7 @@ object Kind {
     const val RELAY_LIST = 10002
     const val ARTICLE = 30023
     const val POLL = 1068
+    const val EMOJI_LIST = 10030
     const val POLL_RESPONSE = 1018
 }
 

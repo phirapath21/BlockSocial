@@ -328,6 +328,8 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     // ---- Actions ----
 
     fun like(note: Event) = act("Couldn't like") { repo.like(note) }
+    fun react(note: Event, content: String, emojiUrl: String?) = act("Couldn't react") { repo.react(note, content, emojiUrl) }
+    val emojis get() = repo.emojis
     fun repost(note: Event) = act("Couldn't repost") { repo.repost(note); say("Reposted") }
     fun follow(pubkey: String, follow: Boolean) = act(if (follow) "Couldn't follow" else "Couldn't unfollow") { repo.setFollowing(pubkey, follow) }
     fun mute(pubkey: String, mute: Boolean) = act("Couldn't update mutes") {

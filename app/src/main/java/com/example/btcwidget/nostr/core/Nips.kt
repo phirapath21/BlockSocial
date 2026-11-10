@@ -153,9 +153,11 @@ object Events {
     )
 
     /** A like (kind 7, "+"). */
-    fun reaction(pubkey: String, target: Event, content: String = "+") = UnsignedEvent(
+    /** A reaction (NIP-25): "+" is a like, an emoji, or ":code:" with [emojiUrl] for a custom emoji (NIP-30). */
+    fun reaction(pubkey: String, target: Event, content: String = "+", emojiUrl: String? = null) = UnsignedEvent(
         pubkey, now(), Kind.REACTION,
-        listOf(listOf("e", target.id), listOf("p", target.pubkey), listOf("k", target.kind.toString())),
+        listOf(listOf("e", target.id), listOf("p", target.pubkey), listOf("k", target.kind.toString())) +
+            listOfNotNull(emojiUrl?.let { url -> CustomEmoji.code(content)?.let { listOf("emoji", it, url) } }),
         content
     )
 
@@ -189,6 +191,22 @@ object Events {
     }
 }
 
+/** Custom emoji (NIP-30): ":shortcode:" in text, with an "emoji" tag giving its image. */
+object CustomEmoji {
+    val SHORTCODE = Regex(""":([A-Za-z0-9_-]{1,64}):""")
+
+    /** Shortcode to image URL from an event's "emoji" tags (https only). */
+    fun of(event: Event): Map<String, String> =
+        event.tags.filter { it.size >= 3 && it[0] == "emoji" && SHORTCODE.matches(":" + it[1] + ":") && it[2].startsWith("https://") }
+            .associate { it[1] to it[2] }
+
+    /** "blob" for ":blob:", null for anything else. */
+    fun code(content: String): String? = SHORTCODE.matchEntire(content)?.groupValues?.get(1)
+
+    /** How a reaction reads: a like is ♥, otherwise its emoji or ":code:". */
+    fun reactionLabel(content: String): String = if (content == "+" || content.isBlank()) "♥" else content
+}
+
 /** Splits note text into displayable pieces: text, links, images, hashtags and nostr: references. */
 object Content {
     sealed interface Segment {
@@ -200,6 +218,7 @@ object Content {
         data class ProfileRef(val pubkey: String, val raw: String) : Segment
         data class NoteRef(val id: String, val relays: List<String>, val author: String?, val raw: String) : Segment
         data class AddressRef(val address: Nip19.Address, val raw: String) : Segment
+        data class Emoji(val code: String, val url: String) : Segment
     }
 
     private val TOKEN = Regex(
@@ -207,6 +226,22 @@ object Content {
     )
     private val IMAGE = Regex("""\.(png|jpe?g|gif|webp|avif)(\?.*)?$""", RegexOption.IGNORE_CASE)
     private val VIDEO = Regex("""\.(mp4|webm|mov|m4v|m3u8)(\?.*)?$""", RegexOption.IGNORE_CASE)
+
+    /** Like [parse], with ":code:" turned into [Segment.Emoji] for the given custom emoji. */
+    fun parse(content: String, emojis: Map<String, String>): List<Segment> =
+        if (emojis.isEmpty()) parse(content) else parse(content).flatMap { seg ->
+            if (seg !is Segment.Text) return@flatMap listOf(seg)
+            val parts = ArrayList<Segment>()
+            var last = 0
+            for (m in CustomEmoji.SHORTCODE.findAll(seg.text)) {
+                val url = emojis[m.groupValues[1]] ?: continue
+                if (m.range.first > last) parts += Segment.Text(seg.text.substring(last, m.range.first))
+                parts += Segment.Emoji(m.groupValues[1], url)
+                last = m.range.last + 1
+            }
+            if (last < seg.text.length) parts += Segment.Text(seg.text.substring(last))
+            parts
+        }
 
     fun parse(content: String): List<Segment> {
         val out = ArrayList<Segment>()

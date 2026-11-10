@@ -39,7 +39,9 @@ data class NoteStats(
     val likes: Int = 0,
     val zapMsat: Long = 0,
     val likedByMe: Boolean = false,
-    val repostedByMe: Boolean = false
+    val repostedByMe: Boolean = false,
+    /** The user's own reaction ("+" for a like, or an emoji), when [likedByMe]. */
+    val myReaction: String? = null
 )
 
 /** One row of a timeline: a note, or a repost of one. */
@@ -108,6 +110,10 @@ class NostrRepository private constructor(private val context: Context) {
     private var muteEvent: Event? = null
     private var bookmarkEvent: Event? = null
     private var pinEvent: Event? = null
+    private var emojiListEvent: Event? = null
+    /** The user's custom emoji (NIP-30 kind 10030 list), shortcode to image. */
+    private val _emojis = MutableStateFlow<Map<String, String>>(emptyMap())
+    val emojis: StateFlow<Map<String, String>> = _emojis.asStateFlow()
 
     private val _pinned = MutableStateFlow<List<String>>(emptyList())
     /** The user's pinned note ids (NIP-51 kind 10001), first shown first. */
@@ -205,6 +211,8 @@ class NostrRepository private constructor(private val context: Context) {
         bookmarkEvent = null
         pinEvent = null
         _pinned.value = emptyList()
+        emojiListEvent = null
+        _emojis.value = emptyMap()
         _bookmarks.value = emptyList()
         _following.value = emptySet()
         _muted.value = emptySet()
@@ -218,7 +226,7 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun loadAccount() {
         val me = pubkey ?: return
         val events = queryEverywhere(
-            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.PINNED, Kind.RELAY_LIST, MEDIA_SERVER_LIST))),
+            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.PINNED, Kind.RELAY_LIST, MEDIA_SERVER_LIST, Kind.EMOJI_LIST))),
             timeoutMs = 6_000
         )
         applyAccountEvents(events, fromRelays = true)
@@ -230,6 +238,7 @@ class NostrRepository private constructor(private val context: Context) {
         latest(Kind.METADATA)?.let { remember(it) }
         latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = it.tagValues("p").toSet() } }
         latest(Kind.PINNED)?.let { if (it.createdAt >= (pinEvent?.createdAt ?: 0)) { pinEvent = it; _pinned.value = it.tagValues("e") } }
+        latest(Kind.EMOJI_LIST)?.let { if (it.createdAt >= (emojiListEvent?.createdAt ?: 0)) { emojiListEvent = it; _emojis.value = com.example.btcwidget.nostr.core.CustomEmoji.of(it) } }
         latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { bookmarkEvent = it; _bookmarks.value = it.tagValues("e").reversed() } }
         latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { muteEvent = it; _muted.value = it.tagValues("p").toSet() } }
         latest(MEDIA_SERVER_LIST)?.let { mediaServerList = it; mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(it) }
@@ -246,7 +255,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     private fun saveAccount() {
         val me = pubkey ?: return
-        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList)
+        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList, emojiListEvent)
         scope.launch(Dispatchers.IO) { cache.saveEvents(ACCOUNT_CACHE, events) }
     }
 
@@ -723,7 +732,10 @@ class NostrRepository private constructor(private val context: Context) {
             update[target] = when (e.kind) {
                 Kind.TEXT_NOTE -> s.copy(replies = s.replies + 1)
                 Kind.REPOST -> s.copy(reposts = s.reposts + 1, repostedByMe = s.repostedByMe || e.pubkey == me)
-                Kind.REACTION -> if (e.content == "-") s else s.copy(likes = s.likes + 1, likedByMe = s.likedByMe || e.pubkey == me)
+                Kind.REACTION -> if (e.content == "-") s else s.copy(
+                    likes = s.likes + 1, likedByMe = s.likedByMe || e.pubkey == me,
+                    myReaction = if (e.pubkey == me) e.content else s.myReaction
+                )
                 Kind.ZAP_RECEIPT -> s.copy(zapMsat = s.zapMsat + (Zaps.parseReceipt(e)?.amountMsat ?: 0))
                 else -> s
             }
@@ -736,7 +748,8 @@ class NostrRepository private constructor(private val context: Context) {
         likes = maxOf(new.likes, if (old.likedByMe && !new.likedByMe) new.likes + 1 else new.likes),
         likedByMe = new.likedByMe || old.likedByMe,
         reposts = if (old.repostedByMe && !new.repostedByMe) new.reposts + 1 else new.reposts,
-        repostedByMe = new.repostedByMe || old.repostedByMe
+        repostedByMe = new.repostedByMe || old.repostedByMe,
+        myReaction = new.myReaction ?: old.myReaction
     )
 
     private fun remember(e: Event, save: Boolean = true) {
@@ -877,12 +890,16 @@ class NostrRepository private constructor(private val context: Context) {
         bump(note.id) { it.copy(reposts = it.reposts + 1, repostedByMe = true) }
     }
 
-    suspend fun like(note: Event) {
+    suspend fun like(note: Event) = react(note, "+")
+
+    /** Reacts with "+" (a like), an emoji, or ":code:" with [emojiUrl] (NIP-30). One reaction per note. */
+    suspend fun react(note: Event, content: String, emojiUrl: String? = null) {
         if (_stats.value[note.id]?.likedByMe == true) return
-        bump(note.id) { it.copy(likes = it.likes + 1, likedByMe = true) }
-        runCatching { publish(Events.reaction(requireMe(), note)) }
-            .onFailure { bump(note.id) { s -> s.copy(likes = (s.likes - 1).coerceAtLeast(0), likedByMe = false) }; throw it }
+        bump(note.id) { it.copy(likes = it.likes + 1, likedByMe = true, myReaction = content) }
+        runCatching { publish(Events.reaction(requireMe(), note, content, emojiUrl)) }
+            .onFailure { bump(note.id) { s -> s.copy(likes = (s.likes - 1).coerceAtLeast(0), likedByMe = false, myReaction = null) }; throw it }
     }
+
 
     suspend fun setFollowing(target: String, follow: Boolean) {
         val me = requireMe()

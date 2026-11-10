@@ -59,6 +59,7 @@ fun SocialScaffold(
     val stats by vm.stats.collectAsState()
     val nwcWallet by vm.nwc.collectAsState()
     val translations by vm.translations.collectAsState()
+    val customEmojis by vm.emojis.collectAsState()
 
     LaunchedEffect(vm) {
         vm.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -90,6 +91,8 @@ fun SocialScaffold(
         openEngagement = { n, tab -> navigate(com.example.btcwidget.EngagementKey(n.id, tab)) },
         profileOf = { profiles[it] },
         resolveNote = { vm.note(it) },
+        react = { n, content, url -> signedIn { vm.react(n, content, url) } },
+        customEmojis = customEmojis,
         pollTally = { vm.pollTally(it) },
         vote = { poll, ids, done -> if (account == null) { navigate(LoginKey); done(false) } else vm.vote(poll, ids, done) },
         translate = { n, text -> vm.toggleTranslation(n, text) },

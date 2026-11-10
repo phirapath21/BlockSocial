@@ -30,7 +30,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] #hashtag autocomplete
 - [x] Video upload
 - [ ] GIF picker (needs Tenor or GIPHY and an API key)
-- [ ] Emoji reactions and custom emoji (NIP-30), beyond ♥
+- [x] Emoji reactions and custom emoji (NIP-30), beyond ♥
 
 ### Account and settings
 - [ ] Multiple accounts and switching
