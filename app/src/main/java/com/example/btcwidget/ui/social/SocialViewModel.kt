@@ -400,6 +400,39 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     val pinned get() = repo.pinned
 
+    // ---- Translation (on the device, ML Kit) ----
+
+    sealed interface Translation {
+        data object Loading : Translation
+        data class Done(val text: String, val from: String) : Translation
+    }
+
+    private val _translations = MutableStateFlow<Map<String, Translation>>(emptyMap())
+    val translations: StateFlow<Map<String, Translation>> = _translations.asStateFlow()
+
+    /** Translates [note] into the phone's language, or shows the original again if it is translated. */
+    fun toggleTranslation(note: Event, text: String) {
+        when (_translations.value[note.id]) {
+            is Translation.Done -> { _translations.update { it - note.id }; return }
+            Translation.Loading -> return
+            null -> Unit
+        }
+        _translations.update { it + (note.id to Translation.Loading) }
+        viewModelScope.launch {
+            val result = runCatching { com.example.btcwidget.nostr.NoteTranslator.translate(text) }
+            _translations.update { map ->
+                result.fold(
+                    onSuccess = { map + (note.id to Translation.Done(it.text, it.fromLanguage)) },
+                    onFailure = { map - note.id }
+                )
+            }
+            result.exceptionOrNull()?.let { e ->
+                if (e is CancellationException) throw e
+                say((e as? com.example.btcwidget.nostr.NoteTranslator.Unsupported)?.message ?: "Couldn't translate. Check your connection for the first download.")
+            }
+        }
+    }
+
     fun togglePin(note: Event) {
         val on = note.id !in repo.pinned.value
         act(if (on) "Couldn't pin" else "Couldn't unpin") { repo.setPinned(note, on); say(if (on) "Pinned to your profile" else "Unpinned") }

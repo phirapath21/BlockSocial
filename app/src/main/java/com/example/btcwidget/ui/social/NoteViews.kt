@@ -77,6 +77,9 @@ class NoteActions(
     val isFollowing: (String) -> Boolean,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
+    /** Translates the note (text without links), or shows the original if it is translated. */
+    val translate: (Event, String) -> Unit,
+    val translation: (String) -> SocialViewModel.Translation?,
     val resolveArticle: suspend (com.example.btcwidget.nostr.core.Nip19.Address) -> com.example.btcwidget.nostr.core.Article?,
     val openArticle: (com.example.btcwidget.nostr.core.Nip19.Address) -> Unit,
     val linkPreview: suspend (String) -> com.example.btcwidget.nostr.core.LinkPreview?,
@@ -128,7 +131,7 @@ fun NoteCard(
                         )
                     }
                 }
-                NoteBody(note, actions, fontSize = if (large) 17 else 15)
+                NoteBody(note, actions, fontSize = if (large) 17 else 15, offerTranslate = large)
                 // The opened post shows its full time, as X does under a post.
                 if (large) {
                     Text(
@@ -178,6 +181,10 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
             )
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Share") }, onClick = { menu = false; actions.share(note) })
+                if (note.content.isNotBlank()) DropdownMenuItem(
+                    text = { Text(if (actions.translation(note.id) is SocialViewModel.Translation.Done) "Show original" else "Translate") },
+                    onClick = { menu = false; actions.translate(note, translatableText(note, actions)) }
+                )
                 DropdownMenuItem(
                     text = { Text(if (actions.isBookmarked(note.id)) "Remove bookmark" else "Bookmark") },
                     onClick = { menu = false; actions.bookmark(note) }
@@ -199,7 +206,7 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
 
 /** Note text with tappable links, hashtags and mentions; images and quoted notes below it. */
 @Composable
-fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int = 0) {
+fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int = 0, offerTranslate: Boolean = false) {
     // NIP-36: hide behind a warning until the reader chooses to see it.
     val warning = note.firstTag("content-warning") ?: note.tags.firstOrNull { it.firstOrNull() == "content-warning" }
     var revealed by remember(note.id) { mutableStateOf(false) }
@@ -255,7 +262,14 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         }
     }
     val shown = text.text.trim()
-    if (shown.isNotEmpty()) {
+    val translation = actions.translation(note.id)
+    if (translation is SocialViewModel.Translation.Done) {
+        Text(translation.text, color = EInk.Value, fontSize = fontSize.sp, lineHeight = (fontSize * 1.35).sp, modifier = Modifier.padding(top = 2.dp))
+        Text(
+            "Translated from ${translation.from} · Show original", color = EInk.Caption, fontSize = 13.sp,
+            modifier = Modifier.padding(top = 4.dp).clickable { actions.translate(note, "") }
+        )
+    } else if (shown.isNotEmpty()) {
         Text(
             text = text,
             color = EInk.Value,
@@ -263,6 +277,14 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
             lineHeight = (fontSize * 1.35).sp,
             modifier = Modifier.padding(top = 2.dp)
         )
+        when {
+            translation == SocialViewModel.Translation.Loading ->
+                Text("Translating…", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            offerTranslate -> Text(
+                "Translate post", color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 6.dp).clickable { actions.translate(note, translatableText(note, actions)) }
+            )
+        }
     }
     segments.filterIsInstance<Content.Segment.Image>().take(4).forEach { img ->
         AsyncImage(
@@ -319,6 +341,18 @@ private fun LinkCard(url: String, actions: NoteActions) {
         }
     }
 }
+
+/** The words of a note for translating: mentions as names, links kept, media and quotes left out. */
+internal fun translatableText(note: Event, actions: NoteActions): String =
+    Content.parse(note.content).joinToString("") { seg ->
+        when (seg) {
+            is Content.Segment.Text -> seg.text
+            is Content.Segment.Link -> seg.url
+            is Content.Segment.Hashtag -> "#" + seg.tag
+            is Content.Segment.ProfileRef -> "@" + (actions.profileOf(seg.pubkey)?.bestName ?: Profile.shortNpub(seg.pubkey))
+            else -> ""
+        }
+    }.trim()
 
 /** A linked long-form article: cover, title and summary, boxed. */
 @Composable

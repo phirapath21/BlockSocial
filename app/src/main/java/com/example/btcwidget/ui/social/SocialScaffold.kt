@@ -58,6 +58,7 @@ fun SocialScaffold(
     val following by vm.following.collectAsState()
     val stats by vm.stats.collectAsState()
     val nwcWallet by vm.nwc.collectAsState()
+    val translations by vm.translations.collectAsState()
 
     LaunchedEffect(vm) {
         vm.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -89,6 +90,8 @@ fun SocialScaffold(
         openEngagement = { n, tab -> navigate(com.example.btcwidget.EngagementKey(n.id, tab)) },
         profileOf = { profiles[it] },
         resolveNote = { vm.note(it) },
+        translate = { n, text -> vm.toggleTranslation(n, text) },
+        translation = { translations[it] },
         resolveArticle = { vm.article(it) },
         openArticle = { a -> navigate(com.example.btcwidget.ArticleKey(Nip19.naddr(a.kind, a.pubkey, a.identifier, a.relays))) },
         linkPreview = { vm.linkPreview(it) },

@@ -125,6 +125,9 @@ dependencies {
   implementation(libs.coil.gif)
   implementation(libs.media3.exoplayer)
   implementation(libs.media3.ui)
+  // Translating notes on the device (models download once from Google)
+  implementation(libs.mlkit.translate)
+  implementation(libs.mlkit.language.id)
 
   // Navigation
   implementation(libs.androidx.navigation3.ui)

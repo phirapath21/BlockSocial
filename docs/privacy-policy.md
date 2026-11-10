@@ -49,6 +49,10 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Link previews:** to show a card for a web link in a note, the app reads the start of that page (title, description and image) from the linked site, which can see your IP address. Nothing about you is sent beyond a normal web request.
 
+**Translating notes:** when you tap Translate, the note is translated on your phone with Google's ML Kit; its text is not sent anywhere. The first time you translate from a language, the app downloads that language's model (about 30 MB) from Google's servers. ML Kit, a Google library inside the app, also sends Google basic information about how the translation feature runs (such as device type, app version and performance), never the text of notes; see Google's ML Kit terms and privacy information. Nothing is downloaded or sent to Google until you first translate.
+
+**Long-form articles:** to open an article, the app asks your relays, the author's relays and any relay named in the link.
+
 **Verified addresses (NIP-05):** to show a ✓ next to a name@domain address, the app asks that domain whether the address belongs to the account.
 
 **Moderation:** you can mute accounts (published as your mute list) and report notes (published as a NIP-56 report to your relays). The Community rules (in the app, and at docs/community-rules.md) say what isn't allowed.
@@ -83,7 +87,7 @@ Requests run when you open or refresh the app and in the background at the inter
 
 - No accounts on any developer server: your Nostr key is yours, and the developer cannot see, recover or reset it.
 - No advertising or advertising identifiers.
-- No analytics, crash-reporting or tracking SDKs.
+- No analytics, crash-reporting or tracking SDKs. (Google's ML Kit, used only when you translate a note, reports its own usage information to Google as described above.)
 - No selling or sharing of personal data — the developer does not collect any.
 - No access to your contacts, location, camera, microphone, files or other apps.
 
