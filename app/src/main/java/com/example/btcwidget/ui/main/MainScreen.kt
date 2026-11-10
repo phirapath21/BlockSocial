@@ -149,7 +149,7 @@ fun MainScreen(
         notificationsAllowed = settings.notificationsAllowed,
         homeContent = { com.example.btcwidget.ui.social.HomeScreen(social, onItemClick) },
         searchContent = { com.example.btcwidget.ui.social.SearchScreen(social, onItemClick, onBack = null) },
-        messagesContent = { com.example.btcwidget.ui.social.MessagesScreen() },
+        messagesContent = { com.example.btcwidget.ui.social.MessagesScreen(social, onItemClick) },
         drawerHeader = { com.example.btcwidget.ui.social.DrawerAccountHeader(social, onLogin = { onItemClick(com.example.btcwidget.LoginKey) }) },
         menuButtonIcon = { com.example.btcwidget.ui.social.MenuAvatar(social) },
         notificationsContent = { com.example.btcwidget.ui.social.NotificationsScreen(social, onItemClick) },

@@ -20,6 +20,9 @@ import kotlinx.serialization.Serializable
 /** Logging in or creating a Nostr account. */
 @Serializable data object LoginKey : NavKey
 
+/** A private conversation; [peers] are pubkeys joined with commas. */
+@Serializable data class ChatKey(val peers: String) : NavKey
+
 /** The community rules. */
 @Serializable data object RulesKey : NavKey
 
