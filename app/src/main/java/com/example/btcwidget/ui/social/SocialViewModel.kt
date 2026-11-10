@@ -543,6 +543,8 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     // ---- Search ----
 
     suspend fun resolve(query: String) = runCatching { repo.resolve(query) }.getOrNull()
+    suspend fun searchArticles(query: String) = runCatching { repo.searchArticles(query) }.getOrDefault(emptyList())
+    suspend fun recentArticles(following: Boolean, until: Long? = null) = runCatching { repo.recentArticles(following, until) }.getOrDefault(emptyList())
     suspend fun searchPeople(query: String) = runCatching { repo.searchPeople(query) }.getOrDefault(emptyList())
     suspend fun searchNotes(query: String) = runCatching { repo.searchNotes(query) }.getOrDefault(emptyList())
 
