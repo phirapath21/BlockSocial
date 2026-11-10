@@ -12,19 +12,17 @@ data class ChartScene(
     val range: ChartRange,
     /** Current price; falls back to the last history point. */
     val price: Double?,
-    val stale: Boolean = false
+    val stale: Boolean = false,
+    val palette: Palette = Palette.CLASSIC
 )
 
 /**
- * Paints the price-chart widget in the blockclock style: the same dark grained panel,
+ * Paints the price-chart widget in the blockclock style: the same panel and palette,
  * a small pair label, the price in the condensed face, the change over the range, and
  * a sparkline (2-unit line, faint area, end dot) across the lower part. A single
  * series, so no legend or axes: the header names it.
  */
 object ChartPainter {
-    private val F = DrawSurface.Font.CONDENSED
-    private val M = DrawSurface.Font.MONO
-
     private fun sizeForCap(s: DrawSurface, font: DrawSurface.Font, cap: Float): Float =
         100f * cap / s.capHeight(font, 100f)
 
@@ -35,8 +33,25 @@ object ChartPainter {
 
     fun paint(s: DrawSurface, width: Float, height: Float, scene: ChartScene) {
         val radius = 0.08f * min(width, height)
-        s.roundRectGradient(0f, 0f, width, height, radius, BlockclockPainter.BG_TOP, BlockclockPainter.BG_BOTTOM)
-        s.grain(0f, 0f, width, height, radius)
+        val p = scene.palette
+        val F = p.displayFont
+        val M = p.captionFont
+        PanelEffects.background(
+            s, width, height, radius, p,
+            seed = (scene.price ?: 0.0).hashCode() * 31 + scene.range.ordinal,
+            codeOpacity = 0.55f
+        )
+        PanelEffects.glowOn(s, p, height)
+        try {
+            paintContent(s, width, height, scene, F, M)
+        } finally {
+            PanelEffects.glowOff(s, p)
+        }
+        PanelEffects.overlay(s, width, height, radius, p)
+    }
+
+    private fun paintContent(s: DrawSurface, width: Float, height: Float, scene: ChartScene, F: DrawSurface.Font, M: DrawSurface.Font) {
+        val p = scene.palette
 
         val unit = min(height, width * 0.6f)
         val padX = max(0.06f * width, 0.08f * unit)
@@ -49,14 +64,14 @@ object ChartPainter {
         val labelSize = sizeForCap(s, M, labelCap)
         var y = padTop + labelCap
         val pair = "BTC/${scene.currency}"
-        s.text(pair, padX, y, M, labelSize, BlockclockPainter.CAPTION, DrawSurface.Align.LEFT, 0.08f)
+        s.text(pair, padX, y, M, labelSize, p.caption, DrawSurface.Align.LEFT, 0.08f)
         if (scene.stale) {
             val r = 0.3f * labelCap
-            s.circle(padX + s.measure(pair, M, labelSize, 0.08f) + 3 * r, y - labelCap / 2, r, BlockclockPainter.ALERT)
+            s.circle(padX + s.measure(pair, M, labelSize, 0.08f) + 3 * r, y - labelCap / 2, r, p.alert)
         }
         val change = summary?.let { BlockclockMetrics.formatChange(it.changePct) }
         val right = listOfNotNull(change, scene.range.label).joinToString(" · ")
-        s.text(right, width - padX, y, M, labelSize, BlockclockPainter.CAPTION, DrawSurface.Align.RIGHT, 0.08f)
+        s.text(right, width - padX, y, M, labelSize, p.caption, DrawSurface.Align.RIGHT, 0.08f)
 
         val priceCap = 0.2f * unit
         var priceSize = sizeForCap(s, F, priceCap)
@@ -65,7 +80,7 @@ object ChartPainter {
         val w = s.measure(priceText, F, priceSize)
         if (w > maxPriceW) priceSize *= maxPriceW / w
         y += 0.05f * unit + s.capHeight(F, priceSize)
-        s.text(priceText, padX, y, F, priceSize, BlockclockPainter.INK, DrawSurface.Align.LEFT)
+        s.text(priceText, padX, y, F, priceSize, p.ink, DrawSurface.Align.LEFT)
 
         // Plot area below the header.
         val top = y + 0.1f * unit
@@ -81,7 +96,7 @@ object ChartPainter {
                 if (tw > plotRight - left) size *= (plotRight - left) / tw
                 s.text(
                     text, width / 2, (top + bottom) / 2 + s.capHeight(M, size) / 2,
-                    M, size, BlockclockPainter.CAPTION, DrawSurface.Align.CENTER
+                    M, size, p.caption, DrawSurface.Align.CENTER
                 )
             }
             return
@@ -99,14 +114,11 @@ object ChartPainter {
         ys.copyInto(ay)
         ax[n] = xs.last(); ay[n] = bottom
         ax[n + 1] = xs.first(); ay[n + 1] = bottom
-        s.polygon(ax, ay, WASH)
+        s.polygon(ax, ay, p.wash)
         val line = max(1.5f, 0.012f * unit)
-        s.polyline(xs, ys, BlockclockPainter.INK, line)
+        s.polyline(xs, ys, p.ink, line)
         val r = max(2.5f, 0.02f * unit)
-        s.circle(xs.last(), ys.last(), r + line, BlockclockPainter.BG_BOTTOM)
-        s.circle(xs.last(), ys.last(), r, BlockclockPainter.INK)
+        s.circle(xs.last(), ys.last(), r + line, p.bgBottom)
+        s.circle(xs.last(), ys.last(), r, p.ink)
     }
-
-    /** INK at ~10% opacity. */
-    private const val WASH = 0x1AD7DCDF
 }

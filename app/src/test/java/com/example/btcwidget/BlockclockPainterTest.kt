@@ -70,13 +70,14 @@ class BlockclockPainterTest {
     private val shapes = listOf(395f to 197f, 560f to 140f, 300f to 260f, 160f to 150f)
 
     @Test
-    fun compositionHoldsForEveryModeAndShape() {
-        for (scene in allScenes()) {
+    fun compositionHoldsForEveryModeShapeAndTheme() {
+        val scenes = AppTheme.entries.flatMap { theme -> allScenes().map { it.copy(palette = theme.palette) } }
+        for (scene in scenes) {
             for ((w, h) in shapes) {
                 val s = RecordingSurface()
                 BlockclockPainter.paint(s, w, h, scene)
                 val panel = s.panel!!
-                val where = "${scene.display} at ${w}x$h"
+                val where = "${scene.display} at ${w}x$h, ${if (scene.palette.crt) "retro" else "classic"}"
 
                 for ((text, box) in s.texts) {
                     assertTrue(

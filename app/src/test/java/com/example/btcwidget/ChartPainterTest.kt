@@ -34,7 +34,8 @@ class ChartPainterTest {
             ChartScene(emptyList(), "USD", ChartRange.DAY, 74_455.0),
             ChartScene(emptyList(), "USD", ChartRange.DAY, null)
         )
-        for (scene in scenes) for ((w, h) in listOf(750f to 450f, 450f to 450f, 1000f to 230f, 250f to 250f)) {
+        val themed = AppTheme.entries.flatMap { theme -> scenes.map { it.copy(palette = theme.palette) } }
+        for (scene in themed) for ((w, h) in listOf(750f to 450f, 450f to 450f, 1000f to 230f, 250f to 250f)) {
             val r = Recorder()
             ChartPainter.paint(r, w, h, scene)
             for ((text, b) in r.boxes) {

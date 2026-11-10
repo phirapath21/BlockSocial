@@ -11,10 +11,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.btcwidget.theme.BTCWidgetTheme
+import com.example.btcwidget.ui.main.EInk
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    EInk.theme = AppPrefs.theme(this)
 
     // The e-ink UI is always dark, so keep light system bar icons regardless of system theme.
     enableEdgeToEdge(

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.btcwidget.AppTheme
 import com.example.btcwidget.DataSources
 import com.example.btcwidget.PriceSource
 import com.example.btcwidget.Stack
@@ -40,6 +41,8 @@ import com.example.btcwidget.ThbSource
 fun SettingsScreen(
     currencySetting: String,
     onCurrencySelected: (String) -> Unit,
+    theme: AppTheme = AppTheme.CLASSIC,
+    onThemeSelected: (AppTheme) -> Unit = {},
     refreshInterval: Int,
     onRefreshIntervalSelected: (Int) -> Unit,
     appVersion: String? = null,
@@ -76,6 +79,15 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         EInkPanel(title = "Display") {
+            SettingRow("Theme", note = "App and widgets") {
+                AppTheme.entries.forEach { option ->
+                    EInkChip(
+                        text = option.label.uppercase(),
+                        selected = theme == option,
+                        onClick = { onThemeSelected(option) }
+                    )
+                }
+            }
             SettingRow("Currency", note = "Prices, sats and alerts") {
                 listOf("USD", "THB").forEach { currency ->
                     EInkChip(
@@ -147,7 +159,7 @@ fun SettingsScreen(
             AboutLine("Blockface" + (appVersion?.let { " $it" } ?: ""))
             AboutLine("Prices: ${dataSources.price.label}" + (if (dataSources.thb == ThbSource.BITKUB) ", Bitkub (THB)" else "") + " · Network: mempool.space")
             AboutLine("Supply: blockchain.info · MSTR: Yahoo Finance, CoinGecko")
-            AboutLine("Display type: Oswald (SIL Open Font License)")
+            AboutLine("Type: Oswald, VT323 (SIL Open Font License)")
             val uriHandler = LocalUriHandler.current
             Text(
                 text = "Privacy policy ›",

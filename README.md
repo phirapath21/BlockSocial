@@ -59,7 +59,9 @@ The widgets and the app share one look: a **dark grained panel** with **tall con
 - A **stacked label** beside the value (e.g. `BTC` over `USD` with a rule between), the **value in large type**, and an optional **unit** set high on the right (e.g. `MIL`, `EH/S`).
 - A **monospace caption** underneath (e.g. `Market price of bitcoin`); a red dot marks stale data.
 - The panel fills the widget and is painted as one image, so it stays crisp at every size; the app uses the same painter.
+- **Retro theme** (Settings → Display → Theme): green phosphor terminal type with a soft glow, scanlines and faint falling hex behind the value; stale data is marked in amber. It applies to the app and every widget.
 - Display face: [Oswald](https://github.com/googlefonts/OswaldFont) Light, bundled under the SIL Open Font License (see `licenses/Oswald-OFL.txt`).
+- Retro theme face: [VT323](https://fonts.google.com/specimen/VT323), subset to Latin, bundled under the SIL Open Font License (see `licenses/VT323-OFL.txt`).
 
 ---
 

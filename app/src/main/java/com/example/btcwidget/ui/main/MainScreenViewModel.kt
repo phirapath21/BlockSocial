@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.btcwidget.AppPrefs
+import com.example.btcwidget.AppTheme
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.ChartRange
 import com.example.btcwidget.DataSources
@@ -29,6 +30,7 @@ import kotlinx.coroutines.launch
 data class SettingsState(
     val heroMetric: String,
     val currency: String,
+    val theme: AppTheme,
     val refreshInterval: Int,
     /** On/off per mode, indexed by mode. */
     val modeStates: List<Boolean>,
@@ -84,6 +86,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private fun readSettings() = SettingsState(
         heroMetric = AppPrefs.heroMetric(appContext),
         currency = AppPrefs.currency(appContext),
+        theme = AppPrefs.theme(appContext),
         refreshInterval = AppPrefs.refreshInterval(appContext),
         modeStates = AppPrefs.enabledModes(appContext),
         modeOrder = AppPrefs.modeOrder(appContext),
@@ -114,6 +117,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun setCurrency(currency: String) {
         AppPrefs.setCurrency(appContext, currency)
         _settings.update { it.copy(currency = currency) }
+        WidgetUpdater.updateAllWidgets(appContext)
+    }
+
+    /** Switches the app and every placed widget to [theme]. */
+    fun setTheme(theme: AppTheme) {
+        AppPrefs.setTheme(appContext, theme)
+        EInk.theme = theme
+        _settings.update { it.copy(theme = theme) }
         WidgetUpdater.updateAllWidgets(appContext)
     }
 

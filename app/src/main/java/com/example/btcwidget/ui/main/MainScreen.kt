@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
+import com.example.btcwidget.AppTheme
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.DataSources
 import com.example.btcwidget.MetricCategory
@@ -88,6 +89,8 @@ fun MainScreen(
         heroMetric = settings.heroMetric,
         modeStates = settings.modeStates,
         currencySetting = settings.currency,
+        theme = settings.theme,
+        onThemeSelected = viewModel::setTheme,
         onCurrencySelected = viewModel::setCurrency,
         refreshInterval = settings.refreshInterval,
         onRefreshIntervalSelected = viewModel::setRefreshInterval,
@@ -126,6 +129,8 @@ fun MainScreenContent(
     modeStates: List<Boolean>,
     currencySetting: String,
     onCurrencySelected: (String) -> Unit,
+    theme: AppTheme = AppTheme.CLASSIC,
+    onThemeSelected: (AppTheme) -> Unit = {},
     refreshInterval: Int,
     onRefreshIntervalSelected: (Int) -> Unit,
     onHeroMetricSelected: (String) -> Unit,
@@ -235,6 +240,8 @@ fun MainScreenContent(
                 MainTab.SETTINGS -> SettingsScreen(
                     currencySetting = currencySetting,
                     onCurrencySelected = onCurrencySelected,
+                    theme = theme,
+                    onThemeSelected = onThemeSelected,
                     refreshInterval = refreshInterval,
                     onRefreshIntervalSelected = onRefreshIntervalSelected,
                     appVersion = appVersion,
