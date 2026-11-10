@@ -8,7 +8,7 @@ Blockface ("the app") shows Bitcoin market and network data in an Android app an
 
 The app keeps the following only on your device, in its private app storage:
 
-- **Your settings** — display currency, refresh interval, data sources, which metrics the widget shows and their order, collapsed sections.
+- **Your settings** — theme, display currency, refresh interval, data sources, which metrics the widget shows and their order, collapsed sections.
 - **Your stack** — the amount of bitcoin you choose to enter, to show what it is worth. It is never sent anywhere by the app.
 - **Alerts** — the price, fee and network-event alerts you set.
 - **Cached market data** — the latest prices, network figures and hourly price history, so widgets and charts work offline.

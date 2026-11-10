@@ -18,7 +18,8 @@ import kotlin.random.Random
 /** [DrawSurface] backed by an Android [Canvas]; used by widgets and the app. */
 class AndroidDrawSurface(
     private val canvas: Canvas,
-    private val condensed: Typeface
+    private val condensed: Typeface,
+    private val pixel: Typeface = Typeface.MONOSPACE
 ) : DrawSurface {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -28,7 +29,11 @@ class AndroidDrawSurface(
 
     private fun prepareText(font: DrawSurface.Font, size: Float, tracking: Float): Paint =
         textPaint.apply {
-            typeface = if (font == DrawSurface.Font.CONDENSED) condensed else Typeface.MONOSPACE
+            typeface = when (font) {
+                DrawSurface.Font.CONDENSED -> condensed
+                DrawSurface.Font.PIXEL -> pixel
+                DrawSurface.Font.MONO -> Typeface.MONOSPACE
+            }
             textSize = size
             letterSpacing = tracking
         }
@@ -90,6 +95,28 @@ class AndroidDrawSurface(
         canvas.drawPath(path(xs, ys, close = true), fill)
     }
 
+    override fun scanlines(l: Float, t: Float, r: Float, b: Float, radius: Float, pitch: Float, color: Int) {
+        // One-pixel-wide tile: a line of [color] on top, clear below, repeated down the panel.
+        val rows = pitch.toInt().coerceAtLeast(2)
+        val lineRows = (rows / 3).coerceAtLeast(1)
+        val pixels = IntArray(rows) { if (it < lineRows) color else Color.TRANSPARENT }
+        val tile = Bitmap.createBitmap(pixels, 1, rows, Bitmap.Config.ARGB_8888)
+        fill.shader = BitmapShader(tile, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        rect.set(l, t, r, b)
+        canvas.drawRoundRect(rect, radius, radius, fill)
+        fill.shader = null
+    }
+
+    override fun glow(color: Int, radius: Float) {
+        if (radius > 0f) {
+            textPaint.setShadowLayer(radius, 0f, 0f, color)
+            stroke.setShadowLayer(radius, 0f, 0f, color)
+        } else {
+            textPaint.clearShadowLayer()
+            stroke.clearShadowLayer()
+        }
+    }
+
     private fun path(xs: FloatArray, ys: FloatArray, close: Boolean) = Path().apply {
         moveTo(xs[0], ys[0])
         for (i in 1 until xs.size) lineTo(xs[i], ys[i])
@@ -106,6 +133,17 @@ class AndroidDrawSurface(
 
     companion object {
         @Volatile private var cachedCondensed: Typeface? = null
+        @Volatile private var cachedPixel: Typeface? = null
+
+        /** A surface on [canvas] with the app's bundled faces. */
+        fun create(canvas: Canvas, context: Context) =
+            AndroidDrawSurface(canvas, condensedTypeface(context), pixelTypeface(context))
+
+        /** VT323, bundled in res/font; falls back to the system monospace face. */
+        fun pixelTypeface(context: Context): Typeface =
+            cachedPixel ?: (
+                runCatching { ResourcesCompat.getFont(context, R.font.vt323) }.getOrNull() ?: Typeface.MONOSPACE
+                ).also { cachedPixel = it }
 
         /** Oswald Light, bundled in res/font; falls back to the system condensed face. */
         fun condensedTypeface(context: Context): Typeface =

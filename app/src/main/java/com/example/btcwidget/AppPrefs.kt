@@ -20,6 +20,7 @@ object AppPrefs {
     private const val CURRENCY = "currency"
     private const val REFRESH_INTERVAL = "refresh_interval"
     private const val HERO_METRIC = "hero_metric"
+    private const val THEME = "app_theme"
     private const val MODE_ORDER = "mode_order"
     private const val COLLAPSED = "collapsed_categories"
     private const val PRICE_SOURCE = "price_source"
@@ -53,6 +54,12 @@ object AppPrefs {
 
     fun refreshInterval(context: Context): Int = prefs(context).getInt(REFRESH_INTERVAL, DEFAULT_REFRESH_MINUTES)
     fun setRefreshInterval(context: Context, minutes: Int) = edit(context) { putInt(REFRESH_INTERVAL, minutes) }
+
+    fun theme(context: Context): AppTheme = AppTheme.fromName(prefs(context).getString(THEME, null))
+    fun setTheme(context: Context, value: AppTheme) = edit(context) { putString(THEME, value.name) }
+
+    /** Colors and effects for widgets, from [theme]. */
+    fun palette(context: Context): Palette = theme(context).palette
 
     fun heroMetric(context: Context): String = prefs(context).getString(HERO_METRIC, DEFAULT_HERO) ?: DEFAULT_HERO
     fun setHeroMetric(context: Context, key: String) = edit(context) { putString(HERO_METRIC, key) }

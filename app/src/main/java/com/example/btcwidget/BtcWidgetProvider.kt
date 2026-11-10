@@ -43,7 +43,8 @@ class BtcWidgetProvider : AppWidgetProvider() {
                     BlockclockMetrics.halvingProgress(data.blockHeight).toFloat()
                 } else {
                     null
-                }
+                },
+                palette = AppPrefs.palette(context)
             )
 
             val views = RemoteViews(context.packageName, R.layout.btc_widget_blockclock)

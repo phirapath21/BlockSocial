@@ -74,12 +74,18 @@ class BtcQuoteWidgetProvider : AppWidgetProvider() {
             val quoteIndex = AppPrefs.quoteIndex(context, appWidgetId)
             val quote = QUOTES[quoteIndex % QUOTES.size]
 
-            val layoutId = R.layout.btc_widget_quote
+            val retro = AppPrefs.theme(context) == AppTheme.RETRO
+            val layoutId = if (retro) R.layout.btc_widget_quote_retro else R.layout.btc_widget_quote
             val views = RemoteViews(context.packageName, layoutId)
 
-            // Format quotation with typography quotes
-            views.setTextViewText(R.id.txt_quote_text, "“${quote.text}”")
-            views.setTextViewText(R.id.txt_quote_author, "— ${quote.author.uppercase()}")
+            if (retro) {
+                // Terminal output: a prompt before the quote, a cursor after the author.
+                views.setTextViewText(R.id.txt_quote_text, "> ${quote.text}")
+                views.setTextViewText(R.id.txt_quote_author, "— ${quote.author.uppercase()}_")
+            } else {
+                views.setTextViewText(R.id.txt_quote_text, "“${quote.text}”")
+                views.setTextViewText(R.id.txt_quote_author, "— ${quote.author.uppercase()}")
+            }
 
             // Tap layout to cycle to next quote
             views.setOnClickPendingIntent(R.id.quote_container, getPendingSelfIntent(context, appWidgetId, ACTION_NEXT_QUOTE))

@@ -51,7 +51,7 @@ object WidgetBitmapRenderer {
         }
 
         val bitmap = Bitmap.createBitmap(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
-        val surface = AndroidDrawSurface(Canvas(bitmap), AndroidDrawSurface.condensedTypeface(context))
+        val surface = AndroidDrawSurface.create(Canvas(bitmap), context)
         paint(surface, bitmap.width.toFloat(), bitmap.height.toFloat())
         views.setImageViewBitmap(R.id.widget_image, bitmap)
         views.setContentDescription(R.id.widget_image, description)
@@ -78,7 +78,7 @@ object WidgetPlaceholder {
 
     fun show(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
         val views = RemoteViews(context.packageName, R.layout.btc_widget_blockclock)
-        WidgetBitmapRenderer.render(context, appWidgetManager, appWidgetId, views, scene)
+        WidgetBitmapRenderer.render(context, appWidgetManager, appWidgetId, views, scene.copy(palette = AppPrefs.palette(context)))
         val retry = Intent(context, BtcWidgetProvider::class.java).setAction(BtcWidgetProvider.ACTION_REFRESH)
         views.setOnClickPendingIntent(
             R.id.widget_root,

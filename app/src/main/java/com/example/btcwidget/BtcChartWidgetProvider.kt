@@ -28,7 +28,8 @@ class BtcChartWidgetProvider : AppWidgetProvider() {
                 currency = currency,
                 range = range,
                 price = if (currency == "THB") data.btcThb else data.btcUsd,
-                stale = !data.lastFetchSuccessful
+                stale = !data.lastFetchSuccessful,
+                palette = AppPrefs.palette(context)
             )
 
             val views = RemoteViews(context.packageName, R.layout.btc_widget_blockclock)

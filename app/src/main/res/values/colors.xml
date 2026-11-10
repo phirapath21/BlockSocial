@@ -7,4 +7,10 @@
     <color name="eink_value">#D7DCDF</color>       <!-- primary type -->
     <color name="eink_caption">#E3E5E7</color>     <!-- monospace captions -->
     <color name="eink_rule">#5A5E63</color>        <!-- divider lines -->
+    <!-- Retro theme: green phosphor terminal (matches Palette.RETRO) -->
+    <color name="retro_panel_top">#03120A</color>
+    <color name="retro_panel_bottom">#000503</color>
+    <color name="retro_value">#39FF6E</color>
+    <color name="retro_caption">#22C552</color>
+    <color name="retro_rule">#0F3D1E</color>
 </resources>

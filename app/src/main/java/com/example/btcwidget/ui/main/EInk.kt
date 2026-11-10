@@ -17,7 +17,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,26 +30,40 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.btcwidget.AndroidDrawSurface
+import com.example.btcwidget.AppTheme
+import com.example.btcwidget.R
 import com.example.btcwidget.BlockclockDisplay
 import com.example.btcwidget.BlockclockPainter
 import com.example.btcwidget.BlockclockScene
 import java.util.Locale
 
-/** App palette, matching the blockclock panels painted by BlockclockPainter. */
+/**
+ * App palette, matching the panels painted by BlockclockPainter. Colors follow [theme],
+ * which is snapshot state: composables and draw lambdas that read them update when the
+ * theme changes.
+ */
 object EInk {
-    val Background = Color(0xFF0E0F11)
-    val Body = Color(0xFF1A1B1F)
-    val BodyStroke = Color(0xFF2A2C31)
-    val Value = Color(0xFFD7DCDF)
-    val Label = Color(0xFFA3A8AC)
-    val Caption = Color(0xFF8C9196)
-    val Track = Color(0xFF34363B)
-    val Alert = Color(0xFFE5534B)
+    var theme: AppTheme by mutableStateOf(AppTheme.CLASSIC)
+
+    private val ui get() = theme.palette.ui
+    val Background get() = Color(ui.background)
+    val Body get() = Color(ui.body)
+    val BodyStroke get() = Color(ui.bodyStroke)
+    val Value get() = Color(ui.value)
+    val Label get() = Color(ui.label)
+    val Caption get() = Color(ui.caption)
+    val Track get() = Color(ui.track)
+    val Alert get() = Color(ui.alert)
+
+    /** Face for screen titles: the terminal face in Retro, monospace otherwise. */
+    val TitleFont: FontFamily get() = if (theme == AppTheme.RETRO) PixelFont else FontFamily.Monospace
+    private val PixelFont = FontFamily(Font(R.font.vt323))
 
     val BodyShape = RoundedCornerShape(16.dp)
     val ChipShape = RoundedCornerShape(50)
@@ -67,8 +84,9 @@ fun EInkDevice(
     progress: Float? = null
 ) {
     val context = LocalContext.current
-    val typeface = remember { AndroidDrawSurface.condensedTypeface(context) }
-    val scene = BlockclockScene(display = display, stale = stale, progress = progress)
+    val condensed = remember { AndroidDrawSurface.condensedTypeface(context) }
+    val pixel = remember { AndroidDrawSurface.pixelTypeface(context) }
+    val scene = BlockclockScene(display = display, stale = stale, progress = progress, palette = EInk.theme.palette)
     val description = listOf(display.labelTop, display.labelBottom, display.value, display.suffix)
         .filter { it.isNotEmpty() }
         .joinToString(" ") + ". " + display.caption
@@ -79,7 +97,7 @@ fun EInkDevice(
             .semantics { contentDescription = description }
     ) {
         drawIntoCanvas { canvas ->
-            BlockclockPainter.paint(AndroidDrawSurface(canvas.nativeCanvas, typeface), size.width, size.height, scene)
+            BlockclockPainter.paint(AndroidDrawSurface(canvas.nativeCanvas, condensed, pixel), size.width, size.height, scene)
         }
     }
 }

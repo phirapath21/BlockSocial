@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.btcwidget.AppTheme
 import java.util.Locale
 
 /** Shared building blocks for the dashboard and widgets screens. */
@@ -46,9 +47,10 @@ fun HeaderSection(title: String, subtitle: String) {
         Text(
             text = title,
             color = EInk.Value,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            // The terminal face is light and small for its size; set it larger, unbolded.
+            fontSize = if (EInk.theme == AppTheme.RETRO) 26.sp else 17.sp,
+            fontWeight = if (EInk.theme == AppTheme.RETRO) FontWeight.Normal else FontWeight.Bold,
+            fontFamily = EInk.TitleFont,
             letterSpacing = 4.sp
         )
         Spacer(modifier = Modifier.height(4.dp))
