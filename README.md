@@ -10,6 +10,22 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 
 ---
 
+## 💬 Nostr social
+
+Blockface is also a Nostr client with a familiar timeline layout. The bottom bar is **Home · Notifications · Bitcoin · Profile · Settings**; Bitcoin holds the dashboard, widget setup and price alerts.
+
+- **Accounts:** connect a **signer app** (NIP-55, e.g. Amber; recommended, the key never enters Blockface), paste an **nsec** (encrypted with an Android Keystore key, excluded from backup, deleted on logout), or **create a new account** (the nsec is shown once to save). Screens showing a key block screenshots.
+- **Timeline:** notes and reposts from people you follow, pull to refresh, infinite scroll; logged out, a public #bitcoin feed.
+- **Notes:** reply (NIP-10 threads), repost (kind 6), quote (NIP-18 `q` tag), like (kind 7), zap (NIP-57, pays through your Lightning wallet app), share link, delete your own (NIP-09).
+- **Profiles:** banner, avatar, bio, NIP-05, Lightning address, follow/unfollow (kind 3, keeps your other follows), edit your own (kind 0).
+- **Notifications:** replies, mentions, reposts, likes and zaps.
+- **Safety:** mute accounts (NIP-51 mute list) and report notes (NIP-56).
+- **Relays:** relay.damus.io, nos.lol and relay.primal.net by default, your NIP-65 relay list when you have one, or your own list in Settings.
+
+Code: `nostr/core` is plain Kotlin (events, NIP-19, Schnorr via ACINQ's secp256k1, relay protocol, zaps) with unit tests; `nostr/` holds the signers, key storage, the OkHttp relay pool and the repository; `ui/social` holds the screens.
+
+---
+
 ## ✨ Premium Features
 
 ### 1. Resizable & Interactive Widgets

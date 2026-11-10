@@ -59,6 +59,15 @@ class MainScreenTest {
     }
 
     @Test
+    fun bitcoinTab_isOneBarItemWithThreePages() {
+        setContent()
+        // Dashboard, Widgets and Alerts share the "Bitcoin" bar item.
+        composeTestRule.onNodeWithContentDescription("Bitcoin").assertExists()
+        composeTestRule.onNodeWithContentDescription("Home").assertExists()
+        composeTestRule.onNodeWithText("DASHBOARD").assertExists()
+    }
+
+    @Test
     fun settings_openFromNavigationBar() {
         setContent()
         composeTestRule.onNodeWithContentDescription("Settings").performClick()
@@ -96,7 +105,7 @@ class MainScreenTest {
     @Test
     fun widgets_tabCountsMetricsOnTheWidget() {
         setContent()
-        composeTestRule.onNodeWithContentDescription("Widgets").performClick()
+        composeTestRule.onNodeWithText("WIDGETS").performClick()
         // STACK needs holdings, so 13 of the 14 modes are available.
         composeTestRule.onNodeWithText("13 OF 13", substring = true).assertExists()
     }
@@ -132,7 +141,7 @@ class MainScreenTest {
     @Test
     fun alerts_tabShowsCurrentPrice() {
         setContent()
-        composeTestRule.onNodeWithContentDescription("Alerts").performClick()
+        composeTestRule.onNodeWithText("ALERTS").performClick()
         composeTestRule.onNodeWithText("\$74,455").assertExists()
     }
 
@@ -141,7 +150,7 @@ class MainScreenTest {
         setContent()
         // Only the hero shows on the dashboard; metric panels live in the Widgets tab.
         composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertDoesNotExist()
-        composeTestRule.onNodeWithContentDescription("Widgets").performClick()
+        composeTestRule.onNodeWithText("WIDGETS").performClick()
         composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertExists()
     }
 }

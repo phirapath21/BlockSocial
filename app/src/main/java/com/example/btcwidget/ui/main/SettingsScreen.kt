@@ -30,6 +30,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.btcwidget.AppTheme
+import com.example.btcwidget.nostr.NostrAccount
+import com.example.btcwidget.nostr.SignerType
+import com.example.btcwidget.nostr.core.Nip19
 import com.example.btcwidget.DataSources
 import com.example.btcwidget.PriceSource
 import com.example.btcwidget.Stack
@@ -51,7 +54,8 @@ fun SettingsScreen(
     onStackChange: (Long, StackUnit) -> Unit = { _, _ -> },
     stackValue: String? = null,
     dataSources: DataSources = DataSources(PriceSource.COINBASE, ThbSource.CONVERTED),
-    onDataSourcesChange: (DataSources) -> Unit = {}
+    onDataSourcesChange: (DataSources) -> Unit = {},
+    nostrSettings: @Composable () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -60,6 +64,8 @@ fun SettingsScreen(
             .padding(horizontal = 12.dp)
     ) {
         HeaderSection(title = "SETTINGS", subtitle = "App preferences")
+
+        nostrSettings()
 
         EInkPanel(title = "Your stack") {
             StackInput(stackSats = stackSats, stackUnit = stackUnit, onStackChange = onStackChange)
@@ -187,6 +193,71 @@ private fun AboutLine(text: String) {
         fontFamily = FontFamily.Monospace,
         modifier = Modifier.padding(vertical = 3.dp)
     )
+}
+
+/** Nostr account and relays. */
+@Composable
+fun NostrSettingsPanel(
+    account: NostrAccount?,
+    relays: List<String>,
+    onLogin: () -> Unit,
+    onLogout: () -> Unit,
+    onRelaysChange: (List<String>?) -> Unit
+) {
+    var confirmLogout by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var relayText by remember(relays) { mutableStateOf(relays.joinToString("\n")) }
+    EInkPanel(title = "Nostr") {
+        if (account == null) {
+            SettingRow("Account", note = "Log in with a signer app or nsec") {
+                EInkChip(text = "LOG IN", selected = true, onClick = onLogin)
+            }
+        } else {
+            val npub = Nip19.npub(account.pubkey)
+            SettingRow(
+                npub.take(12) + "…" + npub.takeLast(6),
+                note = if (account.type == SignerType.AMBER) "Signed by your signer app" else "Key encrypted on this device"
+            ) {
+                EInkChip(text = if (confirmLogout) "SURE?" else "LOG OUT", selected = confirmLogout, onClick = {
+                    if (confirmLogout) onLogout() else confirmLogout = true
+                })
+            }
+            if (confirmLogout && account.type == SignerType.LOCAL) {
+                Text(
+                    text = "Logging out deletes the key from this phone. Make sure you saved your nsec.",
+                    color = EInk.Alert, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+            }
+        }
+        SettingRow("Relays", note = "${relays.size} connected") {
+            EInkChip(text = if (editing) "CLOSE" else "EDIT", selected = editing, onClick = { editing = !editing })
+        }
+        if (editing) {
+            OutlinedTextField(
+                value = relayText,
+                onValueChange = { relayText = it },
+                textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = EInk.Value),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = EInk.Value, unfocusedBorderColor = EInk.BodyStroke, cursorColor = EInk.Value
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                EInkChip(text = "SAVE", selected = true, onClick = {
+                    onRelaysChange(relayText.split('\n', ' ', ',').map { it.trim() }.filter { it.isNotEmpty() })
+                    editing = false
+                })
+                EInkChip(text = "DEFAULTS", selected = false, onClick = { onRelaysChange(null); editing = false })
+            }
+            Text(
+                text = "One wss:// address per line.",
+                color = EInk.Caption, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
 }
 
 /** Published copy of docs/privacy-policy.md (also the URL for the Play listing). */

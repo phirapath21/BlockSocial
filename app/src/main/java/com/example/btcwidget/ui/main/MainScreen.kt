@@ -4,7 +4,9 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -76,7 +79,9 @@ fun MainScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    var selectedTab by rememberSaveable { mutableStateOf(MainTab.DASHBOARD) }
+    var selectedTab by rememberSaveable { mutableStateOf(MainTab.HOME) }
+    val social: com.example.btcwidget.ui.social.SocialViewModel = viewModel()
+    val account by social.account.collectAsStateWithLifecycle()
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         viewModel.refreshNotificationPermission()
@@ -121,7 +126,26 @@ fun MainScreen(
         onAlertChange = { rule ->
             if (viewModel.updateAlert(rule)) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         },
-        notificationsAllowed = settings.notificationsAllowed
+        notificationsAllowed = settings.notificationsAllowed,
+        homeContent = { com.example.btcwidget.ui.social.HomeScreen(social, onItemClick) },
+        notificationsContent = { com.example.btcwidget.ui.social.NotificationsScreen(social, onItemClick) },
+        profileContent = {
+            val me = account?.pubkey
+            if (me != null) {
+                com.example.btcwidget.ui.social.ProfileScreen(social, me, onItemClick, onBack = null)
+            } else {
+                com.example.btcwidget.ui.social.HomeScreen(social, onItemClick)
+            }
+        },
+        nostrSettings = {
+            NostrSettingsPanel(
+                account = account,
+                relays = social.repo.pool.urls.toList(),
+                onLogin = { onItemClick(com.example.btcwidget.LoginKey) },
+                onLogout = social::logout,
+                onRelaysChange = social::setRelays
+            )
+        }
     )
 }
 
@@ -159,7 +183,11 @@ fun MainScreenContent(
     dataSources: DataSources = DataSources(PriceSource.COINBASE, ThbSource.CONVERTED),
     onDataSourcesChange: (DataSources) -> Unit = {},
     history: List<PricePoint> = emptyList(),
-    onShare: (String, PriceData) -> Unit = { _, _ -> }
+    onShare: (String, PriceData) -> Unit = { _, _ -> },
+    homeContent: @Composable () -> Unit = {},
+    notificationsContent: @Composable () -> Unit = {},
+    profileContent: @Composable () -> Unit = {},
+    nostrSettings: @Composable () -> Unit = {}
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
     val stackValue = data?.takeIf { stackSats > 0 }?.let {
@@ -177,7 +205,15 @@ fun MainScreenContent(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
+            // Bitcoin's three pages share one bottom-bar item; chips switch between them.
+            val bitcoinPage = selectedTab in BITCOIN_PAGES
+            Column(Modifier.fillMaxSize()) {
+            if (bitcoinPage) BitcoinPageChips(selectedTab, onTabSelected)
+            Box(Modifier.weight(1f)) {
             when (selectedTab) {
+                MainTab.HOME -> homeContent()
+                MainTab.NOTIFICATIONS -> notificationsContent()
+                MainTab.PROFILE -> profileContent()
                 MainTab.DASHBOARD -> {
                     // Pull down on the dashboard to fetch fresh data now.
                     val pullState = rememberPullToRefreshState()
@@ -257,8 +293,11 @@ fun MainScreenContent(
                     onStackChange = onStackChange,
                     stackValue = stackValue,
                     dataSources = dataSources,
-                    onDataSourcesChange = onDataSourcesChange
+                    onDataSourcesChange = onDataSourcesChange,
+                    nostrSettings = nostrSettings
                 )
+            }
+            }
             }
         }
 
@@ -274,12 +313,14 @@ fun MainScreenContent(
                 unselectedIconColor = EInk.Caption,
                 unselectedTextColor = EInk.Caption
             )
-            MainTab.entries.forEach { tab ->
+            BAR_TABS.forEach { tab ->
+                val selected = selectedTab == tab || (tab == MainTab.DASHBOARD && selectedTab in BITCOIN_PAGES)
+                val label = if (tab == MainTab.DASHBOARD) "Bitcoin" else tab.label
                 NavigationBarItem(
-                    icon = { Icon(tab.icon, contentDescription = tab.label) },
-                    label = { Text(tab.label.uppercase(), fontFamily = FontFamily.Monospace, fontSize = 9.sp, letterSpacing = 0.5.sp, maxLines = 1) },
-                    selected = selectedTab == tab,
-                    onClick = { onTabSelected(tab) },
+                    icon = { Icon(tab.icon, contentDescription = label) },
+                    label = { Text(label.uppercase(), fontFamily = FontFamily.Monospace, fontSize = 9.sp, letterSpacing = 0.5.sp, maxLines = 1) },
+                    selected = selected,
+                    onClick = { onTabSelected(if (tab == MainTab.DASHBOARD && selectedTab in BITCOIN_PAGES) selectedTab else tab) },
                     colors = itemColors
                 )
             }
@@ -287,13 +328,51 @@ fun MainScreenContent(
     }
 }
 
-/** Bottom-bar destinations. */
+/** Top-level pages. DASHBOARD, WIDGETS and ALERTS sit under one "Bitcoin" bar item. */
 enum class MainTab(val label: String, val icon: ImageVector) {
-    DASHBOARD("Dashboard", Icons.Default.Home),
-    ALERTS("Alerts", Icons.Default.Notifications),
+    HOME("Home", Icons.Default.Home),
+    NOTIFICATIONS("Notifications", Icons.Default.Notifications),
+    DASHBOARD("Dashboard", BitcoinIcon),
     WIDGETS("Widgets", WidgetsIcon),
+    ALERTS("Alerts", Icons.Default.Notifications),
+    PROFILE("Profile", Icons.Default.Person),
     SETTINGS("Settings", Icons.Default.Settings)
 }
+
+private val BITCOIN_PAGES = setOf(MainTab.DASHBOARD, MainTab.WIDGETS, MainTab.ALERTS)
+private val BAR_TABS = listOf(MainTab.HOME, MainTab.NOTIFICATIONS, MainTab.DASHBOARD, MainTab.PROFILE, MainTab.SETTINGS)
+
+/** Dashboard / Widgets / Alerts switch at the top of the Bitcoin pages. */
+@Composable
+private fun BitcoinPageChips(selected: MainTab, onSelect: (MainTab) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+    ) {
+        listOf(MainTab.DASHBOARD, MainTab.WIDGETS, MainTab.ALERTS).forEach { tab ->
+            EInkChip(text = tab.label.uppercase(), selected = selected == tab, onClick = { onSelect(tab) })
+        }
+    }
+}
+
+/** "₿"-like glyph for the Bitcoin tab: a B with two strokes. */
+private val BitcoinIcon: ImageVector = ImageVector.Builder(
+    name = "Bitcoin",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f
+).addPath(
+    pathData = addPathNodes(
+        "M9,3h2v2h1V3h2v2.1c2.3,0.4 3.5,1.8 3.5,3.6c0,1.2 -0.6,2.2 -1.6,2.7c1.4,0.5 2.3,1.6 2.3,3.1" +
+            "c0,2.3 -1.8,3.9 -4.2,4.3V21h-2v-2h-1v2H9v-2H6v-2h1.5V7H6V5h3V3z" +
+            "M9.5,7v4h4c1.1,0 1.9,-0.9 1.9,-2s-0.8,-2 -1.9,-2H9.5z" +
+            "M9.5,13v4h4.6c1.2,0 2.1,-0.9 2.1,-2s-0.9,-2 -2.1,-2H9.5z"
+    ),
+    fill = SolidColor(Color.Black)
+).build()
 
 /** Material "widgets" glyph (not in the core icon set). */
 private val WidgetsIcon: ImageVector = ImageVector.Builder(

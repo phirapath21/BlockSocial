@@ -1,0 +1,257 @@
+package com.example.btcwidget.nostr
+
+import com.example.btcwidget.nostr.core.Bech32
+import com.example.btcwidget.nostr.core.ClientMessage
+import com.example.btcwidget.nostr.core.Content
+import com.example.btcwidget.nostr.core.Event
+import com.example.btcwidget.nostr.core.Events
+import com.example.btcwidget.nostr.core.Filter
+import com.example.btcwidget.nostr.core.Hex
+import com.example.btcwidget.nostr.core.Kind
+import com.example.btcwidget.nostr.core.Nip19
+import com.example.btcwidget.nostr.core.Profile
+import com.example.btcwidget.nostr.core.RelayMessage
+import com.example.btcwidget.nostr.core.Schnorr
+import com.example.btcwidget.nostr.core.ThreadRef
+import com.example.btcwidget.nostr.core.UnsignedEvent
+import com.example.btcwidget.nostr.core.Zaps
+import com.example.btcwidget.nostr.core.normalizeRelayUrl
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class NostrCoreTest {
+    private val seckey = Schnorr.newSecretKey()
+    private val pubkey = Schnorr.publicKey(seckey)
+
+    private fun sign(e: UnsignedEvent): Event = e.signed(Schnorr.sign(e.id, seckey))
+
+    // ---- NIP-19 (vectors from the NIP-19 text) ----
+
+    @Test
+    fun nip19Vectors() {
+        val npub = "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
+        val pub = "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e"
+        assertEquals(npub, Nip19.npub(pub))
+        assertEquals(Nip19.Pubkey(pub), Nip19.decode(npub))
+        val nsec = "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5"
+        val sec = "67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa"
+        assertEquals(nsec, Nip19.nsec(sec))
+        assertEquals(Nip19.SecretKey(sec), Nip19.decode(nsec))
+    }
+
+    @Test
+    fun nip19TlvRoundTrip() {
+        val id = Hex.encode(ByteArray(32) { it.toByte() })
+        val nevent = Nip19.nevent(id, listOf("wss://nos.lol"), pubkey, 1)
+        assertEquals(Nip19.Note(id, listOf("wss://nos.lol"), pubkey, 1), Nip19.decode("nostr:$nevent"))
+        val nprofile = Nip19.nprofile(pubkey, listOf("wss://relay.damus.io"))
+        assertEquals(Nip19.Pubkey(pubkey, listOf("wss://relay.damus.io")), Nip19.decode(nprofile))
+    }
+
+    @Test
+    fun nip19RejectsGarbage() {
+        assertNull(Nip19.decode("npub1qqqqqq"))
+        assertNull(Nip19.decode("hello"))
+        // One character changed: bad checksum.
+        assertNull(Nip19.decode("npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptq"))
+    }
+
+    // ---- Keys and signatures (BIP-340 vector 0) ----
+
+    @Test
+    fun bip340PublicKeyAndVerify() {
+        val sec = "0000000000000000000000000000000000000000000000000000000000000003"
+        assertEquals("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9", Schnorr.publicKey(sec))
+        val sig = "e907831f80848d1069a5371b402410364bdf1c5f8307b0084c55f1ce2dca821525f66a4a85ea8b71e482a74f382d2ce5ebeee8fdb2172f477df4900d310536c0"
+        assertTrue(Schnorr.verify(sig, "00".repeat(32), "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"))
+        assertFalse(Schnorr.verify(sig, "01" + "00".repeat(31), "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"))
+    }
+
+    @Test
+    fun signedEventVerifiesAndTamperingFails() {
+        val e = sign(Events.note(pubkey, "gm \"nostr\"\n\tline two \\ ok"))
+        assertTrue(e.verify())
+        assertFalse(e.copy(content = "gm").verify())
+        assertTrue(Event.fromJson(e.toJson()).verify())
+    }
+
+    @Test
+    fun idSerializationEscapesLikeNip01() {
+        val e = UnsignedEvent("ab", 1, 1, listOf(listOf("t", "x")), "a\"b\\c\nd\u0001é")
+        assertEquals("[0,\"ab\",1,1,[[\"t\",\"x\"]],\"a\\\"b\\\\c\\nd\\u0001é\"]", e.serializeForId())
+    }
+
+    // ---- Relay protocol ----
+
+    @Test
+    fun relayMessages() {
+        val e = sign(Events.note(pubkey, "hi"))
+        val msg = RelayMessage.parse("[\"EVENT\",\"s1\",${e.toJson()}]")
+        assertEquals(RelayMessage.EventMsg("s1", e), msg)
+        assertEquals(RelayMessage.Eose("s1"), RelayMessage.parse("[\"EOSE\",\"s1\"]"))
+        assertEquals(RelayMessage.Ok("x", false, "blocked: spam"), RelayMessage.parse("[\"OK\",\"x\",false,\"blocked: spam\"]"))
+        assertNull(RelayMessage.parse("not json"))
+        assertTrue(ClientMessage.event(e).startsWith("[\"EVENT\",{\"id\":\"${e.id}\""))
+        val req = ClientMessage.req("s", listOf(Filter(kinds = listOf(1), tags = mapOf("p" to listOf(pubkey)), limit = 5)))
+        assertTrue(req.contains("\"#p\"") && req.contains("\"limit\":5"))
+    }
+
+    @Test
+    fun filterMatches() {
+        val e = sign(Events.note(pubkey, "#bitcoin"))
+        assertTrue(Filter(kinds = listOf(1), tags = mapOf("t" to listOf("bitcoin"))).matches(e))
+        assertFalse(Filter(authors = listOf("00".repeat(32))).matches(e))
+    }
+
+    @Test
+    fun relayUrls() {
+        assertEquals("wss://nos.lol", normalizeRelayUrl(" wss://NOS.lol/ "))
+        assertNull(normalizeRelayUrl("https://nos.lol"))
+    }
+
+    // ---- Threads, quotes, reposts, likes, follows ----
+
+    @Test
+    fun replyToRootThenReplyToReply() {
+        val root = sign(Events.note(pubkey, "root"))
+        val other = Schnorr.newSecretKey()
+        val otherPub = Schnorr.publicKey(other)
+        val r1u = Events.reply(otherPub, "first", root)
+        val r1 = r1u.signed(Schnorr.sign(r1u.id, other))
+        assertEquals(ThreadRef(root.id, root.id, ""), ThreadRef.of(r1))
+        assertTrue(pubkey in r1.tagValues("p"))
+
+        val r2 = sign(Events.reply(pubkey, "second", r1))
+        val t = ThreadRef.of(r2)
+        assertEquals(root.id, t.root)
+        assertEquals(r1.id, t.reply)
+        // Replying to someone else's reply tags them, not yourself.
+        assertEquals(listOf(otherPub), r2.tagValues("p"))
+    }
+
+    @Test
+    fun positionalThreadTags() {
+        val e = Event("i", "p", 0, 1, listOf(listOf("e", "A"), listOf("e", "B")), "", "")
+        assertEquals(ThreadRef("A", "B"), ThreadRef.of(e))
+        assertFalse(ThreadRef.of(Event("i", "p", 0, 1, emptyList(), "", "")).isReply)
+    }
+
+    @Test
+    fun quoteAddsNeventAndTags() {
+        val quoted = sign(Events.note(pubkey, "quoted"))
+        val q = Events.quote(pubkey, "look", quoted)
+        assertTrue(q.content.startsWith("look\n\nnostr:nevent1"))
+        assertEquals(quoted.id, q.tags.first { it[0] == "q" }[1])
+    }
+
+    @Test
+    fun repostAndReaction() {
+        val n = sign(Events.note(pubkey, "n"))
+        val rp = Events.repost(pubkey, n)
+        assertEquals(Kind.REPOST, rp.kind)
+        assertEquals(n, Event.fromJson(rp.content))
+        val like = Events.reaction(pubkey, n)
+        assertEquals("+", like.content)
+        assertEquals(listOf(n.id), like.tags.filter { it[0] == "e" }.map { it[1] })
+    }
+
+    @Test
+    fun followAndUnfollowKeepOtherContacts() {
+        val a = "aa".repeat(32); val b = "bb".repeat(32)
+        val current = sign(UnsignedEvent(pubkey, 1, Kind.CONTACTS, listOf(listOf("p", a)), "{\"relays\":1}"))
+        val followed = Events.contacts(pubkey, current, b, follow = true)
+        assertEquals(listOf(a, b), followed.tags.map { it[1] })
+        assertEquals("{\"relays\":1}", followed.content)
+        val unfollowed = Events.contacts(pubkey, sign(followed), a, follow = false)
+        assertEquals(listOf(b), unfollowed.tags.map { it[1] })
+    }
+
+    // ---- Content ----
+
+    @Test
+    fun contentSegments() {
+        val npub = Nip19.npub(pubkey)
+        val segs = Content.parse("gm nostr:$npub see https://x.com/a.jpg, and https://example.com/page. #Bitcoin!")
+        assertTrue(segs.any { it is Content.Segment.ProfileRef && it.pubkey == pubkey })
+        assertTrue(segs.contains(Content.Segment.Image("https://x.com/a.jpg")))
+        assertTrue(segs.contains(Content.Segment.Link("https://example.com/page")))
+        assertTrue(segs.contains(Content.Segment.Hashtag("Bitcoin")))
+        // Nothing is lost.
+        assertTrue(segs.joinToString("") {
+            when (it) {
+                is Content.Segment.Text -> it.text
+                is Content.Segment.Link -> it.url
+                is Content.Segment.Image -> it.url
+                is Content.Segment.Hashtag -> "#" + it.tag
+                is Content.Segment.ProfileRef -> it.raw
+                is Content.Segment.NoteRef -> it.raw
+            }
+        }.startsWith("gm nostr:$npub see https://x.com/a.jpg, and"))
+    }
+
+    @Test
+    fun noteTagsHashtagsAndMentions() {
+        val other = "cc".repeat(32)
+        val n = Events.note(pubkey, "hi nostr:${Nip19.npub(other)} #Bitcoin")
+        assertTrue(listOf("p", other) in n.tags)
+        assertTrue(listOf("t", "bitcoin") in n.tags)
+    }
+
+    @Test
+    fun profileFromMetadata() {
+        val e = sign(UnsignedEvent(pubkey, 5, Kind.METADATA, emptyList(), "{\"name\":\"sat\",\"display_name\":\"\",\"lud16\":\"sat@getalby.com\"}"))
+        val p = Profile.fromEvent(e)!!
+        assertEquals("sat", p.bestName)
+        assertEquals("https://getalby.com/.well-known/lnurlp/sat", Zaps.payEndpoint(p))
+    }
+
+    // ---- Zaps ----
+
+    @Test
+    fun bolt11Amounts() {
+        assertEquals(250_000_000L, Zaps.invoiceAmountMsat("lnbc2500u1pvjluezpp5qqqsyq"))
+        assertEquals(2_000_000_000L, Zaps.invoiceAmountMsat("lnbc20m1pvjluezpp5qqq"))
+        assertEquals(21_000L, Zaps.invoiceAmountMsat("lnbc210n1pqqq"))
+        assertNull(Zaps.invoiceAmountMsat("lnbc1pvjluezpp5qqq"))
+    }
+
+    @Test
+    fun lnurlAndCallback() {
+        val url = "https://getalby.com/.well-known/lnurlp/sat"
+        val lnurl = Zaps.encodeLnurl(url)
+        assertTrue(lnurl.startsWith("lnurl1"))
+        assertEquals(url, Zaps.payEndpoint(Profile(pubkey, lud06 = lnurl)))
+        val info = Zaps.parsePayInfo("{\"callback\":\"https://x/cb\",\"minSendable\":1000,\"maxSendable\":100000000,\"allowsNostr\":true,\"nostrPubkey\":\"${"ab".repeat(32)}\"}")!!
+        assertTrue(info.allowsNostr)
+        val req = sign(Zaps.request(pubkey, "ab".repeat(32), 21_000, lnurl, listOf("wss://nos.lol"), noteId = "cd".repeat(32)))
+        val cb = Zaps.callbackUrl(info, 21_000, req, lnurl)
+        assertTrue(cb.startsWith("https://x/cb?amount=21000&nostr=%7B"))
+        assertEquals("lnbc1", Zaps.parseInvoice("{\"pr\":\"lnbc1\"}").getOrNull())
+        assertTrue(Zaps.parseInvoice("{\"status\":\"ERROR\",\"reason\":\"no\"}").isFailure)
+    }
+
+    @Test
+    fun zapReceipt() {
+        val req = sign(Zaps.request(pubkey, "ab".repeat(32), 21_000, "lnurl1x", emptyList(), noteId = "cd".repeat(32), comment = "great"))
+        val receipt = Event(
+            "ee".repeat(32), "ab".repeat(32), 9, Kind.ZAP_RECEIPT,
+            listOf(listOf("p", "ab".repeat(32)), listOf("e", "cd".repeat(32)), listOf("bolt11", "lnbc210n1pqq"), listOf("description", req.toJson())),
+            "", ""
+        )
+        val r = Zaps.parseReceipt(receipt)!!
+        assertEquals(21_000L, r.amountMsat)
+        assertEquals(pubkey, r.sender)
+        assertEquals("great", r.comment)
+        assertEquals("cd".repeat(32), r.noteId)
+    }
+
+    @Test
+    fun bech32RoundTrip() {
+        val (hrp, data) = Bech32.decode(Bech32.encode("test", byteArrayOf(1, 2, 3)))
+        assertEquals("test", hrp)
+        assertEquals(listOf<Byte>(1, 2, 3), data.toList())
+    }
+}
