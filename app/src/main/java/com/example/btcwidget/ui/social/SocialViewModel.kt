@@ -85,6 +85,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 val items = repo.homeFeed()
                 _home.value = Paged(items, endReached = items.isEmpty())
+                startLiveHome()
                 if (items.isNotEmpty()) repo.saveHome(items)
             } catch (e: CancellationException) {
                 throw e
@@ -233,6 +234,8 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun logout() {
         repo.logout()
         reloadReadState()
+        stopLive?.invoke(); stopLive = null
+        _newPosts.value = emptyList()
         _home.value = Paged()
         _notifications.value = Paged()
     }
@@ -317,12 +320,21 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun updateProfile(profile: Profile, onDone: () -> Unit) = act("Couldn't save your profile") { repo.updateProfile(profile); onDone() }
 
     /** Posts a note, reply or quote with any uploaded images; [onResult] gets whether it was published. */
-    fun send(text: String, replyTo: Event?, quote: Event?, images: List<Attachment> = emptyList(), onResult: (Boolean) -> Unit) {
+    fun send(
+        text: String,
+        replyTo: Event?,
+        quote: Event?,
+        images: List<Attachment> = emptyList(),
+        contentWarning: String? = null,
+        onResult: (Boolean) -> Unit
+    ) {
         var ok = false
         act("Couldn't post", finally = { onResult(ok) }) {
             // Image URLs go in the text (so every client shows them) with imeta tags (NIP-92).
             val body = (listOf(text.trim()) + images.map { it.url }).filter { it.isNotEmpty() }.joinToString("\n")
-            val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height) }
+            val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height) } +
+                // NIP-36: other apps hide the note behind a warning until tapped.
+                listOfNotNull(contentWarning?.let { listOf("content-warning", it) })
             val event = when {
                 replyTo != null -> repo.reply(body, replyTo, tags)
                 quote != null -> repo.quote(body, quote, tags)
@@ -332,6 +344,52 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
             ok = true
         }
     }
+
+    // ---- New posts while reading (the "↑ N new posts" pill) ----
+
+    private val _newPosts = MutableStateFlow<List<FeedItem>>(emptyList())
+    val newPosts: StateFlow<List<FeedItem>> = _newPosts.asStateFlow()
+    private var stopLive: (() -> Unit)? = null
+
+    private fun startLiveHome() {
+        stopLive?.invoke()
+        val authors = repo.homeAuthors()
+        if (authors.isEmpty()) return
+        val newest = _home.value.items.maxOfOrNull { it.sortTime } ?: (System.currentTimeMillis() / 1000)
+        _newPosts.value = emptyList()
+        stopLive = repo.liveFeed(authors, newest) { item ->
+            val shown = _home.value.items.any { it.key == item.key }
+            if (!shown) _newPosts.update { pending -> (pending + item).distinctBy { it.key } }
+        }
+    }
+
+    /** Puts the waiting new posts at the top of the timeline. */
+    fun showNewPosts() {
+        val fresh = _newPosts.value
+        if (fresh.isEmpty()) return
+        _newPosts.value = emptyList()
+        _home.update { s -> s.copy(items = (fresh + s.items).distinctBy { it.key }.sortedByDescending { it.sortTime }) }
+        repo.saveHome(_home.value.items)
+    }
+
+    override fun onCleared() {
+        stopLive?.invoke()
+        super.onCleared()
+    }
+
+    // ---- Bookmarks ----
+
+    val bookmarks get() = repo.bookmarks
+
+    fun toggleBookmark(note: Event) {
+        val on = note.id !in repo.bookmarks.value
+        act(if (on) "Couldn't bookmark" else "Couldn't remove the bookmark") {
+            repo.setBookmarked(note, on)
+            say(if (on) "Bookmarked" else "Bookmark removed")
+        }
+    }
+
+    suspend fun bookmarkedNotes() = runCatching { repo.bookmarkedNotes() }.getOrDefault(emptyList())
 
     /** Gets a zap invoice and passes it to [onInvoice] (which opens a wallet). */
     fun zap(recipient: String, amountSat: Long, note: Event?, comment: String, onInvoice: (String) -> Unit) =

@@ -151,6 +151,11 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val account by vm.account.collectAsState()
     val home by vm.home.collectAsState()
     val stats by vm.stats.collectAsState()
+    val newPosts by vm.newPosts.collectAsState()
+    // Like Amethyst's "New threads" / "Conversations": hide replies unless asked.
+    var withReplies by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     LaunchedEffect(account) { vm.start() }
 
     SocialScaffold(vm, navigate) { actions ->
@@ -158,15 +163,46 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
             if (account == null) {
                 WelcomeScreen(vm, actions, onLogin = { navigate(LoginKey) })
             } else {
-                PullToRefreshBox(isRefreshing = home.refreshing, onRefresh = vm::refreshHome, modifier = Modifier.fillMaxSize()) {
-                    when {
-                        home.loading && home.items.isEmpty() -> Spinner(Modifier.padding(top = 40.dp))
-                        home.items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
-                            item { EmptyNote(home.error ?: "Nothing here yet. Follow people to fill your timeline, or write your first note.") }
+                val shown = remember(home.items, withReplies) {
+                    if (withReplies) home.items
+                    else home.items.filter { it.repostedBy != null || !com.example.btcwidget.nostr.core.ThreadRef.of(it.note).isReply }
+                }
+                Column(Modifier.fillMaxSize()) {
+                    FeedTabs(listOf("Posts", "Posts & replies"), selected = if (withReplies) 1 else 0) { withReplies = it == 1 }
+                    PullToRefreshBox(isRefreshing = home.refreshing, onRefresh = vm::refreshHome, modifier = Modifier.fillMaxSize()) {
+                        when {
+                            home.loading && home.items.isEmpty() -> Spinner(Modifier.padding(top = 40.dp))
+                            shown.isEmpty() && !home.loading -> LazyColumn(Modifier.fillMaxSize()) {
+                                item { EmptyNote(home.error ?: "Nothing here yet. Follow people to fill your timeline, or write your first note.") }
+                            }
+                            else -> NoteList(
+                                items = shown, stats = stats, actions = actions, state = listState,
+                                loadingMore = home.loading, onLoadMore = vm::loadMoreHome
+                            )
                         }
-                        else -> NoteList(
-                            items = home.items, stats = stats, actions = actions,
-                            loadingMore = home.loading, onLoadMore = vm::loadMoreHome
+                    }
+                }
+                if (newPosts.isNotEmpty()) {
+                    // "↑ N new posts": new notes wait here instead of shifting what you're reading.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 56.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(EInk.Value)
+                            .clickable(onClickLabel = "Show new posts") {
+                                vm.showNewPosts()
+                                scope.launch { listState.animateScrollToItem(0) }
+                            }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        newPosts.distinctBy { it.note.pubkey }.take(3).forEach { item ->
+                            Box(Modifier.padding(end = 2.dp)) { Avatar(actions.profileOf(item.note.pubkey), item.note.pubkey, size = 20) }
+                        }
+                        Text(
+                            "  ↑ ${newPosts.size} new post" + if (newPosts.size == 1) "" else "s",
+                            color = EInk.Background, fontSize = 13.sp, fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -180,6 +216,38 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
             }
         }
     }
+}
+
+/** Underlined tab row, as at the top of X's timeline. */
+@Composable
+fun FeedTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth()) {
+        labels.forEachIndexed { i, label ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClickLabel = label) { onSelect(i) }
+                    .padding(top = 12.dp)
+            ) {
+                Text(
+                    label,
+                    color = if (i == selected) EInk.Value else EInk.Caption,
+                    fontSize = 15.sp,
+                    fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Normal
+                )
+                Box(
+                    Modifier
+                        .padding(top = 10.dp)
+                        .width(56.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (i == selected) EInk.Value else androidx.compose.ui.graphics.Color.Transparent)
+                )
+            }
+        }
+    }
+    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
 
 /** Logged out: what this is, how to join, and a public #bitcoin feed to browse. */
@@ -343,12 +411,25 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     }
     val profile = profiles[pubkey]
     val isMe = account?.pubkey == pubkey
+    var tab by androidx.compose.runtime.saveable.rememberSaveable(pubkey) { mutableStateOf(0) }
+    // X-style profile tabs, filtered from the same notes.
+    val shown = remember(items, tab) {
+        items.orEmpty().filter { item ->
+            val isReply = item.repostedBy == null && com.example.btcwidget.nostr.core.ThreadRef.of(item.note).isReply
+            when (tab) {
+                0 -> !isReply
+                1 -> isReply
+                else -> item.repostedBy == null && com.example.btcwidget.nostr.core.Content.parse(item.note.content).any { it is com.example.btcwidget.nostr.core.Content.Segment.Image } ||
+                    item.repostedBy == null && com.example.btcwidget.nostr.core.Imeta.imageUrls(item.note).isNotEmpty()
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         if (onBack != null) SocialTopBar(profile?.bestName ?: "Profile", onBack)
         SocialScaffold(vm, navigate) { actions ->
             NoteList(
-                items = items.orEmpty(), stats = stats, actions = actions,
+                items = shown, stats = stats, actions = actions,
                 loadingMore = loadingMore,
                 onLoadMore = {
                     val list = items
@@ -377,8 +458,10 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         onUnmute = { vm.mute(pubkey, false) },
                         actions = actions
                     )
+                    FeedTabs(listOf("Posts", "Replies", "Media"), selected = tab) { tab = it }
                     val loaded = items
-                    if (loaded == null) Spinner() else if (loaded.isEmpty()) EmptyNote("No notes yet.")
+                    if (loaded == null) Spinner()
+                    else if (shown.isEmpty()) EmptyNote(listOf("No posts yet.", "No replies yet.", "No photos yet.")[tab] + if (!end && loaded.isNotEmpty()) " Scroll loads older notes." else "")
                 }
             )
         }
@@ -464,11 +547,6 @@ private fun ProfileHeader(
                 color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)
             )
         }
-        Text(
-            "Posts", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-        )
-        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
     }
 }
 

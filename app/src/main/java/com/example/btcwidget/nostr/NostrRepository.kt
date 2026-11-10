@@ -103,6 +103,11 @@ class NostrRepository private constructor(private val context: Context) {
     private val profileEvents = ConcurrentHashMap<String, Event>()
     private var contactsEvent: Event? = null
     private var muteEvent: Event? = null
+    private var bookmarkEvent: Event? = null
+
+    private val _bookmarks = MutableStateFlow<List<String>>(emptyList())
+    /** Note ids the user bookmarked (NIP-51 kind 10003), newest first. */
+    val bookmarks: StateFlow<List<String>> = _bookmarks.asStateFlow()
     /** The user's Blossom servers (BUD-03 kind 10063), empty for the default. */
     private var mediaServers: List<String> = emptyList()
     // Declared before init: the cache loader started there may set them.
@@ -175,6 +180,8 @@ class NostrRepository private constructor(private val context: Context) {
         signer = null
         contactsEvent = null
         muteEvent = null
+        bookmarkEvent = null
+        _bookmarks.value = emptyList()
         _following.value = emptySet()
         _muted.value = emptySet()
         _stats.value = emptyMap()
@@ -187,7 +194,7 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun loadAccount() {
         val me = pubkey ?: return
         val events = queryEverywhere(
-            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.RELAY_LIST, MEDIA_SERVER_LIST))),
+            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.RELAY_LIST, MEDIA_SERVER_LIST))),
             timeoutMs = 6_000
         )
         applyAccountEvents(events, fromRelays = true)
@@ -198,6 +205,7 @@ class NostrRepository private constructor(private val context: Context) {
         fun latest(kind: Int) = events.filter { it.kind == kind }.maxByOrNull { it.createdAt }
         latest(Kind.METADATA)?.let { remember(it) }
         latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = it.tagValues("p").toSet() } }
+        latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { bookmarkEvent = it; _bookmarks.value = it.tagValues("e").reversed() } }
         latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { muteEvent = it; _muted.value = it.tagValues("p").toSet() } }
         latest(MEDIA_SERVER_LIST)?.let { mediaServerList = it; mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(it) }
         latest(Kind.RELAY_LIST)?.let { list ->
@@ -213,7 +221,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     private fun saveAccount() {
         val me = pubkey ?: return
-        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, relayList, mediaServerList)
+        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, relayList, mediaServerList)
         scope.launch(Dispatchers.IO) { cache.saveEvents(ACCOUNT_CACHE, events) }
     }
 
@@ -591,6 +599,53 @@ class NostrRepository private constructor(private val context: Context) {
         _muted.value = event.tagValues("p").toSet()
         saveAccount()
     }
+
+    /**
+     * Adds or removes [note] from the user's public bookmark list (NIP-51 kind 10003),
+     * keeping everything else on it (other apps' entries, hashtags, links).
+     */
+    suspend fun setBookmarked(note: Event, on: Boolean) {
+        val me = requireMe()
+        if (!accountFresh) loadAccount()
+        val others = bookmarkEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "e" && it[1] == note.id }
+        val tags = if (on) others + listOf(listOf("e", note.id, relayHint())) else others
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.BOOKMARKS, tags, bookmarkEvent?.content.orEmpty()))
+        bookmarkEvent = event
+        _bookmarks.value = event.tagValues("e").reversed()
+        saveAccount()
+    }
+
+    /** The bookmarked notes, in bookmark order (newest first). */
+    suspend fun bookmarkedNotes(): List<FeedItem> {
+        val ids = _bookmarks.value
+        if (ids.isEmpty()) return emptyList()
+        val missing = ids.filter { !notes.containsKey(it) }
+        if (missing.isNotEmpty()) pool.query(listOf(Filter(ids = missing)), 5_000).forEach { remember(it) }
+        val items = ids.mapNotNull { notes[it] }.map { FeedItem(it) }
+        enrich(items.map { it.note.pubkey }, items.map { it.note.id })
+        return items
+    }
+
+    /**
+     * New notes and reposts from [authors] after [since], delivered as they arrive (for the
+     * "new posts" pill). Call the returned function to stop.
+     */
+    fun liveFeed(authors: List<String>, since: Long, onItem: (FeedItem) -> Unit): () -> Unit =
+        pool.subscribe(listOf(Filter(authors = authors, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), since = since + 1)), { e, _ ->
+            if (e.pubkey in _muted.value) return@subscribe
+            val item = when (e.kind) {
+                Kind.TEXT_NOTE -> FeedItem(e)
+                else -> runCatching { Event.fromJson(e.content) }.getOrNull()
+                    ?.takeIf { it.kind == Kind.TEXT_NOTE && it.verify() }
+                    ?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
+            } ?: return@subscribe
+            remember(item.note)
+            onItem(item)
+            enrich(listOfNotNull(item.note.pubkey, item.repostedBy), listOf(item.note.id))
+        })
+
+    /** Whom the home feed is built from (follows plus the user). */
+    fun homeAuthors(): List<String> = pubkey?.let { (_following.value + it).toList() }.orEmpty()
 
     /** Requests deletion of the user's own note (NIP-09). */
     suspend fun delete(note: Event) {

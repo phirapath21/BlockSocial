@@ -325,3 +325,12 @@ class BlossomTest {
         org.junit.Assert.assertTrue(tag in com.example.btcwidget.nostr.core.Events.reply(pub, "r", parent, extraTags = listOf(tag)).tags)
     }
 }
+
+class ThaiTextTest {
+    @org.junit.Test
+    fun thaiHashtagsKeepVowelsAndToneMarks() {
+        val segs = com.example.btcwidget.nostr.core.Content.parse("gm #บิตคอยน์ and #Bitcoin")
+        val tags = segs.filterIsInstance<com.example.btcwidget.nostr.core.Content.Segment.Hashtag>().map { it.tag }
+        org.junit.Assert.assertEquals(listOf("บิตคอยน์", "Bitcoin"), tags)
+    }
+}

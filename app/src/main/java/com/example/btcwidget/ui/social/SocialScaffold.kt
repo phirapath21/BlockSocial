@@ -52,6 +52,8 @@ fun SocialScaffold(
     var zapTarget by remember { mutableStateOf<Event?>(null) }
     var reportTarget by remember { mutableStateOf<Event?>(null) }
     var deleteTarget by remember { mutableStateOf<Event?>(null) }
+    var viewImage by remember { mutableStateOf<String?>(null) }
+    val bookmarks by vm.bookmarks.collectAsState()
 
     LaunchedEffect(vm) {
         vm.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -73,12 +75,17 @@ fun SocialScaffold(
         report = { n -> signedIn { reportTarget = n } },
         delete = { n -> deleteTarget = n },
         share = { n -> shareNote(context, n) },
+        bookmark = { n -> signedIn { vm.toggleBookmark(n) } },
+        isBookmarked = { it in bookmarks },
+        openImage = { viewImage = it },
         profileOf = { profiles[it] },
         resolveNote = { vm.note(it) },
         me = account?.pubkey
     )
 
     content(actions)
+
+    viewImage?.let { url -> ImageViewer(url, onDismiss = { viewImage = null }) }
 
     zapTarget?.let { note ->
         ZapDialog(

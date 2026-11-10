@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -172,6 +173,7 @@ fun MainScreen(
         homeContent = { com.example.btcwidget.ui.social.HomeScreen(social, onItemClick) },
         searchContent = { com.example.btcwidget.ui.social.SearchScreen(social, onItemClick, onBack = null) },
         messagesContent = { com.example.btcwidget.ui.social.MessagesScreen(social, onItemClick) },
+        bookmarksContent = { com.example.btcwidget.ui.social.BookmarksScreen(social, onItemClick) },
         drawerHeader = { com.example.btcwidget.ui.social.DrawerAccountHeader(social, onLogin = { onItemClick(com.example.btcwidget.LoginKey) }) },
         menuButtonIcon = { com.example.btcwidget.ui.social.MenuAvatar(social) },
         badges = mapOf(MainTab.NOTIFICATIONS to unreadNotifications, MainTab.MESSAGES to unreadChats.size),
@@ -243,6 +245,7 @@ fun MainScreenContent(
     nostrSettings: @Composable () -> Unit = {},
     searchContent: @Composable () -> Unit = {},
     messagesContent: @Composable () -> Unit = {},
+    bookmarksContent: @Composable () -> Unit = {},
     /** Top of the side bar: the account (avatar, name) or a log-in prompt. */
     drawerHeader: @Composable () -> Unit = {},
     /** Unread counts shown on bottom-bar tabs. */
@@ -301,6 +304,7 @@ fun MainScreenContent(
                 MainTab.HOME -> homeContent()
                 MainTab.SEARCH -> searchContent()
                 MainTab.MESSAGES -> messagesContent()
+                MainTab.BOOKMARKS -> bookmarksContent()
                 MainTab.NOTIFICATIONS -> notificationsContent()
                 MainTab.PROFILE -> profileContent()
                 MainTab.DASHBOARD -> {
@@ -451,7 +455,7 @@ private fun TopBar(title: String, menuIcon: @Composable () -> Unit, onMenu: () -
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
 
-/** Side bar: the account, then Profile, Widgets, Price alerts and Settings. */
+/** Side bar: the account, then Profile, Bookmarks, Widgets, Price alerts and Settings. */
 @Composable
 private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen: (MainTab) -> Unit) {
     Column(
@@ -497,6 +501,7 @@ enum class MainTab(val label: String, val icon: ImageVector, val title: String =
     NOTIFICATIONS("Notifications", Icons.Default.Notifications),
     MESSAGES("Messages", Icons.Default.Email),
     PROFILE("Profile", Icons.Default.Person),
+    BOOKMARKS("Bookmarks", Icons.Default.Star),
     WIDGETS("Widgets", TabIcons.Widgets),
     ALERTS("Price alerts", Icons.Default.Warning),
     SETTINGS("Settings", Icons.Default.Settings)
@@ -505,7 +510,7 @@ enum class MainTab(val label: String, val icon: ImageVector, val title: String =
 // Getters, not stored values: a top-level val that touches MainTab would initialize the
 // enum while this file's other top-level vals are still null (that crashed the app once).
 private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SEARCH, MainTab.DASHBOARD, MainTab.NOTIFICATIONS, MainTab.MESSAGES)
-private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.WIDGETS, MainTab.ALERTS, MainTab.SETTINGS)
+private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.BOOKMARKS, MainTab.WIDGETS, MainTab.ALERTS, MainTab.SETTINGS)
 
 /** Pages with sideways drags of their own, where a swipe must not open the side bar. */
 private val DRAG_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS)

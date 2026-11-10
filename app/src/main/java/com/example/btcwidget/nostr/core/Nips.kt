@@ -173,7 +173,7 @@ object Content {
     }
 
     private val TOKEN = Regex(
-        """(nostr:(?:npub|nprofile|note|nevent)1[02-9ac-hj-np-z]+)|(https?://[^\s<>"']+)|(?<![\w#])#([\p{L}\p{N}_]+)"""
+        """(nostr:(?:npub|nprofile|note|nevent)1[02-9ac-hj-np-z]+)|(https?://[^\s<>"']+)|(?<![\w#])#([\p{L}\p{M}\p{N}_]+)"""
     )
     private val IMAGE = Regex("""\.(png|jpe?g|gif|webp|avif)(\?.*)?$""", RegexOption.IGNORE_CASE)
 

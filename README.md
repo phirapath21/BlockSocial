@@ -26,6 +26,14 @@ Blockface is also a Nostr client with a familiar timeline layout.
 - **Notes:** reply (NIP-10 threads), repost (kind 6), quote (NIP-18 `q` tag), like (kind 7), zap (NIP-57, pays through your Lightning wallet app), share link, delete your own (NIP-09).
 - **Profiles:** banner, avatar, bio, NIP-05, Lightning address, follow/unfollow (kind 3, keeps your other follows), edit your own (kind 0).
 - **Notifications:** replies, mentions, reposts, likes and zaps.
+- **Timeline basics:**
+  - Home has *Posts* and *Posts & replies* tabs.
+  - New notes wait behind a "↑ N new posts" pill instead of shifting what you're reading.
+  - Profiles have *Posts*, *Replies* and *Media* tabs.
+  - Images open full screen with pinch and double-tap zoom.
+  - Bookmarks are a public NIP-51 list, from ⋯ › Bookmark, listed in the side bar.
+  - Typing `@` suggests people and links them as `nostr:npub`.
+  - Content warnings (NIP-36) hide notes behind "Show", and ⚠ in compose marks your own.
 - **Unread and alerts:**
   - Badges on Notifications and Messages, and bold unread conversations.
   - Phone notifications for replies, mentions, zaps and DMs while the app is closed, from the same background refresh as the price alerts (every 15/30/60 min, not instant). You can turn them off in Settings › Nostr.

@@ -212,6 +212,18 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     var sending by remember { mutableStateOf(false) }
     var images by remember { mutableStateOf<List<SocialViewModel.Attachment>>(emptyList()) }
     var uploading by remember { mutableStateOf(0) }
+    var sensitive by remember { mutableStateOf(false) }
+    // "@name" picked from suggestions → pubkey; turned into nostr:npub links when sending.
+    var mentions by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    val following by vm.following.collectAsState()
+    val mentionQuery = remember(text) { MENTION_AT_END.find(text)?.groupValues?.get(2) }
+    val suggestions = remember(mentionQuery, profiles, following) {
+        val q = mentionQuery?.lowercase() ?: return@remember emptyList()
+        profiles.values
+            .filter { p -> listOfNotNull(p.name, p.displayName, p.nip05).any { it.lowercase().contains(q) } }
+            .sortedWith(compareBy({ it.pubkey !in following }, { !(it.name ?: it.bestName).lowercase().startsWith(q) }))
+            .take(5)
+    }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     // System photo picker: no storage permission needed.
@@ -258,6 +270,23 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp),
                     modifier = Modifier.weight(1f).height(180.dp).focusRequester(focus)
                 )
+            }
+            suggestions.forEach { p ->
+                val handle = mentionHandle(p)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClickLabel = "Mention ${p.bestName}") {
+                            text = text.replace(MENTION_AT_END, "\$1@" + Regex.escapeReplacement(handle) + " ")
+                            mentions = mentions + (handle to p.pubkey)
+                        }
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Avatar(p, p.pubkey, size = 28)
+                    Text(p.bestName, color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+                    Text(" @$handle", color = EInk.Caption, fontSize = 13.sp, maxLines = 1)
+                }
             }
             if (quote != null) {
                 target?.let { t ->
@@ -310,7 +339,16 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                         .padding(8.dp)
                 )
                 Text(
-                    "Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed.",
+                    "⚠",
+                    color = if (sensitive) EInk.Alert else EInk.Caption, fontSize = 20.sp,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable(onClickLabel = if (sensitive) "Unmark sensitive" else "Mark as sensitive") { sensitive = !sensitive }
+                        .padding(8.dp)
+                )
+                Text(
+                    if (sensitive) "Marked sensitive: shown behind a warning."
+                    else "Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed.",
                     color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
                 )
                 val canSend = !sending && uploading == 0 && (text.isNotBlank() || images.isNotEmpty() || quote != null) &&
@@ -318,7 +356,11 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                 PillButton(if (sending) "Posting…" else if (replyTo != null) "Reply" else "Post", filled = canSend) {
                     if (!canSend) return@PillButton
                     sending = true
-                    vm.send(text.trim(), replyTo?.let { target }, quote?.let { target }, images) { ok ->
+                    // "@handle" → nostr:npub… so it links and notifies them (and gets a "p" tag).
+                    val body = mentions.entries.fold(text.trim()) { acc, (handle, pk) ->
+                        acc.replace(Regex("@" + Regex.escape(handle) + "(?![\\p{L}\\p{M}\\p{N}_])"), "nostr:" + com.example.btcwidget.nostr.core.Nip19.npub(pk))
+                    }
+                    vm.send(body, replyTo?.let { target }, quote?.let { target }, images, if (sensitive) "Sensitive content" else null) { ok ->
                         // Success closes the screen; a failure re-enables the button.
                         if (ok) onBack() else sending = false
                     }
@@ -327,6 +369,13 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
         }
     }
 }
+
+/** An "@name" being typed at the end of the text. */
+private val MENTION_AT_END = Regex("""(^|\s)@([\p{L}\p{M}\p{N}_.]{1,30})$""")
+
+/** The handle inserted for a mention: their username, else their name without spaces. */
+private fun mentionHandle(p: Profile): String =
+    (p.name?.takeIf { it.isNotBlank() && ' ' !in it } ?: p.bestName.replace(Regex("\\s+"), "_")).take(30)
 
 /** Editing the user's profile (kind 0). */
 @Composable
