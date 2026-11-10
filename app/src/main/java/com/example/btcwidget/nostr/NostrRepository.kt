@@ -78,10 +78,13 @@ class NostrRepository private constructor(private val context: Context) {
     /** Background work (profiles, counts, cache writes) that screens don't wait for. */
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     internal val cache = NostrCache(java.io.File(context.cacheDir, "nostr"))
+    /** The local event database (SQLite): what was seen, for instant and offline screens. */
+    internal val events = EventStore(context)
+    private val toStore = java.util.concurrent.ConcurrentLinkedQueue<Event>()
+    @Volatile private var storeJob: Job? = null
 
     /** Private messages (NIP-17). */
     val dms: DirectMessages by lazy { DirectMessages(this) }
-    private var saveProfilesJob: Job? = null
 
     /** True once the account's lists were read from relays this session (not just the cache). */
     @Volatile private var accountFresh = false
@@ -153,12 +156,20 @@ class NostrRepository private constructor(private val context: Context) {
         pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)
         // Show what we knew last time straight away; relays refresh it.
         cacheReady = scope.launch(Dispatchers.IO) {
-            cache.loadEvents(PROFILES_CACHE).forEach { remember(it, save = false) }
-            cache.loadEvents(RELAY_LIST_CACHE).forEach { e ->
+            // The database, plus the JSON files earlier versions wrote (moved into it once).
+            val legacyProfiles = cache.loadEvents(PROFILES_CACHE)
+            val legacyRelayLists = cache.loadEvents(RELAY_LIST_CACHE)
+            if (legacyProfiles.isNotEmpty() || legacyRelayLists.isNotEmpty()) {
+                events.insert(legacyProfiles + legacyRelayLists)
+                cache.delete(PROFILES_CACHE); cache.delete(RELAY_LIST_CACHE)
+            }
+            events.query(listOf(Filter(kinds = listOf(Kind.METADATA), limit = 3_000))).forEach { remember(it, save = false) }
+            events.query(listOf(Filter(kinds = listOf(Kind.RELAY_LIST), limit = 3_000))).forEach { e ->
                 relayListEvents[e.pubkey] = e
                 writeRelays[e.pubkey] = com.example.btcwidget.nostr.core.Outbox.writeRelays(e)
             }
             pubkey?.let { me -> applyAccountEvents(cache.loadEvents(ACCOUNT_CACHE).filter { it.pubkey == me }, fromRelays = false) }
+            events.prune(keep = 50_000, me = pubkey)
         }
     }
 
@@ -261,6 +272,8 @@ class NostrRepository private constructor(private val context: Context) {
         mediaServerList = null
         mediaServers = emptyList()
         cache.clear()
+        toStore.clear()
+        scope.launch(Dispatchers.IO) { this@NostrRepository.events.clear() }
         accountFresh = false
         _account.value = null
         signer = null
@@ -319,6 +332,7 @@ class NostrRepository private constructor(private val context: Context) {
         val me = pubkey ?: return
         val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList, emojiListEvent)
         scope.launch(Dispatchers.IO) { cache.saveEvents(ACCOUNT_CACHE, events) }
+        events.forEach { store(it) }
     }
 
     /** The home timeline saved last time, for an instant first screen. */
@@ -373,9 +387,9 @@ class NostrRepository private constructor(private val context: Context) {
             val latest = lists.maxBy { it.createdAt }
             relayListEvents[pk] = latest
             writeRelays[pk] = com.example.btcwidget.nostr.core.Outbox.writeRelays(latest)
+            store(latest)
         }
         missing.forEach { writeRelays.putIfAbsent(it, emptyList()) }
-        scope.launch(Dispatchers.IO) { cache.saveEvents(RELAY_LIST_CACHE, relayListEvents.values.sortedByDescending { it.createdAt }.take(3_000)) }
     }
 
     /**
@@ -407,7 +421,8 @@ class NostrRepository private constructor(private val context: Context) {
                     outbox.query(listOf(filterFor(authors)), timeoutMs = 5_000, only = urls)
                 }.getOrDefault(emptyList())
             }
-            (ours.await() + theirs.await() + hinted.await()).distinctBy { it.id }
+            val stored = async(Dispatchers.IO) { events.query(listOf(filterFor(authors))) }
+            (ours.await() + theirs.await() + hinted.await() + stored.await()).distinctBy { it.id }
         }
 
     // ---- Long-form articles (NIP-23) ----
@@ -463,6 +478,7 @@ class NostrRepository private constructor(private val context: Context) {
         if (missing.isNotEmpty()) {
             pool.query(listOf(Filter(ids = missing)), 3_000, graceMs = 500).forEach { remember(it) }
         }
+        events.filter { it.kind == Kind.REPOST }.forEach { store(it) }
         val items = events.mapNotNull { e ->
             when (e.kind) {
                 Kind.TEXT_NOTE, Kind.POLL -> FeedItem(e)
@@ -487,6 +503,10 @@ class NostrRepository private constructor(private val context: Context) {
     /** A note by id, from cache or relays. */
     suspend fun note(id: String): Event? {
         notes[id]?.let { return it }
+        withContext(Dispatchers.IO) { events.query(listOf(Filter(ids = listOf(id)))) }.firstOrNull()?.let {
+            remember(it, save = false)
+            return it
+        }
         return pool.query(listOf(Filter(ids = listOf(id))), 4_000, graceMs = 400).firstOrNull()?.also {
             remember(it)
             enrich(listOf(it.pubkey), emptyList())
@@ -519,7 +539,9 @@ class NostrRepository private constructor(private val context: Context) {
             cursor = ThreadRef.of(parent).parent
         }
         val rootId = ThreadRef.of(focus).root ?: focus.id
-        val replies = pool.query(listOf(Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("e" to listOf(rootId, focus.id).distinct()), limit = 200)))
+        val replyFilter = Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("e" to listOf(rootId, focus.id).distinct()), limit = 200)
+        val stored = withContext(Dispatchers.IO) { events.query(listOf(replyFilter)) }
+        val replies = (pool.query(listOf(replyFilter)) + stored).distinctBy { it.id }
             .filter { !hidden(it, threadMuteApplies = false) && trusted(it.pubkey) }
         replies.forEach { remember(it) }
         val below = ReplyTree.flatten(focus.id, replies)
@@ -821,19 +843,25 @@ class NostrRepository private constructor(private val context: Context) {
                 if (old == null || e.createdAt > old.createdAt) {
                     profileEvents[e.pubkey] = e
                     Profile.fromEvent(e)?.let { p -> _profiles.update { it + (e.pubkey to p) } }
-                    if (save) scheduleProfileSave()
+                    if (save) store(e)
                 }
             }
-            else -> notes[e.id] = e
+            else -> {
+                val isNew = notes.put(e.id, e) == null
+                if (save && isNew) store(e)
+            }
         }
     }
 
-    /** Writes profiles to disk a few seconds after the last change (newest 2,000 kept). */
-    private fun scheduleProfileSave() {
-        saveProfilesJob?.cancel()
-        saveProfilesJob = scope.launch(Dispatchers.IO) {
-            delay(3_000)
-            cache.saveEvents(PROFILES_CACHE, profileEvents.values.sortedByDescending { it.createdAt }.take(2_000))
+    /** Queues [e] for the local database; written in batches a moment later. */
+    internal fun store(e: Event) {
+        toStore.add(e)
+        if (storeJob?.isActive == true) return
+        storeJob = scope.launch(Dispatchers.IO) {
+            delay(1_500)
+            while (toStore.isNotEmpty()) {
+                events.insert(generateSequence { toStore.poll() }.take(2_000).toList())
+            }
         }
     }
 

@@ -34,6 +34,10 @@ class NostrCache(private val dir: File) {
         "{\"n\":" + item.note.toJson() + ",\"by\":\"" + (item.repostedBy ?: "") + "\",\"t\":" + item.sortTime + "}"
     })
 
+    fun delete(name: String) {
+        runCatching { file(name).delete() }
+    }
+
     fun clear() {
         dir.listFiles()?.forEach { it.delete() }
     }
