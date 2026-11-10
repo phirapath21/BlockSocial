@@ -406,6 +406,30 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun searchNotes(query: String): List<FeedItem> =
         timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), search = query.trim(), limit = 40), source = searchPool)
 
+    // ---- Who engaged with a note ----
+
+    /** Who reposted, liked (with their reaction) and zapped a note. */
+    data class Engagement(
+        val reposts: List<String>,
+        val likes: List<Pair<String, String>>,
+        val zaps: List<Zaps.Receipt>
+    )
+
+    suspend fun engagement(noteId: String): Engagement {
+        val events = pool.query(listOf(Filter(kinds = listOf(Kind.REPOST, Kind.REACTION, Kind.ZAP_RECEIPT), tags = mapOf("e" to listOf(noteId)), limit = 500)), 6_000)
+            .filter { it.pubkey !in _muted.value }
+        val reposts = events.filter { it.kind == Kind.REPOST && it.tagValues("e").firstOrNull() == noteId }
+            .sortedByDescending { it.createdAt }.map { it.pubkey }.distinct()
+        // NIP-25: the reaction targets the last "e" tag; "-" is a dislike, not a like.
+        val likes = events.filter { it.kind == Kind.REACTION && it.tagValues("e").lastOrNull() == noteId && it.content != "-" }
+            .sortedByDescending { it.createdAt }.distinctBy { it.pubkey }
+            .map { it.pubkey to it.content.ifEmpty { "+" } }
+        val zaps = events.filter { it.kind == Kind.ZAP_RECEIPT }.mapNotNull { Zaps.parseReceipt(it) }
+            .filter { it.noteId == noteId }.sortedByDescending { it.amountMsat }
+        loadProfiles(reposts + likes.map { it.first } + zaps.mapNotNull { it.sender })
+        return Engagement(reposts, likes, zaps)
+    }
+
     // ---- NIP-05 verification ----
 
     private val _nip05 = MutableStateFlow<Map<String, Boolean>>(emptyMap())

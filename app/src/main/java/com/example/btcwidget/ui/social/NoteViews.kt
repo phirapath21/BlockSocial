@@ -68,6 +68,8 @@ class NoteActions(
     /** Opens an image full screen, with its note's author and actions. */
     val openImage: (url: String, note: Event) -> Unit,
     val follow: (pubkey: String, follow: Boolean) -> Unit,
+    /** Opens who reposted (0), liked (1) or zapped (2) a note. */
+    val openEngagement: (note: Event, tab: Int) -> Unit,
     val isFollowing: (String) -> Boolean,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
@@ -127,6 +129,7 @@ fun NoteCard(
                         color = EInk.Caption, fontSize = 14.sp,
                         modifier = Modifier.padding(top = 10.dp)
                     )
+                    EngagementCounts(note, stats, actions)
                 }
                 ActionRow(note, stats, actions)
             }
@@ -360,6 +363,32 @@ fun Avatar(profile: Profile?, pubkey: String, size: Int, onClick: (() -> Unit)? 
             )
         }
     }
+}
+
+/** "11 Reposts  51 Likes  2.1K sats" under an opened post; each opens the list of people. */
+@Composable
+private fun EngagementCounts(note: Event, stats: NoteStats, actions: NoteActions) {
+    val parts = listOf(
+        Triple(stats.reposts, if (stats.reposts == 1) "Repost" else "Reposts", 0),
+        Triple(stats.likes, if (stats.likes == 1) "Like" else "Likes", 1),
+        Triple((stats.zapMsat / 1000).toInt(), "sats", 2)
+    ).filter { it.first > 0 }
+    if (parts.isEmpty()) return
+    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 10.dp))
+    Row(Modifier.padding(vertical = 8.dp)) {
+        parts.forEach { (count, label, tab) ->
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClickLabel = "See who: $label") { actions.openEngagement(note, tab) }
+                    .padding(end = 16.dp, top = 2.dp, bottom = 2.dp)
+            ) {
+                Text(compactCount(count), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(" $label", color = EInk.Caption, fontSize = 14.sp)
+            }
+        }
+    }
+    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
 
 /** "Tue, Nov 10, 2026 - 2:10 PM" in the phone's time zone (English, 12-hour). */

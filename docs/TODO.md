@@ -13,7 +13,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [ ] **Video / GIF playback** (M): play videos and animated GIFs in notes; today only still images show.
 - [x] **Upload profile picture and banner** (S): pick from the phone and upload via Blossom instead of pasting a URL.
 - [ ] **In-app zaps (NWC, NIP-47)** (M–L): pay without switching to a wallet app.
-- [ ] **Who liked / reposted / zapped** (S): tap a count to see the people.
+- [x] **Who liked / reposted / zapped** (S): tap a count to see the people.
 
 ## 🟡 Basics users expect
 

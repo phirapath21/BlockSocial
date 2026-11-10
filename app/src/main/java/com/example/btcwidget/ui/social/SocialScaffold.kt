@@ -82,6 +82,7 @@ fun SocialScaffold(
         openImage = { url, note -> viewImage = url to note },
         follow = { pk, on -> signedIn { vm.follow(pk, on) } },
         isFollowing = { it in following },
+        openEngagement = { n, tab -> navigate(com.example.btcwidget.EngagementKey(n.id, tab)) },
         profileOf = { profiles[it] },
         resolveNote = { vm.note(it) },
         me = account?.pubkey
