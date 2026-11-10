@@ -66,6 +66,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Communities, public chats and groups:** communities (NIP-72) and public chat channels (NIP-28) are read from your relays and the community's own relays; posts and chat messages you send there are public, and joining a community publishes your public list of joined communities (kind 10004). Groups (NIP-29) live on one relay chosen by the group: when you open a group, the app connects to that relay, and if the relay asks (NIP-42), it proves who you are by signing a login challenge, so that relay learns your public key. This happens only for groups you open. The groups you open are remembered on your phone only.
 
+**Feeds from DVMs:** under Search › Feeds you can ask a Data Vending Machine (NIP-90) for a feed. The request goes through your relays to that service and is signed with a new throwaway key each time, so the service doesn't learn who asked, except for feeds marked "personalized", which use your account so they can tailor results.
+
 **Long-form articles:** to open an article, the app asks your relays, the author's relays and any relay named in the link.
 
 **Verified addresses (NIP-05):** to show a ✓ next to a name@domain address, the app asks that domain whether the address belongs to the account.

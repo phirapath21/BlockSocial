@@ -1116,6 +1116,61 @@ class NostrRepository private constructor(private val context: Context) {
         return ranked.mapNotNull { (pk, n) -> _profiles.value[pk]?.let { it to n } }
     }
 
+    // ---- Feeds from DVMs (NIP-90) ----
+
+    /** Feed services (content-discovery DVMs) announced on relays. */
+    suspend fun feedServices(): List<com.example.btcwidget.nostr.core.Dvm.Service> {
+        val D = com.example.btcwidget.nostr.core.Dvm
+        val events = queryEverywhere(listOf(Filter(kinds = listOf(D.ANNOUNCEMENT), tags = mapOf("k" to listOf(D.FEED_REQUEST.toString())), limit = 80)), timeoutMs = 6_000)
+        return events.groupBy { it.pubkey + ":" + it.firstTag("d")?.get(1) }.values
+            .mapNotNull { v -> D.service(v.maxBy { it.createdAt }) }
+            .filter { it.pubkey !in _muted.value }
+            .sortedBy { it.name.lowercase() }
+    }
+
+    class FeedUnavailable(message: String) : Exception(message)
+
+    /**
+     * Asks [service] for its feed and returns the notes. The request is signed with a
+     * throwaway key, so the DVM doesn't learn who asked, unless the feed is personalized
+     * and the user is logged in.
+     */
+    suspend fun dvmFeed(service: com.example.btcwidget.nostr.core.Dvm.Service): List<FeedItem> {
+        val D = com.example.btcwidget.nostr.core.Dvm
+        val useAccount = service.personalized && pubkey != null
+        val request = if (useAccount) {
+            requireSigner().sign(D.request(pubkey!!, service.pubkey, pool.urls.toList()))
+        } else {
+            val k = com.example.btcwidget.nostr.core.Schnorr.newSecretKey()
+            val u = D.request(com.example.btcwidget.nostr.core.Schnorr.publicKey(k), service.pubkey, pool.urls.toList())
+            u.signed(com.example.btcwidget.nostr.core.Schnorr.sign(u.id, k))
+        }
+        val answer = kotlinx.coroutines.CompletableDeferred<Event>()
+        val stop = pool.subscribe(
+            listOf(Filter(kinds = listOf(D.FEED_RESULT, D.FEEDBACK), tags = mapOf("e" to listOf(request.id)))),
+            { e, _ ->
+                if (e.pubkey != service.pubkey) return@subscribe
+                if (e.kind == D.FEED_RESULT) answer.complete(e)
+                else if (e.firstTag("status")?.get(1) in setOf("error", "payment-required")) answer.completeExceptionally(
+                    FeedUnavailable(if (e.firstTag("status")?.get(1) == "payment-required") "This feed asks for payment" else e.firstTag("status")?.getOrNull(2)?.take(120) ?: "The feed reported an error")
+                )
+            }
+        )
+        try {
+            if (pool.publish(request).none { it.accepted }) throw FeedUnavailable("No relay took the request")
+            val result = kotlinx.coroutines.withTimeoutOrNull(25_000) { answer.await() } ?: throw FeedUnavailable("The feed didn't answer in time")
+            val ids = D.noteIds(result).take(100)
+            if (ids.isEmpty()) return emptyList()
+            val missing = ids.filter { !notes.containsKey(it) }
+            val fetched = if (missing.isEmpty()) emptyList() else queryEverywhere(listOf(Filter(ids = missing)), timeoutMs = 6_000)
+            val all = ids.mapNotNull { notes[it] ?: fetched.firstOrNull { e -> e.id == it } }
+            val order = ids.withIndex().associate { it.value to it.index }
+            return buildTimeline(all).sortedBy { order[it.note.id] ?: Int.MAX_VALUE }
+        } finally {
+            stop()
+        }
+    }
+
     // ---- Badges (NIP-58) ----
 
     /** Badges [pubkey] shows on their profile, verified against the issuers' awards. */

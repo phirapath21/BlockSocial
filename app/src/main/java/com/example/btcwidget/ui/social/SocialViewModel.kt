@@ -266,6 +266,10 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun joinGroup(address: com.example.btcwidget.nostr.core.RelayGroups.Address) =
         act("Couldn't ask to join") { val e = repo.spaces.joinGroup(address); say(e ?: "Asked to join") }
 
+    suspend fun feedServices() = runCatching { repo.feedServices() }.getOrDefault(emptyList())
+    /** The feed, or the reason it couldn't load. */
+    suspend fun dvmFeed(service: com.example.btcwidget.nostr.core.Dvm.Service): Result<List<FeedItem>> = runCatching { repo.dvmFeed(service) }
+
     suspend fun followSuggestions() = runCatching { repo.followSuggestions() }.getOrDefault(emptyList())
     suspend fun badgesOf(pubkey: String) = runCatching { repo.badgesOf(pubkey) }.getOrDefault(emptyList())
 
