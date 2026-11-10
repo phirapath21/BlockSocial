@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -75,7 +76,9 @@ fun ImageViewer(
     note: Event,
     stats: NoteStats,
     actions: NoteActions,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** The reply bar under the actions; null hides it. */
+    replyBar: (@Composable () -> Unit)? = null
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -112,7 +115,8 @@ fun ImageViewer(
             }.trim()
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    // Not fitting system windows, so the reply bar can rise above the keyboard (imePadding).
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             AsyncImage(
                 model = url,
@@ -168,6 +172,7 @@ fun ImageViewer(
                     .fillMaxWidth()
                     .background(Scrim)
                     .safeDrawingPadding()
+                    .imePadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -214,6 +219,10 @@ fun ImageViewer(
                     val marked = actions.isBookmarked(note.id)
                     PillAction(if (marked) Glyphs.Bookmarked else Glyphs.Bookmark, null, if (marked) "Remove bookmark" else "Bookmark", active = marked) { actions.bookmark(note) }
                     PillAction(Glyphs.Share, null, "Share") { actions.share(note) }
+                }
+                if (replyBar != null) {
+                    Spacer(Modifier.height(12.dp))
+                    replyBar()
                 }
             }
         }

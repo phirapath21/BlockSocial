@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -346,21 +348,21 @@ fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit
             if (t == null) {
                 Spinner(Modifier.padding(top = 40.dp))
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
-                    items(t.ancestors, key = { "a" + it.id }) { NoteCard(it, stats[it.id] ?: NoteStats(), actions) }
-                    item(key = "focus") { NoteCard(t.focus, stats[t.focus.id] ?: NoteStats(), actions, large = true) }
-                    item(key = "reply") {
-                        Row(
-                            Modifier.fillMaxWidth().clickable { actions.reply(t.focus) }.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Post your reply", color = EInk.Caption, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                            PillButton("Reply", onClick = { actions.reply(t.focus) })
-                        }
-                        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+                Column(Modifier.fillMaxSize().imePadding()) {
+                    LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+                        items(t.ancestors, key = { "a" + it.id }) { NoteCard(it, stats[it.id] ?: NoteStats(), actions) }
+                        item(key = "focus") { NoteCard(t.focus, stats[t.focus.id] ?: NoteStats(), actions, large = true) }
+                        items(t.replies, key = { "r" + it.id }) { NoteCard(it, stats[it.id] ?: NoteStats(), actions) }
+                        if (t.replies.isEmpty()) item { EmptyNote("No replies yet.") }
                     }
-                    items(t.replies, key = { "r" + it.id }) { NoteCard(it, stats[it.id] ?: NoteStats(), actions) }
-                    if (t.replies.isEmpty()) item { EmptyNote("No replies yet.") }
+                    // Pinned at the bottom, as on X; it stays while you scroll the replies.
+                    ReplyBar(
+                        vm, t.focus,
+                        onLogin = { navigate(LoginKey) },
+                        onExpand = { navigate(ComposeKey(replyTo = t.focus.id)) },
+                        onSent = { reload++ },
+                        modifier = Modifier.navigationBarsPadding().padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
                 }
             }
         }
