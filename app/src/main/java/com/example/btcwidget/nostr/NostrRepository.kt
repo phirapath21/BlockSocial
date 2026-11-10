@@ -911,6 +911,12 @@ class NostrRepository private constructor(private val context: Context) {
         return uploadBlob(sha, image.bytes.size.toLong()) { image.bytes.toRequestBody(image.mime.toMediaType()) }
     }
 
+    /** Uploads already-encrypted bytes (a photo for a private message). */
+    suspend fun uploadEncrypted(bytes: ByteArray): com.example.btcwidget.nostr.core.Blossom.Blob {
+        val sha = com.example.btcwidget.nostr.core.Blossom.sha256Hex(bytes)
+        return uploadBlob(sha, bytes.size.toLong()) { bytes.toRequestBody("application/octet-stream".toMediaType()) }
+    }
+
     /** Uploads a video as-is; the cached copy is deleted afterwards. */
     suspend fun uploadVideo(video: PreparedVideo): com.example.btcwidget.nostr.core.Blossom.Blob = try {
         uploadBlob(video.sha256, video.size) { video.file.asRequestBody(video.mime.toMediaType()) }

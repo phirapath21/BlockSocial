@@ -86,6 +86,10 @@ class BunkerSigner(
         runCatching { call("nip44_decrypt", listOf(peer, ciphertext), if (interactive) INTERACTIVE_TIMEOUT else QUIET_TIMEOUT) }
             .getOrElse { if (interactive) throw it else null }
 
+    override suspend fun nip04Decrypt(ciphertext: String, peer: String, interactive: Boolean): String? =
+        runCatching { call("nip04_decrypt", listOf(peer, ciphertext), if (interactive) INTERACTIVE_TIMEOUT else QUIET_TIMEOUT) }
+            .getOrElse { if (interactive) throw it else null }
+
     fun close() {
         stopListening?.invoke()
         stopListening = null

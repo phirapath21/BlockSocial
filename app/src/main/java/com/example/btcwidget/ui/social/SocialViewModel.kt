@@ -370,10 +370,28 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun startDms() { if (repo.pubkey != null) viewModelScope.launch { runCatching { repo.dms.start() } } }
 
     /** Sends a private message; [onResult] gets whether it was delivered. */
-    fun sendDm(peers: List<String>, text: String, onResult: (Boolean) -> Unit) {
+    fun sendDm(peers: List<String>, text: String, replyTo: String? = null, onResult: (Boolean) -> Unit) {
         var ok = false
-        act("Couldn't send the message", finally = { onResult(ok) }) { repo.dms.send(peers, text); ok = true }
+        act("Couldn't send the message", finally = { onResult(ok) }) { repo.dms.send(peers, text, replyTo); ok = true }
     }
+
+    fun reactDm(peers: List<String>, target: com.example.btcwidget.nostr.core.Nip17.Message, emoji: String) =
+        act("Couldn't react") { repo.dms.react(peers, target, emoji) }
+
+    /** Sends a photo, encrypted on the phone (location data removed first). */
+    fun sendDmImage(peers: List<String>, uri: android.net.Uri, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't send the photo", finally = { onResult(ok) }) {
+            val prepared = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                com.example.btcwidget.nostr.ImagePrep.prepare(getApplication(), uri)
+            }
+            repo.dms.sendImage(peers, prepared)
+            ok = true
+        }
+    }
+
+    suspend fun openDmFile(info: com.example.btcwidget.nostr.core.DmFile.Info): ByteArray? =
+        runCatching { repo.dms.openFile(info) }.getOrNull()
 
     fun unlockDms() = act("Couldn't open messages") { repo.dms.unlock() }
     fun setUpDmInbox() = act("Couldn't set up your inbox") { repo.dms.setUpInbox(); say("Inbox ready: people can message you") }

@@ -122,7 +122,7 @@ object NostrBackground {
         val fresh = wraps.mapNotNull { wrap ->
             // A signer app that would need to ask returns null: those wait until the app is opened.
             runCatching { Nip17.unwrap(wrap) { c, peer -> signer.nip44Decrypt(c, peer, interactive = false) ?: error("locked") } }.getOrNull()
-        }.filter { it.sender != me && it.createdAt > notified }.distinctBy { it.id }
+        }.filter { it.sender != me && it.createdAt > notified && it.isBubble }.distinctBy { it.id }
         if (fresh.isEmpty()) return
         NostrAccountStore.setDmNotified(context, fresh.maxOf { it.createdAt })
         fresh.groupBy { it.peers(me) }.forEach { (peers, msgs) ->
@@ -130,13 +130,15 @@ object NostrBackground {
             post(
                 context, CHANNEL_DM, ID_DM_BASE + Math.floorMod(peers.joinToString(",").hashCode(), 1000),
                 title = name(names, latest.sender) + if (msgs.size > 1) " (${msgs.size})" else "",
-                text = latest.content.take(200),
-                lines = msgs.sortedBy { it.createdAt }.takeLast(5).map { it.content.take(100) },
+                text = preview(latest).take(200),
+                lines = msgs.sortedBy { it.createdAt }.takeLast(5).map { preview(it).take(100) },
                 tab = "MESSAGES",
                 private = true
             )
         }
     }
+
+    private fun preview(m: Nip17.Message) = if (m.kind == Nip17.FILE) "📷 Photo" else m.content
 
     private fun post(context: Context, channel: String, id: Int, title: String, text: String, lines: List<String>, tab: String, private: Boolean) {
         ensureChannels(context)

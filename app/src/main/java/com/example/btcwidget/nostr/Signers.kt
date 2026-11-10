@@ -32,6 +32,9 @@ interface NostrSigner {
      * signer app that would have to ask the user returns null instead of prompting.
      */
     suspend fun nip44Decrypt(ciphertext: String, peer: String, interactive: Boolean = false): String?
+
+    /** Legacy NIP-04 decryption (for reading old direct messages); same [interactive] rule. */
+    suspend fun nip04Decrypt(ciphertext: String, peer: String, interactive: Boolean = false): String?
 }
 
 /** The user declined in the signer app. */
@@ -58,6 +61,9 @@ class LocalSigner(private val seckey: String) : NostrSigner {
 
     override suspend fun nip44Decrypt(ciphertext: String, peer: String, interactive: Boolean): String? =
         withContext(Dispatchers.Default) { runCatching { Nip44.decrypt(ciphertext, key(peer)) }.getOrNull() }
+
+    override suspend fun nip04Decrypt(ciphertext: String, peer: String, interactive: Boolean): String? =
+        withContext(Dispatchers.Default) { runCatching { com.example.btcwidget.nostr.core.Nip04.decrypt(ciphertext, seckey, peer) }.getOrNull() }
 }
 
 /**
@@ -146,6 +152,9 @@ class AmberSigner(
     override suspend fun nip44Decrypt(ciphertext: String, peer: String, interactive: Boolean): String? =
         crypt("nip44_decrypt", "NIP44_DECRYPT", ciphertext, peer, interactive)
 
+    override suspend fun nip04Decrypt(ciphertext: String, peer: String, interactive: Boolean): String? =
+        crypt("nip04_decrypt", "NIP04_DECRYPT", ciphertext, peer, interactive)
+
     /**
      * Encrypts or decrypts through the signer: in the background when the user allowed it,
      * else (if [interactive]) with an intent the user confirms.
@@ -204,6 +213,8 @@ class AmberSigner(
                 // Private messages (NIP-17) need the user's key to seal and open them.
                 put(JSONObject().put("type", "nip44_encrypt"))
                 put(JSONObject().put("type", "nip44_decrypt"))
+                // Reading older direct messages (NIP-04).
+                put(JSONObject().put("type", "nip04_decrypt"))
             }
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:")).apply {
                 putExtra("type", "get_public_key")

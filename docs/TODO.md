@@ -41,11 +41,11 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [ ] Thai translation of the UI
 
 ### Direct messages
-- [ ] Photos in DMs
-- [ ] Reply to a message, and react to messages
-- [ ] Read legacy DMs (NIP-04); most older Nostr DMs use it
-- [ ] "Message requests" for people you don't follow (spam control)
-- [ ] Create group chats from the UI (groups already work underneath)
+- [x] Photos in DMs
+- [x] Reply to a message, and react to messages
+- [x] Read legacy DMs (NIP-04); most older Nostr DMs use it
+- [x] "Message requests" for people you don't follow (spam control)
+- [x] Create group chats from the UI (groups already work underneath)
 
 ### Safety
 - [ ] Mute words, hashtags and threads (today: accounts only)

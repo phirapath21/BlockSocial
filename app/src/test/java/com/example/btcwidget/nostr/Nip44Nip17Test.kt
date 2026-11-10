@@ -137,4 +137,44 @@ class Nip44Nip17Test {
         assertArrayEquals(ByteArray(0), ByteArray(0))
         assertNotNull(list)
     }
+
+    private fun sealAndWrap(rumor: UnsignedEvent, senderSec: String, receiver: String) = runBlocking {
+        val seal = Nip17.seal(rumor, receiver, { pt, peer -> Nip44.encrypt(pt, senderSec, peer) }, { it.signed(Schnorr.sign(it.id, senderSec)) })
+        Nip17.wrap(seal, receiver)
+    }
+
+    @Test
+    fun photosAndReactionsTravelAsRumors() {
+        val aSec = Schnorr.newSecretKey(); val a = Schnorr.publicKey(aSec)
+        val bSec = Schnorr.newSecretKey(); val b = Schnorr.publicKey(bSec)
+        val photo = "jpeg bytes".toByteArray()
+        val sealed = com.example.btcwidget.nostr.core.DmFile.encrypt(photo)
+        val tags = com.example.btcwidget.nostr.core.DmFile.tags("image/jpeg", sealed, "aa", "bb", 640, 480)
+        val fileWrap = sealAndWrap(Nip17.rumor(a, listOf(b), "https://blossom.example/x", kind = Nip17.FILE, extraTags = tags), aSec, b)
+        val file = runBlocking { Nip17.unwrap(fileWrap) { c, peer -> Nip44.decrypt(c, bSec, peer) } }!!
+        val info = file.file!!
+        assertEquals(640, info.width)
+        assertArrayEquals(photo, com.example.btcwidget.nostr.core.DmFile.decrypt(sealed.bytes, info.key, info.nonce))
+        assertTrue(file.isBubble)
+
+        val reactWrap = sealAndWrap(Nip17.rumor(b, listOf(a), "🔥", replyTo = file.id, kind = Nip17.REACTION), bSec, a)
+        val reaction = runBlocking { Nip17.unwrap(reactWrap) { c, peer -> Nip44.decrypt(c, aSec, peer) } }!!
+        assertEquals(file.id, reaction.replyTo)
+        assertEquals(false, reaction.isBubble)
+    }
+
+    @Test
+    fun legacyNip04MessagesAreRead() {
+        val aSec = Schnorr.newSecretKey(); val a = Schnorr.publicKey(aSec)
+        val bSec = Schnorr.newSecretKey(); val b = Schnorr.publicKey(bSec)
+        val u = UnsignedEvent(a, 100, Nip17.LEGACY_DM, listOf(listOf("p", b)), com.example.btcwidget.nostr.core.Nip04.encrypt("old hello", aSec, b))
+        val e = u.signed(Schnorr.sign(u.id, aSec))
+        assertEquals(a, Nip17.legacyPeer(e, b))
+        assertEquals(b, Nip17.legacyPeer(e, a))
+        val text = com.example.btcwidget.nostr.core.Nip04.decrypt(e.content, bSec, a)
+        val m = Nip17.fromLegacy(e, text)!!
+        assertEquals("old hello", m.content)
+        assertEquals(listOf(a), m.peers(b))
+        assertTrue(m.isLegacy)
+    }
 }
