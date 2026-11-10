@@ -245,10 +245,13 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
             uploading++
-            vm.uploadImage(uri) { attachment ->
+            val done: (SocialViewModel.Attachment?) -> Unit = { attachment ->
                 uploading--
                 if (attachment != null) images = images + attachment
             }
+            // Photos are re-encoded (location removed); videos upload as they are.
+            if (context.contentResolver.getType(uri)?.startsWith("video/") == true) vm.uploadVideo(uri, done)
+            else vm.uploadImage(uri, done)
         }
     }
 
@@ -350,7 +353,11 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                 ) {
                     images.forEach { img ->
                         Box {
-                            AsyncImage(
+                            if (img.isVideo) {
+                                Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body), contentAlignment = Alignment.Center) {
+                                    Text("▶ Video", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+                            } else AsyncImage(
                                 model = img.url, contentDescription = "Attached image", contentScale = ContentScale.Crop,
                                 modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body)
                             )
@@ -380,8 +387,8 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     color = EInk.Value, fontSize = 22.sp,
                     modifier = Modifier
                         .clip(CircleShape)
-                        .clickable(enabled = !poll && images.size + uploading < 4, onClickLabel = "Add image") {
-                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        .clickable(enabled = !poll && images.size + uploading < 4, onClickLabel = "Add photo or video") {
+                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                         }
                         .padding(8.dp)
                 )
@@ -404,6 +411,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                 )
                 Text(
                     if (sensitive) "Marked sensitive: shown behind a warning."
+                    else if (images.any { it.isVideo }) "Videos are posted as they are: any location saved in the file is not removed."
                     else "Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed.",
                     color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
                 )

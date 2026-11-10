@@ -261,7 +261,21 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     // ---- Images ----
 
     /** An uploaded image waiting to be posted. */
-    data class Attachment(val url: String, val mime: String, val sha256: String, val width: Int, val height: Int)
+    data class Attachment(val url: String, val mime: String, val sha256: String, val width: Int, val height: Int) {
+        val isVideo get() = mime.startsWith("video/")
+    }
+
+    /** Uploads a picked video as-is (up to 100 MB). */
+    fun uploadVideo(uri: android.net.Uri, onResult: (Attachment?) -> Unit) {
+        var result: Attachment? = null
+        act("Couldn't upload the video", finally = { onResult(result) }) {
+            val prepared = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.example.btcwidget.nostr.VideoPrep.prepare(getApplication(), uri)
+            }
+            val blob = repo.uploadVideo(prepared)
+            result = Attachment(blob.url, prepared.mime, blob.sha256, prepared.width, prepared.height)
+        }
+    }
 
     /** Prepares (strips metadata) and uploads a picked image; [onResult] gets it, or null on failure. */
     fun uploadImage(uri: android.net.Uri, onResult: (Attachment?) -> Unit) {

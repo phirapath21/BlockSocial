@@ -233,5 +233,14 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
                 .pingInterval(30, TimeUnit.SECONDS)
                 .build()
         }
+
+        /** For media uploads: big videos on slow connections need longer than the default. */
+        val uploadClient: OkHttpClient by lazy {
+            defaultClient.newBuilder()
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(120, TimeUnit.SECONDS)
+                .callTimeout(15, TimeUnit.MINUTES)
+                .build()
+        }
     }
 }

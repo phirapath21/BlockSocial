@@ -44,6 +44,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Photos you post:** when you attach a photo, the app first re-encodes it on your phone, which removes EXIF metadata such as GPS location, camera model and time. It then uploads the photo to a Blossom media server: by default blossom.primal.net, or the servers in your own media server list (kind 10063). The upload is signed with your key. The photo becomes public at its address, and the server's own policy applies. Only photos you pick are read; the app asks for no storage or photo permission (it uses Android's photo picker).
 
+**Videos you post:** videos (up to 100 MB) are uploaded the same way but **as they are, without re-encoding**, so metadata saved in the file, which can include where it was recorded, is not removed; the composer warns you. While uploading, a temporary copy is kept in the app's cache and deleted afterwards.
+
 **Wallet (Nostr Wallet Connect):** if you connect a wallet in Settings › Nostr, the connection link is stored on your phone encrypted with the Android Keystore, is excluded from backup, and is removed when you disconnect or log out. When you zap, the app sends an encrypted payment request for that invoice to your wallet's relay, and your wallet pays it. The developer never sees the link, your balance or your payments.
 
 **Images and videos:** pictures (including animated GIFs) in notes and profiles are loaded from the addresses they point to, which can see your IP address. Videos load only when you tap play.

@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.ConcurrentHashMap
 
@@ -825,10 +826,25 @@ class NostrRepository private constructor(private val context: Context) {
      * Signing the upload permission goes through the user's signer.
      */
     suspend fun uploadImage(image: PreparedImage): com.example.btcwidget.nostr.core.Blossom.Blob {
+        val sha = com.example.btcwidget.nostr.core.Blossom.sha256Hex(image.bytes)
+        return uploadBlob(sha, image.bytes.size.toLong()) { image.bytes.toRequestBody(image.mime.toMediaType()) }
+    }
+
+    /** Uploads a video as-is; the cached copy is deleted afterwards. */
+    suspend fun uploadVideo(video: PreparedVideo): com.example.btcwidget.nostr.core.Blossom.Blob = try {
+        uploadBlob(video.sha256, video.size) { video.file.asRequestBody(video.mime.toMediaType()) }
+    } finally {
+        video.file.delete()
+    }
+
+    /**
+     * Uploads a file to the user's Blossom servers (or the default), trying up to three.
+     * Signing the upload permission goes through the user's signer.
+     */
+    private suspend fun uploadBlob(sha: String, size: Long, body: () -> okhttp3.RequestBody): com.example.btcwidget.nostr.core.Blossom.Blob {
         val me = requireMe()
         val blossom = com.example.btcwidget.nostr.core.Blossom
-        val sha = blossom.sha256Hex(image.bytes)
-        val auth = requireSigner().sign(blossom.uploadAuth(me, sha, image.bytes.size.toLong()))
+        val auth = requireSigner().sign(blossom.uploadAuth(me, sha, size))
         val header = blossom.authHeader(auth)
         val servers = mediaServers.ifEmpty { listOf(blossom.DEFAULT_SERVER) }.take(3)
         var failure: Exception? = null
@@ -838,9 +854,9 @@ class NostrRepository private constructor(private val context: Context) {
                     val request = Request.Builder()
                         .url(blossom.uploadUrl(server))
                         .header("Authorization", header)
-                        .put(image.bytes.toRequestBody(image.mime.toMediaType()))
+                        .put(body())
                         .build()
-                    RelayPool.defaultClient.newCall(request).execute().use { r ->
+                    RelayPool.uploadClient.newCall(request).execute().use { r ->
                         if (!r.isSuccessful) {
                             error(r.header("X-Reason") ?: "${server.removePrefix("https://")} refused the upload (HTTP ${r.code})")
                         }
