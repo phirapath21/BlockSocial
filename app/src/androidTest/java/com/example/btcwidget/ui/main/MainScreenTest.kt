@@ -59,18 +59,25 @@ class MainScreenTest {
     }
 
     @Test
-    fun bitcoinTab_isOneBarItemWithThreePages() {
+    fun bottomBar_hasFiveTabsInOrder() {
         setContent()
-        // Dashboard, Widgets and Alerts share the "Bitcoin" bar item.
-        composeTestRule.onNodeWithContentDescription("Bitcoin").assertExists()
-        composeTestRule.onNodeWithContentDescription("Home").assertExists()
-        composeTestRule.onNodeWithText("DASHBOARD").assertExists()
+        listOf("Home", "Search", "Bitcoin", "Notifications", "Messages").forEach {
+            composeTestRule.onNodeWithContentDescription(it).assertExists()
+        }
+        // Profile and Settings moved to the side bar.
+        composeTestRule.onNodeWithContentDescription("Settings").assertDoesNotExist()
+    }
+
+    /** Opens the side bar with the top-left button and picks [page]. */
+    private fun openFromSideBar(page: String) {
+        composeTestRule.onNodeWithContentDescription("Open menu").performClick()
+        composeTestRule.onNodeWithText(page).performClick()
     }
 
     @Test
-    fun settings_openFromNavigationBar() {
+    fun settings_openFromSideBar() {
         setContent()
-        composeTestRule.onNodeWithContentDescription("Settings").performClick()
+        openFromSideBar("Settings")
         // Header subtitle; "SETTINGS" alone also matches the navigation label.
         composeTestRule.onNodeWithText("APP PREFERENCES").assertExists()
         composeTestRule.onNodeWithText("Currency").assertExists()
@@ -105,7 +112,7 @@ class MainScreenTest {
     @Test
     fun widgets_tabCountsMetricsOnTheWidget() {
         setContent()
-        composeTestRule.onNodeWithText("WIDGETS").performClick()
+        openFromSideBar("Widgets")
         // STACK needs holdings, so 13 of the 14 modes are available.
         composeTestRule.onNodeWithText("13 OF 13", substring = true).assertExists()
     }
@@ -141,7 +148,7 @@ class MainScreenTest {
     @Test
     fun alerts_tabShowsCurrentPrice() {
         setContent()
-        composeTestRule.onNodeWithText("ALERTS").performClick()
+        openFromSideBar("Price alerts")
         composeTestRule.onNodeWithText("\$74,455").assertExists()
     }
 
@@ -150,7 +157,7 @@ class MainScreenTest {
         setContent()
         // Only the hero shows on the dashboard; metric panels live in the Widgets tab.
         composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertDoesNotExist()
-        composeTestRule.onNodeWithText("WIDGETS").performClick()
+        openFromSideBar("Widgets")
         composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertExists()
     }
 }

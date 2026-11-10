@@ -1,6 +1,26 @@
 package com.example.btcwidget.ui.main
 
 import android.Manifest
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -128,6 +148,10 @@ fun MainScreen(
         },
         notificationsAllowed = settings.notificationsAllowed,
         homeContent = { com.example.btcwidget.ui.social.HomeScreen(social, onItemClick) },
+        searchContent = { com.example.btcwidget.ui.social.SearchScreen(social, onItemClick, onBack = null) },
+        messagesContent = { com.example.btcwidget.ui.social.MessagesScreen() },
+        drawerHeader = { com.example.btcwidget.ui.social.DrawerAccountHeader(social, onLogin = { onItemClick(com.example.btcwidget.LoginKey) }) },
+        menuButtonIcon = { com.example.btcwidget.ui.social.MenuAvatar(social) },
         notificationsContent = { com.example.btcwidget.ui.social.NotificationsScreen(social, onItemClick) },
         profileContent = {
             val me = account?.pubkey
@@ -188,31 +212,65 @@ fun MainScreenContent(
     homeContent: @Composable () -> Unit = {},
     notificationsContent: @Composable () -> Unit = {},
     profileContent: @Composable () -> Unit = {},
-    nostrSettings: @Composable () -> Unit = {}
+    nostrSettings: @Composable () -> Unit = {},
+    searchContent: @Composable () -> Unit = {},
+    messagesContent: @Composable () -> Unit = {},
+    /** Top of the side bar: the account (avatar, name) or a log-in prompt. */
+    drawerHeader: @Composable () -> Unit = {},
+    /** The top-left button that opens the side bar (the user's avatar when logged in). */
+    menuButtonIcon: @Composable () -> Unit = { Text("≡", color = EInk.Value, fontSize = 22.sp) }
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
     val stackValue = data?.takeIf { stackSats > 0 }?.let {
         val btc = stackSats / Stack.SATS_PER_BTC.toDouble()
         PriceAlerts.formatPrice(btc * PriceAlerts.price(it, currencySetting), currencySetting)
     }
-    Column(
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val openPage: (MainTab) -> Unit = { tab ->
+        onTabSelected(tab)
+        scope.launch { drawerState.close() }
+    }
+    // Back closes the side bar first, then returns from a side-bar page to Home.
+    BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
+    BackHandler(enabled = !drawerState.isOpen && selectedTab !in BAR_TABS) { onTabSelected(MainTab.HOME) }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        // Swipe right to open, left to close. Pages with sideways drags of their own (the
+        // price chart scrub, widget reordering) open it with the top-left button instead.
+        gesturesEnabled = drawerState.isOpen || selectedTab !in DRAG_PAGES,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = EInk.Background,
+                drawerContentColor = EInk.Value,
+                modifier = Modifier.width(300.dp)
+            ) {
+                SideBar(selectedTab = selectedTab, header = drawerHeader, onOpen = openPage)
+            }
+        },
         modifier = modifier
+    ) {
+    Column(
+        modifier = Modifier
             .fillMaxSize()
             .background(EInk.Background)
             .statusBarsPadding()
     ) {
+        TopBar(
+            title = selectedTab.title,
+            menuIcon = menuButtonIcon,
+            onMenu = { scope.launch { drawerState.open() } }
+        )
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            // Bitcoin's three pages share one bottom-bar item; chips switch between them.
-            val bitcoinPage = selectedTab in BITCOIN_PAGES
-            Column(Modifier.fillMaxSize()) {
-            if (bitcoinPage) BitcoinPageChips(selectedTab, onTabSelected)
-            Box(Modifier.weight(1f)) {
             when (selectedTab) {
                 MainTab.HOME -> homeContent()
+                MainTab.SEARCH -> searchContent()
+                MainTab.MESSAGES -> messagesContent()
                 MainTab.NOTIFICATIONS -> notificationsContent()
                 MainTab.PROFILE -> profileContent()
                 MainTab.DASHBOARD -> {
@@ -298,8 +356,6 @@ fun MainScreenContent(
                     nostrSettings = nostrSettings
                 )
             }
-            }
-            }
         }
 
         HorizontalDivider(thickness = 1.dp, color = EInk.BodyStroke)
@@ -315,50 +371,107 @@ fun MainScreenContent(
                 unselectedTextColor = EInk.Caption
             )
             BAR_TABS.forEach { tab ->
-                val selected = selectedTab == tab || (tab == MainTab.DASHBOARD && selectedTab in BITCOIN_PAGES)
-                val label = if (tab == MainTab.DASHBOARD) "Bitcoin" else tab.label
+                // Icons only, as in X; the names are read out by TalkBack.
                 NavigationBarItem(
-                    icon = { Icon(tab.icon, contentDescription = label) },
-                    label = { Text(label.uppercase(), fontFamily = FontFamily.Monospace, fontSize = 9.sp, letterSpacing = 0.5.sp, maxLines = 1) },
-                    selected = selected,
-                    onClick = { onTabSelected(if (tab == MainTab.DASHBOARD && selectedTab in BITCOIN_PAGES) selectedTab else tab) },
+                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                    alwaysShowLabel = false,
+                    selected = selectedTab == tab,
+                    onClick = { onTabSelected(tab) },
                     colors = itemColors
+                )
+            }
+        }
+    }
+    }
+}
+
+/** Title row above every page; the left button opens the side bar. */
+@Composable
+private fun TopBar(title: String, menuIcon: @Composable () -> Unit, onMenu: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .padding(horizontal = 8.dp)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable(onClickLabel = "Open menu", onClick = onMenu)
+                .semantics { contentDescription = "Open menu" }
+        ) { menuIcon() }
+        Text(
+            text = title,
+            color = EInk.Value,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 12.dp)
+        )
+    }
+    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+}
+
+/** Side bar: the account, then Profile, Widgets, Price alerts and Settings. */
+@Composable
+private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen: (MainTab) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp)
+    ) {
+        Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { header() }
+        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(vertical = 8.dp))
+        DRAWER_PAGES.forEach { tab ->
+            val selected = selectedTab == tab
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClickLabel = "Open ${tab.title}") { onOpen(tab) }
+                    .background(if (selected) EInk.Body else Color.Transparent)
+                    .padding(horizontal = 20.dp, vertical = 14.dp)
+            ) {
+                Icon(tab.icon, contentDescription = null, tint = if (selected) EInk.Value else EInk.Label, modifier = Modifier.size(24.dp))
+                Text(
+                    text = tab.title,
+                    color = EInk.Value,
+                    fontSize = 18.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.padding(start = 18.dp)
                 )
             }
         }
     }
 }
 
-/** Top-level pages. DASHBOARD, WIDGETS and ALERTS sit under one "Bitcoin" bar item. */
-enum class MainTab(val label: String, val icon: ImageVector) {
+/**
+ * Pages. The bottom bar holds Home, Search, Bitcoin, Notifications and Messages; the side
+ * bar holds Profile, Widgets, Price alerts and Settings. [label] names the bar
+ * icon for TalkBack, [title] is shown in the top bar and side bar.
+ */
+enum class MainTab(val label: String, val icon: ImageVector, val title: String = label) {
     HOME("Home", Icons.Default.Home),
+    SEARCH("Search", Icons.Default.Search),
+    DASHBOARD("Bitcoin", TabIcons.Bitcoin),
     NOTIFICATIONS("Notifications", Icons.Default.Notifications),
-    DASHBOARD("Dashboard", TabIcons.Bitcoin),
-    WIDGETS("Widgets", TabIcons.Widgets),
-    ALERTS("Alerts", Icons.Default.Notifications),
+    MESSAGES("Messages", Icons.Default.Email),
     PROFILE("Profile", Icons.Default.Person),
+    WIDGETS("Widgets", TabIcons.Widgets),
+    ALERTS("Price alerts", Icons.Default.Warning),
     SETTINGS("Settings", Icons.Default.Settings)
 }
 
 // Getters, not stored values: a top-level val that touches MainTab would initialize the
-// enum while this file's other top-level vals (the icons it uses) are still null.
-private val BITCOIN_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS, MainTab.ALERTS)
-private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.NOTIFICATIONS, MainTab.DASHBOARD, MainTab.PROFILE, MainTab.SETTINGS)
+// enum while this file's other top-level vals are still null (that crashed the app once).
+private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SEARCH, MainTab.DASHBOARD, MainTab.NOTIFICATIONS, MainTab.MESSAGES)
+private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.WIDGETS, MainTab.ALERTS, MainTab.SETTINGS)
 
-/** Dashboard / Widgets / Alerts switch at the top of the Bitcoin pages. */
-@Composable
-private fun BitcoinPageChips(selected: MainTab, onSelect: (MainTab) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 10.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-    ) {
-        listOf(MainTab.DASHBOARD, MainTab.WIDGETS, MainTab.ALERTS).forEach { tab ->
-            EInkChip(text = tab.label.uppercase(), selected = selected == tab, onClick = { onSelect(tab) })
-        }
-    }
-}
+/** Pages with sideways drags of their own, where a swipe must not open the side bar. */
+private val DRAG_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS)
 
 /**
  * Custom tab glyphs. In their own object so they initialize on first use, independent of
