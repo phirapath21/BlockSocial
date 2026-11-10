@@ -276,6 +276,7 @@ class NostrRepository private constructor(private val context: Context) {
         _muted.value = emptySet()
         _mutes.value = com.example.btcwidget.nostr.core.MuteRules()
         trust = null
+        followsLists = null
         _stats.value = emptyMap()
     }
 
@@ -1049,17 +1050,59 @@ class NostrRepository private constructor(private val context: Context) {
         val me = pubkey ?: return
         if (!NostrAccountStore.wotFilter(context)) { trust = null; return }
         if (trust != null) return
+        val lists = followsContactLists()
+        trust = com.example.btcwidget.nostr.core.TrustNetwork(me, _following.value, lists.values.flatten())
+    }
+
+    /** Whom each followed account follows (up to 400 of them), loaded once per session. */
+    @Volatile private var followsLists: Map<String, List<String>>? = null
+
+    private suspend fun followsContactLists(): Map<String, List<String>> {
+        followsLists?.let { return it }
         val follows = _following.value.toList()
         val lists = coroutineScope {
             follows.take(400).chunked(100).map { chunk ->
                 async { queryEverywhere(listOf(Filter(authors = chunk, kinds = listOf(Kind.CONTACTS))), timeoutMs = 6_000) }
             }.awaitAll().flatten()
         }
-        val second = lists.groupBy { it.pubkey }.values.asSequence()
-            .map { versions -> versions.maxBy { it.createdAt } }
-            .flatMap { it.tagValues("p").asSequence() }
-            .toList()
-        trust = com.example.btcwidget.nostr.core.TrustNetwork(me, follows, second)
+        val out = lists.groupBy { it.pubkey }.mapValues { (_, versions) -> versions.maxBy { it.createdAt }.tagValues("p") }
+        if (out.isNotEmpty()) followsLists = out
+        return out
+    }
+
+    /** People followed by several of the people you follow, most shared first, with that count. */
+    suspend fun followSuggestions(): List<Pair<Profile, Int>> {
+        val me = pubkey ?: return emptyList()
+        if (_following.value.isEmpty()) return emptyList()
+        val ranked = com.example.btcwidget.nostr.core.FollowSuggestions.rank(me, _following.value, followsContactLists(), exclude = _muted.value)
+        loadProfiles(ranked.map { it.first })
+        return ranked.mapNotNull { (pk, n) -> _profiles.value[pk]?.let { it to n } }
+    }
+
+    // ---- Badges (NIP-58) ----
+
+    /** Badges [pubkey] shows on their profile, verified against the issuers' awards. */
+    suspend fun badgesOf(pubkey: String): List<com.example.btcwidget.nostr.core.Badges.Definition> {
+        val profile = queryEverywhere(listOf(Filter(authors = listOf(pubkey), kinds = listOf(com.example.btcwidget.nostr.core.Badges.PROFILE), tags = mapOf("d" to listOf(com.example.btcwidget.nostr.core.Badges.PROFILE_D)), limit = 2)))
+            .maxByOrNull { it.createdAt }
+        val shown = com.example.btcwidget.nostr.core.Badges.shown(profile).take(30)
+        if (shown.isEmpty()) return emptyList()
+        val (awards, definitions) = coroutineScope {
+            val a = async { queryEverywhere(listOf(Filter(ids = shown.map { it.second }))) }
+            val d = async {
+                queryEverywhere(listOf(Filter(
+                    authors = shown.map { it.first.issuer }.distinct(), kinds = listOf(com.example.btcwidget.nostr.core.Badges.DEFINITION),
+                    tags = mapOf("d" to shown.map { it.first.id }.distinct())
+                )))
+            }
+            a.await() to d.await()
+        }
+        val awardById = awards.associateBy { it.id }
+        val defs = definitions.mapNotNull { com.example.btcwidget.nostr.core.Badges.Definition.of(it) }.groupBy { it.ref }.mapValues { it.value.first() }
+        return shown.mapNotNull { (ref, awardId) ->
+            val award = awardById[awardId] ?: return@mapNotNull null
+            if (!com.example.btcwidget.nostr.core.Badges.isValidAward(award, ref, pubkey)) null else defs[ref]
+        }
     }
 
     fun setWotFilter(on: Boolean) {

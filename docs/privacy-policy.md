@@ -62,6 +62,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Polls:** your vote is a public event signed by your key, sent to your relays and to the relays the poll names (where its votes are collected). Anyone can see how you voted.
 
+**Who to follow and badges:** suggestions are worked out on your phone from the public follow lists of people you follow (fetched from your relays and indexers). Profile badges (NIP-58) are loaded from the same relays.
+
 **Long-form articles:** to open an article, the app asks your relays, the author's relays and any relay named in the link.
 
 **Verified addresses (NIP-05):** to show a ✓ next to a name@domain address, the app asks that domain whether the address belongs to the account.

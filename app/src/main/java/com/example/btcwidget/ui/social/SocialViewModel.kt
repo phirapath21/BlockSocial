@@ -230,6 +230,9 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         if (on) act("Couldn't load your network") { repo.loadTrust(); say("Showing replies and mentions from your network only") }
     }
 
+    suspend fun followSuggestions() = runCatching { repo.followSuggestions() }.getOrDefault(emptyList())
+    suspend fun badgesOf(pubkey: String) = runCatching { repo.badgesOf(pubkey) }.getOrDefault(emptyList())
+
     fun mediaServers(): List<String> = repo.mediaServerUrls()
     fun setMediaServers(urls: List<String>, onDone: () -> Unit) =
         act("Couldn't save media servers") { repo.setMediaServers(urls); say("Media servers saved"); onDone() }

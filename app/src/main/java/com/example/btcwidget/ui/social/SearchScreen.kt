@@ -168,6 +168,8 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
 private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
     val stats by vm.stats.collectAsState()
     val scope = rememberCoroutineScope()
+    val account by vm.account.collectAsState()
+    var suggestions by rememberSaveable { mutableStateOf(false) }
     var relay by rememberSaveable { mutableStateOf<String?>(null) }
     var items by remember(relay) { mutableStateOf<List<FeedItem>?>(null) }
     var loadingMore by remember(relay) { mutableStateOf(false) }
@@ -178,12 +180,14 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            EInkChip(text = "GLOBAL", selected = relay == null, onClick = { relay = null })
+            if (account != null) EInkChip(text = "WHO TO FOLLOW", selected = suggestions, onClick = { suggestions = true })
+            EInkChip(text = "GLOBAL", selected = !suggestions && relay == null, onClick = { suggestions = false; relay = null })
             vm.relays.forEach { url ->
-                EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = relay == url, onClick = { relay = url })
+                EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = !suggestions && relay == url, onClick = { suggestions = false; relay = url })
             }
         }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+        if (suggestions) { WhoToFollow(vm, actions); return@Column }
         when (val list = items) {
             null -> Spinner(Modifier.padding(top = 30.dp))
             else -> if (list.isEmpty()) EmptyNote("Nothing here right now.") else NoteList(
@@ -201,6 +205,30 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
                     }
                 }
             )
+        }
+    }
+}
+
+/** People followed by several of the people you follow, with a Follow button. */
+@Composable
+private fun WhoToFollow(vm: SocialViewModel, actions: NoteActions) {
+    val following by vm.following.collectAsState()
+    val list by androidx.compose.runtime.produceState<List<Pair<Profile, Int>>?>(null) { value = vm.followSuggestions() }
+    when (val l = list) {
+        null -> Spinner(Modifier.padding(top = 30.dp))
+        else -> if (l.isEmpty()) EmptyNote("No suggestions yet. Follow a few people first.") else LazyColumn(Modifier.fillMaxSize()) {
+            items(l, key = { it.first.pubkey }) { (p, shared) ->
+                val on = p.pubkey in following
+                Column {
+                    Text(
+                        "Followed by $shared people you follow", color = EInk.Caption, fontSize = 12.sp,
+                        modifier = Modifier.padding(start = 68.dp, top = 8.dp)
+                    )
+                    PersonRow(p, isFollowing = on, onClick = { actions.openProfile(p.pubkey) }) {
+                        EInkChip(text = if (on) "FOLLOWING" else "FOLLOW", selected = !on, onClick = { actions.follow(p.pubkey, !on) })
+                    }
+                }
+            }
         }
     }
 }
