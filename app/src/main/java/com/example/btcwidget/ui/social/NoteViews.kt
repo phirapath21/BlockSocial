@@ -218,8 +218,13 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
     val segments = remember(note.id) {
         // Links that imeta tags mark as images show as images even without a file extension.
         val images = com.example.btcwidget.nostr.core.Imeta.imageUrls(note)
+        val videos = com.example.btcwidget.nostr.core.Imeta.videoUrls(note)
         Content.parse(note.content.trim()).map { seg ->
-            if (seg is Content.Segment.Link && seg.url in images) Content.Segment.Image(seg.url) else seg
+            when {
+                seg is Content.Segment.Link && seg.url in images -> Content.Segment.Image(seg.url)
+                seg is Content.Segment.Link && seg.url in videos -> Content.Segment.Video(seg.url)
+                else -> seg
+            }
         }
     }
     val uriHandler = LocalUriHandler.current
@@ -237,7 +242,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 append("@" + (actions.profileOf(seg.pubkey)?.bestName ?: Profile.shortNpub(seg.pubkey)))
             }
             // Images and quoted notes are shown as blocks below.
-            is Content.Segment.Image, is Content.Segment.NoteRef -> Unit
+            is Content.Segment.Image, is Content.Segment.Video, is Content.Segment.NoteRef -> Unit
         }
     }
     val shown = text.text.trim()
@@ -264,8 +269,9 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 .clickable(onClickLabel = "View image") { actions.openImage(img.url, note) }
         )
     }
-    // A card for the first web link (not for posts that already show photos or a quote).
-    if (depth == 0 && segments.none { it is Content.Segment.Image || it is Content.Segment.NoteRef }) {
+    segments.filterIsInstance<Content.Segment.Video>().take(2).forEach { VideoPlayer(it.url) }
+    // A card for the first web link (not for posts that already show photos, video or a quote).
+    if (depth == 0 && segments.none { it is Content.Segment.Image || it is Content.Segment.Video || it is Content.Segment.NoteRef }) {
         segments.filterIsInstance<Content.Segment.Link>().firstOrNull()?.let { LinkCard(it.url, actions) }
     }
     if (depth == 0) {

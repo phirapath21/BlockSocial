@@ -185,6 +185,7 @@ class NostrCoreTest {
                 is Content.Segment.Text -> it.text
                 is Content.Segment.Link -> it.url
                 is Content.Segment.Image -> it.url
+                is Content.Segment.Video -> it.url
                 is Content.Segment.Hashtag -> "#" + it.tag
                 is Content.Segment.ProfileRef -> it.raw
                 is Content.Segment.NoteRef -> it.raw
@@ -361,5 +362,19 @@ class LinkPreviewTest {
         // Plain-http images aren't loaded.
         val q = com.example.btcwidget.nostr.core.LinkPreview.parse("<head><meta property=\"og:title\" content=\"T\"><meta property=\"og:image\" content=\"http://x/i.png\"></head>", "https://x.example")!!
         org.junit.Assert.assertNull(q.image)
+    }
+}
+
+class VideoSegmentTest {
+    @org.junit.Test
+    fun videoLinksAreRecognised() {
+        val segs = com.example.btcwidget.nostr.core.Content.parse("clip https://v.example/a.mp4?x=1 and https://v.example/live.m3u8 page https://v.example/watch")
+        org.junit.Assert.assertEquals(
+            listOf("https://v.example/a.mp4?x=1", "https://v.example/live.m3u8"),
+            segs.filterIsInstance<com.example.btcwidget.nostr.core.Content.Segment.Video>().map { it.url }
+        )
+        org.junit.Assert.assertTrue(segs.contains(com.example.btcwidget.nostr.core.Content.Segment.Link("https://v.example/watch")))
+        val e = com.example.btcwidget.nostr.core.Event("i", "p", 0, 1, listOf(listOf("imeta", "url https://b/x", "m video/mp4")), "https://b/x", "")
+        org.junit.Assert.assertEquals(setOf("https://b/x"), com.example.btcwidget.nostr.core.Imeta.videoUrls(e))
     }
 }

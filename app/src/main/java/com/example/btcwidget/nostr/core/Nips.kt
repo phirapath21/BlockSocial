@@ -167,6 +167,7 @@ object Content {
         data class Text(val text: String) : Segment
         data class Link(val url: String) : Segment
         data class Image(val url: String) : Segment
+        data class Video(val url: String) : Segment
         data class Hashtag(val tag: String) : Segment
         data class ProfileRef(val pubkey: String, val raw: String) : Segment
         data class NoteRef(val id: String, val relays: List<String>, val author: String?, val raw: String) : Segment
@@ -176,6 +177,7 @@ object Content {
         """(nostr:(?:npub|nprofile|note|nevent)1[02-9ac-hj-np-z]+)|(https?://[^\s<>"']+)|(?<![\w#])#([\p{L}\p{M}\p{N}_]+)"""
     )
     private val IMAGE = Regex("""\.(png|jpe?g|gif|webp|avif)(\?.*)?$""", RegexOption.IGNORE_CASE)
+    private val VIDEO = Regex("""\.(mp4|webm|mov|m4v|m3u8)(\?.*)?$""", RegexOption.IGNORE_CASE)
 
     fun parse(content: String): List<Segment> {
         val out = ArrayList<Segment>()
@@ -194,7 +196,11 @@ object Content {
                 }
                 url != null -> {
                     consumedTo = m.range.first + url.length
-                    out += if (IMAGE.containsMatchIn(url)) Segment.Image(url) else Segment.Link(url)
+                    out += when {
+                        IMAGE.containsMatchIn(url) -> Segment.Image(url)
+                        VIDEO.containsMatchIn(url) -> Segment.Video(url)
+                        else -> Segment.Link(url)
+                    }
                 }
                 tag != null -> out += Segment.Hashtag(tag)
             }

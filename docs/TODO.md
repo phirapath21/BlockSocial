@@ -10,7 +10,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] **Verify NIP-05** (S): check `name@domain` against the domain's `nostr.json` before showing ✓; today it's shown unverified, so impersonation is easy.
 - [ ] **Outbox model / per-author NIP-65** (M–L): read each person's notes from the relays they write to, so notes on other relays aren't missed.
 - [x] **Link previews** (M): card with title and image for links in notes (OpenGraph).
-- [ ] **Video / GIF playback** (M): play videos and animated GIFs in notes; today only still images show.
+- [x] **Video / GIF playback** (M): play videos and animated GIFs in notes; today only still images show.
 - [x] **Upload profile picture and banner** (S): pick from the phone and upload via Blossom instead of pasting a URL.
 - [ ] **In-app zaps (NWC, NIP-47)** (M–L): pay without switching to a wallet app.
 - [x] **Who liked / reposted / zapped** (S): tap a count to see the people.
