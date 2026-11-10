@@ -19,6 +19,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -119,6 +120,14 @@ class NostrRepository private constructor(private val context: Context) {
 
     internal val appContext: Context get() = context
 
+    // Outbox state: declared before init, whose cache loader fills it.
+    /** Connections to other people's write relays (separate from the user's own relays). */
+    private val outbox = RelayPool()
+
+    /** pubkey → write relays from their kind-10002 list; an empty list means "has none". */
+    private val writeRelays = ConcurrentHashMap<String, List<String>>()
+    private val relayListEvents = ConcurrentHashMap<String, Event>()
+
     /** Completes once the disk cache (profiles, the account's lists) is loaded. */
     val cacheReady: Job
 
@@ -127,6 +136,10 @@ class NostrRepository private constructor(private val context: Context) {
         // Show what we knew last time straight away; relays refresh it.
         cacheReady = scope.launch(Dispatchers.IO) {
             cache.loadEvents(PROFILES_CACHE).forEach { remember(it, save = false) }
+            cache.loadEvents(RELAY_LIST_CACHE).forEach { e ->
+                relayListEvents[e.pubkey] = e
+                writeRelays[e.pubkey] = com.example.btcwidget.nostr.core.Outbox.writeRelays(e)
+            }
             pubkey?.let { me -> applyAccountEvents(cache.loadEvents(ACCOUNT_CACHE).filter { it.pubkey == me }, fromRelays = false) }
         }
     }
@@ -173,6 +186,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     fun logout() {
         dms.reset()
+        _nwc.value = null
         NostrAccountStore.clear(context)
         cache.clear()
         accountFresh = false
@@ -255,12 +269,55 @@ class NostrRepository private constructor(private val context: Context) {
             )
         }
         val authors = (_following.value + me).toList()
-        return timeline(Filter(authors = authors, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit))
+        return authoredTimeline(authors) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit) }
     }
 
     /** A profile's notes and reposts. */
     suspend fun profileFeed(pubkey: String, until: Long? = null, limit: Int = 30): List<FeedItem> =
-        timeline(Filter(authors = listOf(pubkey), kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit))
+        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST), until = until, limit = limit) }
+
+    // ---- Outbox model (NIP-65): read people from the relays they write to ----
+
+
+    /** Fetches relay lists (from the indexers and our relays) for authors we don't know yet. */
+    private suspend fun loadWriteRelays(authors: Collection<String>) {
+        val missing = authors.distinct().filter { !writeRelays.containsKey(it) }
+        if (missing.isEmpty()) return
+        coroutineScope {
+            missing.chunked(150).map { chunk ->
+                async { queryEverywhere(listOf(Filter(authors = chunk, kinds = listOf(Kind.RELAY_LIST))), timeoutMs = 4_000) }
+            }.awaitAll()
+        }.flatten().groupBy { it.pubkey }.forEach { (pk, lists) ->
+            val latest = lists.maxBy { it.createdAt }
+            relayListEvents[pk] = latest
+            writeRelays[pk] = com.example.btcwidget.nostr.core.Outbox.writeRelays(latest)
+        }
+        missing.forEach { writeRelays.putIfAbsent(it, emptyList()) }
+        scope.launch(Dispatchers.IO) { cache.saveEvents(RELAY_LIST_CACHE, relayListEvents.values.sortedByDescending { it.createdAt }.take(3_000)) }
+    }
+
+    /**
+     * Notes by [authors], from our relays and, at the same time, from the relays each of
+     * them writes to (at most 12 extra relays, two per person). Merged into one timeline.
+     */
+    private suspend fun authoredTimeline(authors: List<String>, filterFor: (List<String>) -> Filter): List<FeedItem> {
+        val events = coroutineScope {
+            val ours = async { pool.query(listOf(filterFor(authors))) }
+            val theirs = async {
+                runCatching {
+                    loadWriteRelays(authors)
+                    val plan = com.example.btcwidget.nostr.core.Outbox.plan(authors, writeRelays, avoid = pool.urls)
+                    if (plan.isEmpty()) return@runCatching emptyList()
+                    outbox.addRelays(plan.keys)
+                    plan.map { (url, who) ->
+                        async { outbox.query(listOf(filterFor(who)), timeoutMs = 5_000, only = setOf(url)) }
+                    }.awaitAll().flatten()
+                }.getOrDefault(emptyList())
+            }
+            (ours.await() + theirs.await()).distinctBy { it.id }
+        }
+        return buildTimeline(events)
+    }
 
     /** Notes tagged with [hashtag]. */
     suspend fun hashtagFeed(hashtag: String, until: Long? = null): List<FeedItem> =
@@ -270,8 +327,10 @@ class NostrRepository private constructor(private val context: Context) {
      * Notes for a timeline. Returns as soon as the notes are in; names, avatars and counts
      * fill in afterwards (their flows update the screen), instead of holding it up.
      */
-    private suspend fun timeline(vararg filters: Filter, source: RelayPool = pool): List<FeedItem> {
-        val events = source.query(filters.toList())
+    private suspend fun timeline(vararg filters: Filter, source: RelayPool = pool): List<FeedItem> =
+        buildTimeline(source.query(filters.toList()))
+
+    private suspend fun buildTimeline(events: List<Event>): List<FeedItem> {
         // Reposts carry the note as JSON; fetch the few that don't in one request.
         val embedded = events.filter { it.kind == Kind.REPOST }.associateWith { r ->
             runCatching { Event.fromJson(r.content) }.getOrNull()?.takeIf { it.kind == Kind.TEXT_NOTE && it.verify() }
@@ -405,6 +464,135 @@ class NostrRepository private constructor(private val context: Context) {
     /** Notes matching [query] (NIP-50). */
     suspend fun searchNotes(query: String): List<FeedItem> =
         timeline(Filter(kinds = listOf(Kind.TEXT_NOTE), search = query.trim(), limit = 40), source = searchPool)
+
+    // ---- Nostr Wallet Connect (NIP-47) ----
+
+    private val _nwc = MutableStateFlow(NostrAccountStore.nwc(context)?.let { com.example.btcwidget.nostr.core.Nwc.parse(it) })
+    /** The connected wallet, or null: zaps then open a wallet app instead. */
+    val nwc: StateFlow<com.example.btcwidget.nostr.core.Nwc.Connection?> = _nwc.asStateFlow()
+
+    /** Saves a `nostr+walletconnect://` string (encrypted). Throws if it isn't one. */
+    fun connectNwc(uri: String) {
+        val c = com.example.btcwidget.nostr.core.Nwc.parse(uri) ?: throw IllegalArgumentException("That isn't a nostr+walletconnect:// link")
+        NostrAccountStore.setNwc(context, uri.trim())
+        _nwc.value = c
+    }
+
+    fun disconnectNwc() {
+        NostrAccountStore.setNwc(context, null)
+        _nwc.value = null
+    }
+
+    /**
+     * Pays [invoice] through the connected wallet: sends the request to the wallet's relay
+     * and waits up to 45 s for its answer. Returns the preimage; throws the wallet's error.
+     */
+    suspend fun payWithNwc(invoice: String): String {
+        val c = _nwc.value ?: error("No wallet connected")
+        val nwc = com.example.btcwidget.nostr.core.Nwc
+        val walletPool = RelayPool().also { it.setRelays(c.relays) }
+        try {
+            // NIP-44 if the wallet says it supports it, else NIP-04.
+            val info = walletPool.query(listOf(Filter(authors = listOf(c.walletPubkey), kinds = listOf(nwc.INFO), limit = 1)), 4_000).firstOrNull()
+            val request = nwc.payInvoiceRequest(c, invoice, nwc.supportsNip44(info))
+            val answer = kotlinx.coroutines.CompletableDeferred<Event>()
+            val stop = walletPool.subscribe(
+                listOf(Filter(authors = listOf(c.walletPubkey), kinds = listOf(nwc.RESPONSE), tags = mapOf("e" to listOf(request.id)))),
+                { e, _ -> answer.complete(e) }
+            )
+            try {
+                val sent = walletPool.publish(request)
+                if (sent.none { it.accepted }) error(sent.firstOrNull { it.message.isNotBlank() }?.message ?: "The wallet's relay didn't accept the request")
+                val response = kotlinx.coroutines.withTimeoutOrNull(45_000) { answer.await() } ?: error("The wallet didn't answer in time")
+                return nwc.parseResponse(c, response).getOrThrow()
+            } finally {
+                stop()
+            }
+        } finally {
+            walletPool.closeAll()
+        }
+    }
+
+    // ---- Link previews ----
+
+    /** url → preview (null = page has none); newest 300 kept. */
+    private val previews = object : LinkedHashMap<String, com.example.btcwidget.nostr.core.LinkPreview?>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, com.example.btcwidget.nostr.core.LinkPreview?>?) = size > 300
+    }
+    private val previewLock = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * The card for [url], fetched once: only HTML pages, only the first 256 KB, and only
+     * https. Null if the page has no title or can't be read.
+     */
+    suspend fun linkPreview(url: String): com.example.btcwidget.nostr.core.LinkPreview? {
+        if (!url.startsWith("https://")) return null
+        previewLock.withLock { if (previews.containsKey(url)) return previews[url] }
+        val preview = withContext(Dispatchers.IO) {
+            runCatching {
+                val request = Request.Builder().url(url).header("Accept", "text/html").header("User-Agent", "Mozilla/5.0 (Linux; Android) Blockface").build()
+                RelayPool.defaultClient.newCall(request).execute().use { r ->
+                    val type = r.header("Content-Type").orEmpty()
+                    if (!r.isSuccessful || !type.contains("html", ignoreCase = true)) return@use null
+                    val source = r.body.source()
+                    source.request(256 * 1024L)
+                    val html = source.buffer.readUtf8(minOf(source.buffer.size, 256 * 1024L))
+                    com.example.btcwidget.nostr.core.LinkPreview.parse(html, r.request.url.toString())
+                }
+            }.getOrNull()
+        }
+        previewLock.withLock { previews[url] = preview }
+        return preview
+    }
+
+    // ---- Who engaged with a note ----
+
+    /** Who reposted, liked (with their reaction) and zapped a note. */
+    data class Engagement(
+        val reposts: List<String>,
+        val likes: List<Pair<String, String>>,
+        val zaps: List<Zaps.Receipt>
+    )
+
+    suspend fun engagement(noteId: String): Engagement {
+        val events = pool.query(listOf(Filter(kinds = listOf(Kind.REPOST, Kind.REACTION, Kind.ZAP_RECEIPT), tags = mapOf("e" to listOf(noteId)), limit = 500)), 6_000)
+            .filter { it.pubkey !in _muted.value }
+        val reposts = events.filter { it.kind == Kind.REPOST && it.tagValues("e").firstOrNull() == noteId }
+            .sortedByDescending { it.createdAt }.map { it.pubkey }.distinct()
+        // NIP-25: the reaction targets the last "e" tag; "-" is a dislike, not a like.
+        val likes = events.filter { it.kind == Kind.REACTION && it.tagValues("e").lastOrNull() == noteId && it.content != "-" }
+            .sortedByDescending { it.createdAt }.distinctBy { it.pubkey }
+            .map { it.pubkey to it.content.ifEmpty { "+" } }
+        val zaps = events.filter { it.kind == Kind.ZAP_RECEIPT }.mapNotNull { Zaps.parseReceipt(it) }
+            .filter { it.noteId == noteId }.sortedByDescending { it.amountMsat }
+        loadProfiles(reposts + likes.map { it.first } + zaps.mapNotNull { it.sender })
+        return Engagement(reposts, likes, zaps)
+    }
+
+    // ---- NIP-05 verification ----
+
+    private val _nip05 = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    /** "pubkey|name@domain" → whether the domain's nostr.json really maps the name to that key. */
+    val nip05Verified: StateFlow<Map<String, Boolean>> = _nip05.asStateFlow()
+    private val nip05InFlight = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Checks [identifier] against https://domain/.well-known/nostr.json once per session.
+     * Until it's confirmed, the app doesn't show the address as verified.
+     */
+    fun verifyNip05(pubkey: String, identifier: String) {
+        val key = "$pubkey|$identifier"
+        if (_nip05.value.containsKey(key) || !nip05InFlight.add(key)) return
+        scope.launch(Dispatchers.IO) {
+            val ok = runCatching {
+                val url = com.example.btcwidget.nostr.core.Nip05.url(identifier) ?: return@runCatching false
+                val name = com.example.btcwidget.nostr.core.Nip05.parts(identifier)?.first ?: return@runCatching false
+                com.example.btcwidget.nostr.core.Nip05.pubkeyFrom(httpGet(url), name) == pubkey
+            }.getOrDefault(false)
+            _nip05.update { it + (key to ok) }
+            nip05InFlight.remove(key)
+        }
+    }
 
     /** Pubkeys whose profiles are being fetched, so concurrent screens don't ask twice. */
     private val profilesInFlight = ConcurrentHashMap.newKeySet<String>()
@@ -710,6 +898,7 @@ class NostrRepository private constructor(private val context: Context) {
         private const val PROFILES_CACHE = "profiles"
         private const val ACCOUNT_CACHE = "account"
         private const val HOME_CACHE = "home"
+        private const val RELAY_LIST_CACHE = "relay_lists"
 
         /** BUD-03 list of the user's Blossom media servers. */
         const val MEDIA_SERVER_LIST = 10063

@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -68,9 +69,12 @@ class NoteActions(
     /** Opens an image full screen, with its note's author and actions. */
     val openImage: (url: String, note: Event) -> Unit,
     val follow: (pubkey: String, follow: Boolean) -> Unit,
+    /** Opens who reposted (0), liked (1) or zapped (2) a note. */
+    val openEngagement: (note: Event, tab: Int) -> Unit,
     val isFollowing: (String) -> Boolean,
     val profileOf: (String) -> Profile?,
     val resolveNote: suspend (String) -> Event?,
+    val linkPreview: suspend (String) -> com.example.btcwidget.nostr.core.LinkPreview?,
     val me: String?
 )
 
@@ -127,6 +131,7 @@ fun NoteCard(
                         color = EInk.Caption, fontSize = 14.sp,
                         modifier = Modifier.padding(top = 10.dp)
                     )
+                    EngagementCounts(note, stats, actions)
                 }
                 ActionRow(note, stats, actions)
             }
@@ -148,7 +153,7 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
         )
-        val handle = author?.nip05?.removePrefix("_@") ?: author?.name?.let { "@$it" }
+        val handle = handleText(author, note.pubkey)
         Text(
             text = listOfNotNull(handle, relativeTime(note.createdAt)).joinToString(" · ", prefix = " "),
             color = EInk.Caption,
@@ -213,8 +218,13 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
     val segments = remember(note.id) {
         // Links that imeta tags mark as images show as images even without a file extension.
         val images = com.example.btcwidget.nostr.core.Imeta.imageUrls(note)
+        val videos = com.example.btcwidget.nostr.core.Imeta.videoUrls(note)
         Content.parse(note.content.trim()).map { seg ->
-            if (seg is Content.Segment.Link && seg.url in images) Content.Segment.Image(seg.url) else seg
+            when {
+                seg is Content.Segment.Link && seg.url in images -> Content.Segment.Image(seg.url)
+                seg is Content.Segment.Link && seg.url in videos -> Content.Segment.Video(seg.url)
+                else -> seg
+            }
         }
     }
     val uriHandler = LocalUriHandler.current
@@ -232,7 +242,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 append("@" + (actions.profileOf(seg.pubkey)?.bestName ?: Profile.shortNpub(seg.pubkey)))
             }
             // Images and quoted notes are shown as blocks below.
-            is Content.Segment.Image, is Content.Segment.NoteRef -> Unit
+            is Content.Segment.Image, is Content.Segment.Video, is Content.Segment.NoteRef -> Unit
         }
     }
     val shown = text.text.trim()
@@ -259,9 +269,42 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 .clickable(onClickLabel = "View image") { actions.openImage(img.url, note) }
         )
     }
+    segments.filterIsInstance<Content.Segment.Video>().take(2).forEach { VideoPlayer(it.url) }
+    // A card for the first web link (not for posts that already show photos, video or a quote).
+    if (depth == 0 && segments.none { it is Content.Segment.Image || it is Content.Segment.Video || it is Content.Segment.NoteRef }) {
+        segments.filterIsInstance<Content.Segment.Link>().firstOrNull()?.let { LinkCard(it.url, actions) }
+    }
     if (depth == 0) {
         segments.filterIsInstance<Content.Segment.NoteRef>().distinctBy { it.id }.take(2).forEach { ref ->
             QuotedNote(ref.id, actions)
+        }
+    }
+}
+
+/** Link preview: image, site and title, boxed like X's cards. Nothing shows until it loads. */
+@Composable
+private fun LinkCard(url: String, actions: NoteActions) {
+    val uriHandler = LocalUriHandler.current
+    val preview by produceState<com.example.btcwidget.nostr.core.LinkPreview?>(null, url) { value = actions.linkPreview(url) }
+    val p = preview ?: return
+    Column(
+        Modifier
+            .padding(top = 8.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
+            .clickable(onClickLabel = "Open link") { uriHandler.openUri(url) }
+    ) {
+        p.image?.let {
+            AsyncImage(
+                model = it, contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1.91f).background(EInk.Track)
+            )
+        }
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(p.site, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(p.title, color = EInk.Value, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            p.description?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
         }
     }
 }
@@ -360,6 +403,32 @@ fun Avatar(profile: Profile?, pubkey: String, size: Int, onClick: (() -> Unit)? 
             )
         }
     }
+}
+
+/** "11 Reposts  51 Likes  2.1K sats" under an opened post; each opens the list of people. */
+@Composable
+private fun EngagementCounts(note: Event, stats: NoteStats, actions: NoteActions) {
+    val parts = listOf(
+        Triple(stats.reposts, if (stats.reposts == 1) "Repost" else "Reposts", 0),
+        Triple(stats.likes, if (stats.likes == 1) "Like" else "Likes", 1),
+        Triple((stats.zapMsat / 1000).toInt(), "sats", 2)
+    ).filter { it.first > 0 }
+    if (parts.isEmpty()) return
+    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 10.dp))
+    Row(Modifier.padding(vertical = 8.dp)) {
+        parts.forEach { (count, label, tab) ->
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClickLabel = "See who: $label") { actions.openEngagement(note, tab) }
+                    .padding(end = 16.dp, top = 2.dp, bottom = 2.dp)
+            ) {
+                Text(compactCount(count), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(" $label", color = EInk.Caption, fontSize = 14.sp)
+            }
+        }
+    }
+    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
 
 /** "Tue, Nov 10, 2026 - 2:10 PM" in the phone's time zone (English, 12-hour). */

@@ -185,6 +185,7 @@ class NostrCoreTest {
                 is Content.Segment.Text -> it.text
                 is Content.Segment.Link -> it.url
                 is Content.Segment.Image -> it.url
+                is Content.Segment.Video -> it.url
                 is Content.Segment.Hashtag -> "#" + it.tag
                 is Content.Segment.ProfileRef -> it.raw
                 is Content.Segment.NoteRef -> it.raw
@@ -332,5 +333,134 @@ class ThaiTextTest {
         val segs = com.example.btcwidget.nostr.core.Content.parse("gm #บิตคอยน์ and #Bitcoin")
         val tags = segs.filterIsInstance<com.example.btcwidget.nostr.core.Content.Segment.Hashtag>().map { it.tag }
         org.junit.Assert.assertEquals(listOf("บิตคอยน์", "Bitcoin"), tags)
+    }
+}
+
+class LinkPreviewTest {
+    @org.junit.Test
+    fun openGraphTagsInAnyAttributeOrder() {
+        val html = """<html><head><title>Fallback</title>
+            <meta content="Bitcoin &amp; you" property="og:title">
+            <meta property='og:description' content='A peer-to-peer &quot;cash&quot; system'/>
+            <meta property="og:image" content="/img/card.png">
+            <meta name="og:site_name" content="Example">
+            </head><body><meta property="og:title" content="ignored"></body></html>"""
+        val p = com.example.btcwidget.nostr.core.LinkPreview.parse(html, "https://www.example.com/a/b")!!
+        org.junit.Assert.assertEquals("Bitcoin & you", p.title)
+        org.junit.Assert.assertEquals("A peer-to-peer \"cash\" system", p.description)
+        org.junit.Assert.assertEquals("https://www.example.com/img/card.png", p.image)
+        org.junit.Assert.assertEquals("Example", p.site)
+    }
+
+    @org.junit.Test
+    fun titleFallbackAndRejections() {
+        val p = com.example.btcwidget.nostr.core.LinkPreview.parse("<head><title>Just a page &#8212; ok</title></head>", "https://news.example.org/x")!!
+        org.junit.Assert.assertEquals("Just a page — ok", p.title)
+        org.junit.Assert.assertEquals("news.example.org", p.site)
+        org.junit.Assert.assertNull(p.image)
+        org.junit.Assert.assertNull(com.example.btcwidget.nostr.core.LinkPreview.parse("<head></head>", "https://x.example"))
+        // Plain-http images aren't loaded.
+        val q = com.example.btcwidget.nostr.core.LinkPreview.parse("<head><meta property=\"og:title\" content=\"T\"><meta property=\"og:image\" content=\"http://x/i.png\"></head>", "https://x.example")!!
+        org.junit.Assert.assertNull(q.image)
+    }
+}
+
+class VideoSegmentTest {
+    @org.junit.Test
+    fun videoLinksAreRecognised() {
+        val segs = com.example.btcwidget.nostr.core.Content.parse("clip https://v.example/a.mp4?x=1 and https://v.example/live.m3u8 page https://v.example/watch")
+        org.junit.Assert.assertEquals(
+            listOf("https://v.example/a.mp4?x=1", "https://v.example/live.m3u8"),
+            segs.filterIsInstance<com.example.btcwidget.nostr.core.Content.Segment.Video>().map { it.url }
+        )
+        org.junit.Assert.assertTrue(segs.contains(com.example.btcwidget.nostr.core.Content.Segment.Link("https://v.example/watch")))
+        val e = com.example.btcwidget.nostr.core.Event("i", "p", 0, 1, listOf(listOf("imeta", "url https://b/x", "m video/mp4")), "https://b/x", "")
+        org.junit.Assert.assertEquals(setOf("https://b/x"), com.example.btcwidget.nostr.core.Imeta.videoUrls(e))
+    }
+}
+
+class Nip04NwcTest {
+    private val n04 = com.example.btcwidget.nostr.core.Nip04
+    private val nwc = com.example.btcwidget.nostr.core.Nwc
+    private val schnorr = com.example.btcwidget.nostr.core.Schnorr
+
+    @org.junit.Test
+    fun nip04InteropVector() {
+        // Made independently with Python's `cryptography` (secp256k1 ECDH + AES-256-CBC).
+        val payload = "W7JcHJiSz8qnq1wBWZm6OTPw40gqeD6OmtWGmu0qOLw=?iv=AAECAwQFBgcICQoLDA0ODw=="
+        val sk1 = "00".repeat(31) + "01"
+        val pub2 = "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        org.junit.Assert.assertEquals("nostr wallet connect ⚡", n04.decrypt(payload, sk1, pub2))
+        // And the other side, with sk2 and pub1.
+        val sk2 = "00".repeat(31) + "02"
+        org.junit.Assert.assertEquals("nostr wallet connect ⚡", n04.decrypt(payload, sk2, schnorr.publicKey(sk1)))
+    }
+
+    @org.junit.Test
+    fun parseConnectionString() {
+        val wallet = "ab".repeat(32); val secret = schnorr.newSecretKey()
+        val c = nwc.parse("nostr+walletconnect://$wallet?relay=wss%3A%2F%2Frelay.getalby.com%2Fv1&secret=$secret&lud16=me%40getalby.com")!!
+        org.junit.Assert.assertEquals(wallet, c.walletPubkey)
+        org.junit.Assert.assertEquals(listOf("wss://relay.getalby.com/v1"), c.relays)
+        org.junit.Assert.assertEquals("me@getalby.com", c.lud16)
+        org.junit.Assert.assertNull(nwc.parse("nostr+walletconnect://$wallet?relay=wss://r.example"))   // no secret
+        org.junit.Assert.assertNull(nwc.parse("https://example.com"))
+    }
+
+    @org.junit.Test
+    fun payInvoiceRoundTripWithBothEncryptions() {
+        val walletSec = schnorr.newSecretKey(); val walletPub = schnorr.publicKey(walletSec)
+        val c = nwc.parse("nostr+walletconnect://$walletPub?relay=wss://r.example&secret=${schnorr.newSecretKey()}")!!
+        for (nip44 in listOf(false, true)) {
+            val req = nwc.payInvoiceRequest(c, "lnbc10n1test", nip44)
+            org.junit.Assert.assertTrue(req.verify())
+            org.junit.Assert.assertEquals(listOf(walletPub), req.tagValues("p"))
+            // The wallet reads it…
+            val body = if (nip44) com.example.btcwidget.nostr.core.Nip44.decrypt(req.content, walletSec, c.clientPubkey)
+                       else n04.decrypt(req.content, walletSec, c.clientPubkey)
+            org.junit.Assert.assertEquals("lnbc10n1test", org.json.JSONObject(body).getJSONObject("params").getString("invoice"))
+            // …and answers.
+            fun answer(json: String): com.example.btcwidget.nostr.core.Event {
+                val content = if (nip44) com.example.btcwidget.nostr.core.Nip44.encrypt(json, walletSec, c.clientPubkey) else n04.encrypt(json, walletSec, c.clientPubkey)
+                val u = com.example.btcwidget.nostr.core.UnsignedEvent(walletPub, 1, nwc.RESPONSE, listOf(listOf("e", req.id)), content)
+                return u.signed(schnorr.sign(u.id, walletSec))
+            }
+            org.junit.Assert.assertEquals("pre", nwc.parseResponse(c, answer("{\"result_type\":\"pay_invoice\",\"result\":{\"preimage\":\"pre\"}}")).getOrThrow())
+            val err = nwc.parseResponse(c, answer("{\"result_type\":\"pay_invoice\",\"error\":{\"code\":\"INSUFFICIENT_BALANCE\",\"message\":\"Not enough sats\"}}"))
+            org.junit.Assert.assertEquals("Not enough sats", err.exceptionOrNull()?.message)
+        }
+    }
+}
+
+class OutboxTest {
+    private val o = com.example.btcwidget.nostr.core.Outbox
+
+    @org.junit.Test
+    fun writeRelaysSkipReadOnly() {
+        val e = com.example.btcwidget.nostr.core.Event("i", "p", 0, 10002, listOf(
+            listOf("r", "wss://a.example"), listOf("r", "wss://b.example", "write"),
+            listOf("r", "wss://c.example", "read"), listOf("r", "https://bad")
+        ), "", "")
+        org.junit.Assert.assertEquals(listOf("wss://a.example", "wss://b.example"), o.writeRelays(e))
+    }
+
+    @org.junit.Test
+    fun planSharesRelaysAndRespectsTheCap() {
+        val lists = mapOf(
+            "alice" to listOf("wss://big", "wss://a1", "wss://a2"),
+            "bob" to listOf("wss://big", "wss://b1"),
+            "carol" to listOf("wss://c1"),
+            "dave" to listOf("wss://d1", "wss://d2")
+        )
+        val plan = o.plan(listOf("alice", "bob", "carol", "dave", "erin"), lists, perAuthor = 2, maxRelays = 4)
+        org.junit.Assert.assertTrue(plan.size <= 4)
+        // The shared relay is used for both people who write there.
+        org.junit.Assert.assertTrue(plan["wss://big"]!!.containsAll(listOf("alice", "bob")))
+        // Carol has a single relay: it's picked.
+        org.junit.Assert.assertEquals(listOf("carol"), plan["wss://c1"])
+        // Erin has no list: left to the defaults.
+        org.junit.Assert.assertTrue(plan.values.none { "erin" in it })
+        // Avoided relays (e.g. ones we already query) aren't planned.
+        org.junit.Assert.assertFalse(o.plan(listOf("bob"), lists, avoid = setOf("wss://big")).containsKey("wss://big"))
     }
 }

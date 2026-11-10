@@ -26,6 +26,9 @@ import kotlinx.serialization.Serializable
 /** Whom [pubkey] follows, or ([followers]) who follows them. */
 @Serializable data class FollowsKey(val pubkey: String, val followers: Boolean) : NavKey
 
+/** Who reposted, liked or zapped a note; [tab] 0 = reposts, 1 = likes, 2 = zaps. */
+@Serializable data class EngagementKey(val noteId: String, val tab: Int) : NavKey
+
 /** The community rules. */
 @Serializable data object RulesKey : NavKey
 

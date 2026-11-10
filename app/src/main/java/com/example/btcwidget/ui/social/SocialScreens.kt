@@ -513,7 +513,7 @@ private fun ProfileHeader(
             Text(profile?.bestName ?: Profile.shortNpub(pubkey), color = EInk.Value, fontSize = 21.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    profile?.nip05?.removePrefix("_@") ?: Profile.shortNpub(pubkey),
+                    handleText(profile, pubkey),
                     color = EInk.Caption, fontSize = 14.sp
                 )
                 if (followsYou) {

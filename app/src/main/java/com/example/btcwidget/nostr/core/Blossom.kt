@@ -70,6 +70,13 @@ object Imeta {
             if (width != null && height != null) "dim ${width}x$height" else null
         )
 
+    /** URLs that [event]'s imeta tags mark as videos. */
+    fun videoUrls(event: Event): Set<String> =
+        event.tags.filter { it.firstOrNull() == "imeta" }.mapNotNull { tag ->
+            val fields = tag.drop(1).associate { it.substringBefore(' ') to it.substringAfter(' ', "") }
+            fields["url"]?.takeIf { fields["m"]?.startsWith("video/") == true }
+        }.toSet()
+
     /** URLs that [event]'s imeta tags mark as images (so links without a file extension still show). */
     fun imageUrls(event: Event): Set<String> =
         event.tags.filter { it.firstOrNull() == "imeta" }.mapNotNull { tag ->

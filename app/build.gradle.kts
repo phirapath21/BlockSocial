@@ -121,6 +121,10 @@ dependencies {
   testImplementation(libs.secp256k1.kmp.jni.jvm)
   implementation(libs.coil.compose)
   implementation(libs.coil.network.okhttp)
+  // Animated GIFs in notes, and video playback
+  implementation(libs.coil.gif)
+  implementation(libs.media3.exoplayer)
+  implementation(libs.media3.ui)
 
   // Navigation
   implementation(libs.androidx.navigation3.ui)

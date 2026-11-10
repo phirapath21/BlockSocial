@@ -68,6 +68,24 @@ object NostrAccountStore {
         Hex.encode(cipher.doFinal(sealed, 12, sealed.size - 12))
     }.getOrNull()
 
+    // ---- Nostr Wallet Connect: the connection string can spend money, so it's sealed like a key ----
+
+    private const val NWC = "nwc"
+
+    fun setNwc(context: Context, uri: String?) {
+        if (uri == null) { prefs(context).edit().remove(NWC).commit(); return }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, keystoreKey()) }
+        val sealed = cipher.iv + cipher.doFinal(uri.toByteArray(Charsets.UTF_8))
+        prefs(context).edit().putString(NWC, Base64.encodeToString(sealed, Base64.NO_WRAP)).commit()
+    }
+
+    fun nwc(context: Context): String? = runCatching {
+        val sealed = Base64.decode(prefs(context).getString(NWC, null) ?: return null, Base64.NO_WRAP)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, keystoreKey(), GCMParameterSpec(128, sealed, 0, 12))
+        String(cipher.doFinal(sealed, 12, sealed.size - 12), Charsets.UTF_8)
+    }.getOrNull()
+
     /** The account's signer, or null when logged out (or the key can't be read). */
     fun signer(context: Context): NostrSigner? {
         val account = account(context) ?: return null

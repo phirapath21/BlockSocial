@@ -36,6 +36,7 @@ fun MainNavigation() {
         entry<EditProfileKey> { EditProfileScreen(social, back) }
         entry<ChatKey> { key -> com.example.btcwidget.ui.social.ChatScreen(social, key.peers.split(','), navigate, back) }
         entry<FollowsKey> { key -> com.example.btcwidget.ui.social.FollowListScreen(social, key.pubkey, key.followers, navigate, back) }
+        entry<EngagementKey> { key -> com.example.btcwidget.ui.social.EngagementScreen(social, key.noteId, key.tab, navigate, back) }
         entry<RulesKey> { com.example.btcwidget.ui.social.CommunityRulesScreen(back) }
         entry<SearchKey> { com.example.btcwidget.ui.social.SearchScreen(social, navigate, back) }
       },

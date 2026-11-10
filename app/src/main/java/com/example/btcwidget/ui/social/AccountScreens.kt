@@ -21,7 +21,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -370,6 +374,18 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     }
 }
 
+/** A small dark label over an image; a spinner while [text] is null (uploading). */
+@Composable
+private fun UploadBadge(text: String?) {
+    Box(
+        Modifier.clip(RoundedCornerShape(50)).background(Color(0x99000000)).padding(horizontal = 10.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (text == null) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+        else Text(text, color = Color.White, fontSize = 12.sp)
+    }
+}
+
 /** An "@name" being typed at the end of the text. */
 private val MENTION_AT_END = Regex("""(^|\s)@([\p{L}\p{M}\p{N}_.]{1,30})$""")
 
@@ -392,6 +408,23 @@ fun EditProfileScreen(vm: SocialViewModel, onBack: () -> Unit) {
     var nip05 by remember { mutableStateOf(current.nip05.orEmpty()) }
     var lud16 by remember { mutableStateOf(current.lud16.orEmpty()) }
     var website by remember { mutableStateOf(current.website.orEmpty()) }
+    // Which image the photo picker is choosing for, and which one is uploading.
+    var pickFor by remember { mutableStateOf<String?>(null) }
+    var uploadingFor by remember { mutableStateOf<String?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val target = pickFor
+        if (uri != null && target != null) {
+            uploadingFor = target
+            vm.uploadImage(uri) { a ->
+                uploadingFor = null
+                if (a != null) { if (target == "picture") picture = a.url else banner = a.url }
+            }
+        }
+    }
+    fun pick(target: String) {
+        pickFor = target
+        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar("Edit profile", onBack)
@@ -399,6 +432,30 @@ fun EditProfileScreen(vm: SocialViewModel, onBack: () -> Unit) {
             @Composable fun field(label: String, value: String, set: (String) -> Unit, singleLine: Boolean = true) =
                 OutlinedTextField(value, set, label = { Text(label) }, singleLine = singleLine, colors = fieldColors(),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
+            // Banner with the avatar over it, as on the profile; tap either to change it.
+            Box(Modifier.fillMaxWidth().padding(bottom = 44.dp)) {
+                Box(
+                    Modifier.fillMaxWidth().aspectRatio(3f).clip(RoundedCornerShape(12.dp)).background(EInk.Track)
+                        .clickable(enabled = uploadingFor == null, onClickLabel = "Change banner") { pick("banner") },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (banner.isNotBlank()) AsyncImage(banner, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    UploadBadge(if (uploadingFor == "banner") null else "🖼 Banner")
+                }
+                Box(
+                    Modifier.align(Alignment.BottomStart).offset(x = 14.dp, y = 36.dp).size(80.dp).clip(CircleShape)
+                        .background(EInk.Body).border(3.dp, EInk.Background, CircleShape)
+                        .clickable(enabled = uploadingFor == null, onClickLabel = "Change profile picture") { pick("picture") },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (picture.isNotBlank()) AsyncImage(picture, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    UploadBadge(if (uploadingFor == "picture") null else "📷")
+                }
+            }
+            Text(
+                "Tap the picture or banner to upload from your phone (location data is removed).",
+                color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp)
+            )
             field("Display name", displayName, { displayName = it.take(60) })
             field("Username", name, { name = it.take(40) })
             field("Bio", about, { about = it.take(500) }, singleLine = false)
@@ -408,7 +465,8 @@ fun EditProfileScreen(vm: SocialViewModel, onBack: () -> Unit) {
             field("Nostr address (NIP-05)", nip05, { nip05 = it.trim() })
             field("Lightning address (for zaps)", lud16, { lud16 = it.trim() })
             Spacer(Modifier.height(8.dp))
-            PillButton("Save") {
+            PillButton(if (uploadingFor != null) "Uploading…" else "Save", filled = uploadingFor == null) {
+                if (uploadingFor != null) return@PillButton
                 vm.updateProfile(
                     current.copy(name = name, displayName = displayName, about = about, picture = picture,
                         banner = banner, nip05 = nip05, lud16 = lud16, website = website),

@@ -29,7 +29,7 @@ Uninstalling the app or clearing its storage deletes all of this.
 
 When you post, reply, quote, repost, like, follow, mute, report, zap or edit your profile, the app signs an event with your key and sends it to your Nostr relays (by default relay.damus.io, nos.lol and relay.primal.net, or the list you set). These events are **public**, are signed by your public key, and may be copied by other relays and apps. Deleting a note sends a deletion request; relays and people who already have a copy may keep it. The developer does not operate these relays and cannot remove content from them.
 
-To show your timeline, profiles, threads and notifications, the app requests public events from your relays. Profiles, follow lists and relay lists are also requested from public indexer relays (purplepag.es, user.kindpag.es and indexer.coracle.social), so people's names and pictures load even when they publish elsewhere. Relays see your IP address and which events you ask for (for example, whose notes you load). Each relay's own policy applies.
+To show your timeline, profiles, threads and notifications, the app requests public events from your relays. To show notes from people you follow, the app also asks the relays those people say they publish to (their NIP-65 lists), so those relays see your IP address and whose notes you load. Profiles, follow lists and relay lists are also requested from public indexer relays (purplepag.es, user.kindpag.es and indexer.coracle.social), so people's names and pictures load even when they publish elsewhere. Relays see your IP address and which events you ask for (for example, whose notes you load). Each relay's own policy applies.
 
 **Cache:** to open quickly, the app keeps the last home timeline, profiles it has shown, and your own follow, mute and relay lists in its private cache on the phone. These are public Nostr events; Android may clear the cache, and logging out deletes it.
 
@@ -43,7 +43,13 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Photos you post:** when you attach a photo, the app first re-encodes it on your phone, which removes EXIF metadata such as GPS location, camera model and time. It then uploads the photo to a Blossom media server: by default blossom.primal.net, or the servers in your own media server list (kind 10063). The upload is signed with your key. The photo becomes public at its address, and the server's own policy applies. Only photos you pick are read; the app asks for no storage or photo permission (it uses Android's photo picker).
 
-**Images:** pictures in notes and profiles are loaded from the addresses they point to, which can see your IP address.
+**Wallet (Nostr Wallet Connect):** if you connect a wallet in Settings › Nostr, the connection link is stored on your phone encrypted with the Android Keystore, is excluded from backup, and is removed when you disconnect or log out. When you zap, the app sends an encrypted payment request for that invoice to your wallet's relay, and your wallet pays it. The developer never sees the link, your balance or your payments.
+
+**Images and videos:** pictures (including animated GIFs) in notes and profiles are loaded from the addresses they point to, which can see your IP address. Videos load only when you tap play.
+
+**Link previews:** to show a card for a web link in a note, the app reads the start of that page (title, description and image) from the linked site, which can see your IP address. Nothing about you is sent beyond a normal web request.
+
+**Verified addresses (NIP-05):** to show a ✓ next to a name@domain address, the app asks that domain whether the address belongs to the account.
 
 **Moderation:** you can mute accounts (published as your mute list) and report notes (published as a NIP-56 report to your relays). The Community rules (in the app, and at docs/community-rules.md) say what isn't allowed.
 
