@@ -56,3 +56,20 @@ class CommunitiesTest {
         assertEquals(listOf(listOf("h", "abc_1")), RelayGroups.chat(user, a, "hi").tags)
     }
 }
+
+class DvmTest {
+    @Test
+    fun feedServicesAndResults() {
+        val dvm = "d".repeat(64)
+        val ann = Event("a", dvm, 1, com.example.btcwidget.nostr.core.Dvm.ANNOUNCEMENT, listOf(listOf("d", "trending"), listOf("k", "5300")), "{\"name\":\"Trending\",\"about\":\"hot\",\"picture\":\"http://x\"}", "")
+        val s = com.example.btcwidget.nostr.core.Dvm.service(ann)!!
+        assertEquals("Trending", s.name); assertNull(s.picture)
+        assertNull(com.example.btcwidget.nostr.core.Dvm.service(ann.copy(tags = listOf(listOf("d", "x"), listOf("k", "5050")))))
+        val n1 = "1".repeat(64); val n2 = "2".repeat(64)
+        val res = Event("r", dvm, 2, com.example.btcwidget.nostr.core.Dvm.FEED_RESULT, listOf(listOf("e", "req"), listOf("p", "me")), "[[\"e\",\"$n1\"],[\"e\",\"$n2\"],[\"e\",\"bad\"]]", "")
+        assertEquals(listOf(n1, n2), com.example.btcwidget.nostr.core.Dvm.noteIds(res))
+        assertTrue(com.example.btcwidget.nostr.core.Dvm.answers(res, "req", dvm))
+        val req = com.example.btcwidget.nostr.core.Dvm.request("me", dvm, listOf("wss://a", "wss://b"))
+        assertEquals(listOf("relays", "wss://a", "wss://b"), req.tags[1])
+    }
+}

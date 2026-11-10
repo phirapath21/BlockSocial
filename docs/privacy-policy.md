@@ -19,6 +19,7 @@ The app keeps the following only on your device, in its private app storage:
   - **with an nsec or a new account**: your private key, encrypted with a key held in the phone's Android Keystore that cannot be exported. It is never sent anywhere, is excluded from Android backup and device transfer, and is deleted when you log out.
 - **Other accounts you add** — if you add more than one Nostr account, the inactive ones are kept the same way (keys still encrypted with the Keystore key), excluded from backup and device transfer, until you remove them from the phone.
 - **Your relay list**, if you edit it.
+- **Scheduled posts** — posts you scheduled, kept until they are published at their time (then signed and sent to your relays) or you cancel them. Excluded from Android backup and device transfer, and deleted when you log out.
 - **Drafts** — text you typed in the composer but didn't post (one per new post, reply or quote, up to 50), so you can pick up where you left off. Excluded from Android backup and device transfer, and deleted when you post or log out.
 - **A local database of Nostr events** you have seen (notes, profiles, lists, and private messages still in their encrypted form), so screens open instantly and work offline. It holds about 50,000 events at most, is excluded from Android backup and device transfer, and is deleted when you log out.
 
@@ -65,6 +66,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 **Who to follow and badges:** suggestions are worked out on your phone from the public follow lists of people you follow (fetched from your relays and indexers). Profile badges (NIP-58) are loaded from the same relays.
 
 **Communities, public chats and groups:** communities (NIP-72) and public chat channels (NIP-28) are read from your relays and the community's own relays; posts and chat messages you send there are public, and joining a community publishes your public list of joined communities (kind 10004). Groups (NIP-29) live on one relay chosen by the group: when you open a group, the app connects to that relay, and if the relay asks (NIP-42), it proves who you are by signing a login challenge, so that relay learns your public key. This happens only for groups you open. The groups you open are remembered on your phone only.
+
+**Feeds from DVMs:** under Search › Feeds you can ask a Data Vending Machine (NIP-90) for a feed. The request goes through your relays to that service and is signed with a new throwaway key each time, so the service doesn't learn who asked, except for feeds marked "personalized", which use your account so they can tailor results.
 
 **Long-form articles:** to open an article, the app asks your relays, the author's relays and any relay named in the link.
 

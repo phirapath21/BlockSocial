@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -170,6 +172,7 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
     val scope = rememberCoroutineScope()
     val account by vm.account.collectAsState()
     var suggestions by rememberSaveable { mutableStateOf(false) }
+    var feeds by rememberSaveable { mutableStateOf(false) }
     var relay by rememberSaveable { mutableStateOf<String?>(null) }
     var items by remember(relay) { mutableStateOf<List<FeedItem>?>(null) }
     var loadingMore by remember(relay) { mutableStateOf(false) }
@@ -180,14 +183,16 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            if (account != null) EInkChip(text = "WHO TO FOLLOW", selected = suggestions, onClick = { suggestions = true })
-            EInkChip(text = "GLOBAL", selected = !suggestions && relay == null, onClick = { suggestions = false; relay = null })
+            EInkChip(text = "FEEDS", selected = feeds, onClick = { feeds = true; suggestions = false })
+            if (account != null) EInkChip(text = "WHO TO FOLLOW", selected = suggestions, onClick = { suggestions = true; feeds = false })
+            EInkChip(text = "GLOBAL", selected = !suggestions && !feeds && relay == null, onClick = { suggestions = false; feeds = false; relay = null })
             vm.relays.forEach { url ->
-                EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = !suggestions && relay == url, onClick = { suggestions = false; relay = url })
+                EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = !suggestions && !feeds && relay == url, onClick = { suggestions = false; feeds = false; relay = url })
             }
         }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
         if (suggestions) { WhoToFollow(vm, actions); return@Column }
+        if (feeds) { DvmFeeds(vm, actions); return@Column }
         when (val list = items) {
             null -> Spinner(Modifier.padding(top = 30.dp))
             else -> if (list.isEmpty()) EmptyNote("Nothing here right now.") else NoteList(
@@ -204,6 +209,64 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
                         }
                     }
                 }
+            )
+        }
+    }
+}
+
+/** Feeds made by Data Vending Machines (NIP-90): pick one to see what it suggests. */
+@Composable
+private fun DvmFeeds(vm: SocialViewModel, actions: NoteActions) {
+    val stats by vm.stats.collectAsState()
+    val services by androidx.compose.runtime.produceState<List<com.example.btcwidget.nostr.core.Dvm.Service>?>(null) { value = vm.feedServices() }
+    var chosen by remember { mutableStateOf<com.example.btcwidget.nostr.core.Dvm.Service?>(null) }
+    var reload by remember { mutableStateOf(0) }
+    val c = chosen
+    if (c == null) {
+        when (val l = services) {
+            null -> Spinner(Modifier.padding(top = 30.dp))
+            else -> if (l.isEmpty()) EmptyNote("No feeds found on your relays.") else LazyColumn(Modifier.fillMaxSize()) {
+                item(key = "note") {
+                    Text(
+                        "Feeds from Data Vending Machines: services that pick notes for you. Asking one doesn't reveal who you are, except feeds marked personalized.",
+                        color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    )
+                }
+                items(l, key = { it.key }) { svc ->
+                    Row(Modifier.fillMaxWidth().clickable { chosen = svc }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.foundation.layout.Box(
+                            Modifier.size(40.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(EInk.Body),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (svc.picture != null) coil3.compose.AsyncImage(model = svc.picture, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            else Text("✦", color = EInk.Value, fontSize = 18.sp)
+                        }
+                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                            Text(svc.name + if (svc.personalized) "  · personalized" else "", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            svc.about?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                        }
+                    }
+                    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+                }
+            }
+        }
+        return
+    }
+    val result by androidx.compose.runtime.produceState<Result<List<FeedItem>>?>(null, c, reload) { value = null; value = vm.dvmFeed(c) }
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            EInkChip(text = "‹ FEEDS", selected = false, onClick = { chosen = null })
+            Text(c.name, color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+            EInkChip(text = "↻", selected = false, onClick = { reload++ })
+        }
+        when (val r = result) {
+            null -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Spinner(Modifier.padding(top = 30.dp))
+                Text("Asking ${c.name}…", color = EInk.Caption, fontSize = 12.sp)
+            }
+            else -> r.fold(
+                onSuccess = { items -> if (items.isEmpty()) EmptyNote("This feed has nothing right now.") else NoteList(items, stats, actions) },
+                onFailure = { EmptyNote(it.message ?: "Couldn't load this feed.") }
             )
         }
     }

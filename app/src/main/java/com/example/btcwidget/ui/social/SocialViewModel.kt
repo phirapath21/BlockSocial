@@ -266,6 +266,10 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun joinGroup(address: com.example.btcwidget.nostr.core.RelayGroups.Address) =
         act("Couldn't ask to join") { val e = repo.spaces.joinGroup(address); say(e ?: "Asked to join") }
 
+    suspend fun feedServices() = runCatching { repo.feedServices() }.getOrDefault(emptyList())
+    /** The feed, or the reason it couldn't load. */
+    suspend fun dvmFeed(service: com.example.btcwidget.nostr.core.Dvm.Service): Result<List<FeedItem>> = runCatching { repo.dvmFeed(service) }
+
     suspend fun followSuggestions() = runCatching { repo.followSuggestions() }.getOrDefault(emptyList())
     suspend fun badgesOf(pubkey: String) = runCatching { repo.badgesOf(pubkey) }.getOrDefault(emptyList())
 
@@ -324,6 +328,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         _push.value = store.pushEnabled(app)
         _notifOff.value = store.notificationsOff(app)
         _wot.value = store.wotFilter(app)
+        refreshScheduled()
     }
 
     private fun afterLogin() {
@@ -518,6 +523,42 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
             if (replyTo == null) _home.update { it.copy(items = listOf(FeedItem(event)) + it.items) }
             ok = true
         }
+    }
+
+    // ---- Scheduled posts ----
+
+    private val _scheduled = MutableStateFlow<List<com.example.btcwidget.nostr.ScheduledPosts.Post>>(emptyList())
+    /** The active account's posts waiting to be published. */
+    val scheduled: StateFlow<List<com.example.btcwidget.nostr.ScheduledPosts.Post>> = _scheduled.asStateFlow()
+
+    fun refreshScheduled() {
+        _scheduled.value = repo.pubkey?.let { com.example.btcwidget.nostr.ScheduledPosts.forAccount(getApplication(), it) }.orEmpty()
+    }
+
+    /** Saves a new post to publish at [at] (seconds), with the same tags [send] would add. */
+    fun schedule(text: String, images: List<Attachment>, contentWarning: String?, at: Long): Boolean {
+        val me = repo.pubkey ?: return false
+        val body = (listOf(text.trim()) + images.map { it.url }).filter { it.isNotEmpty() }.joinToString("\n")
+        val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height) } +
+            listOfNotNull(contentWarning?.let { listOf("content-warning", it) })
+        com.example.btcwidget.nostr.ScheduledPosts.schedule(getApplication(), me, at, body, tags)
+        refreshScheduled()
+        say("Scheduled for " + java.text.SimpleDateFormat("EEE, MMM d - h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(at * 1000)))
+        return true
+    }
+
+    fun cancelScheduled(id: String) {
+        com.example.btcwidget.nostr.ScheduledPosts.cancel(getApplication(), id)
+        refreshScheduled()
+    }
+
+    /** Publishes a scheduled post right away (e.g. one the signer couldn't approve in the background). */
+    fun postScheduledNow(post: com.example.btcwidget.nostr.ScheduledPosts.Post) = act("Couldn't post") {
+        val event = repo.publish(com.example.btcwidget.nostr.core.Events.note(post.pubkey, post.content, post.tags))
+        com.example.btcwidget.nostr.ScheduledPosts.cancel(getApplication(), post.id)
+        _home.update { it.copy(items = listOf(FeedItem(event)) + it.items) }
+        refreshScheduled()
+        say("Posted")
     }
 
     // ---- New posts while reading (the "↑ N new posts" pill) ----
