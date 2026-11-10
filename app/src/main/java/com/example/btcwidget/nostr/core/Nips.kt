@@ -72,6 +72,30 @@ data class ThreadRef(val root: String?, val reply: String?, val rootRelay: Strin
     }
 }
 
+/** Replies below a note, as a tree flattened in reading order. */
+object ReplyTree {
+    data class Row(val event: Event, val depth: Int)
+
+    /**
+     * Every reply under [focusId] found in [events], depth-first: each reply is followed by
+     * its own replies (oldest first at each level). Depth 0 answers the focus directly.
+     */
+    fun flatten(focusId: String, events: List<Event>, maxRows: Int = 500): List<Row> {
+        val children = events.distinctBy { it.id }.filter { it.id != focusId }.groupBy { ThreadRef.of(it).parent }
+        val out = ArrayList<Row>()
+        val seen = HashSet<String>()
+        fun walk(parent: String, depth: Int) {
+            for (e in children[parent].orEmpty().sortedBy { it.createdAt }) {
+                if (out.size >= maxRows || !seen.add(e.id)) continue
+                out.add(Row(e, depth))
+                walk(e.id, depth + 1)
+            }
+        }
+        walk(focusId, 0)
+        return out
+    }
+}
+
 /** Builders for the events this app publishes. All return unsigned events for a signer. */
 object Events {
     fun now(): Long = System.currentTimeMillis() / 1000

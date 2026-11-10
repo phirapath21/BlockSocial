@@ -44,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -352,7 +354,9 @@ fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit
                     LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                         items(t.ancestors, key = { "a" + it.id }) { NoteCard(it, stats[it.id] ?: NoteStats(), actions) }
                         item(key = "focus") { NoteCard(t.focus, stats[t.focus.id] ?: NoteStats(), actions, large = true) }
-                        items(t.replies, key = { "r" + it.id }) { NoteCard(it, stats[it.id] ?: NoteStats(), actions) }
+                        items(t.replies, key = { "r" + it.event.id }) { row ->
+                            NoteCard(row.event, stats[row.event.id] ?: NoteStats(), actions, modifier = Modifier.threadIndent(row.depth))
+                        }
                         if (t.replies.isEmpty()) item { EmptyNote("No replies yet.") }
                     }
                     // Pinned at the bottom, as on X; it stays while you scroll the replies.
@@ -368,6 +372,22 @@ fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit
         }
     }
 }
+
+/** Indents a nested reply and draws a line for each level above it. Deep threads stop indenting. */
+private fun Modifier.threadIndent(depth: Int): Modifier {
+    val levels = depth.coerceAtMost(MAX_INDENT)
+    if (levels == 0) return this
+    return drawBehind {
+        val step = INDENT_STEP.dp.toPx()
+        for (i in 0 until levels) {
+            val x = step * i + step / 2
+            drawLine(EInk.BodyStroke, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
+        }
+    }.padding(start = (INDENT_STEP * levels).dp)
+}
+
+private const val INDENT_STEP = 14
+private const val MAX_INDENT = 5
 
 // ---- Hashtag ----
 

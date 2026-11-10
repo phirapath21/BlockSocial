@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.btcwidget.nostr.core.Event
 import com.example.btcwidget.nostr.core.Events
 import com.example.btcwidget.nostr.core.Filter
+import com.example.btcwidget.nostr.core.ReplyTree
 import com.example.btcwidget.nostr.core.Kind
 import com.example.btcwidget.nostr.core.Profile
 import com.example.btcwidget.nostr.core.ThreadRef
@@ -405,13 +406,14 @@ class NostrRepository private constructor(private val context: Context) {
         val replies = pool.query(listOf(Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("e" to listOf(rootId, focus.id).distinct()), limit = 200)))
             .filter { it.pubkey !in _muted.value }
         replies.forEach { remember(it) }
-        val below = replies.filter { ThreadRef.of(it).parent == focus.id }.sortedBy { it.createdAt }
-        val all = ancestors + focus + below
+        val below = ReplyTree.flatten(focus.id, replies)
+        val all = ancestors + focus + below.map { it.event }
         enrich(all.map { it.pubkey }, all.map { it.id })
         return Thread(ancestors, focus, below)
     }
 
-    data class Thread(val ancestors: List<Event>, val focus: Event, val replies: List<Event>)
+    /** [replies] holds every reply below [focus], nested, in reading order. */
+    data class Thread(val ancestors: List<Event>, val focus: Event, val replies: List<ReplyTree.Row>)
 
     /** Replies, mentions, reposts, likes and zaps involving the user. */
     suspend fun notifications(limit: Int = 100): List<NostrNotification> {

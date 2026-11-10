@@ -463,4 +463,14 @@ class OutboxTest {
         // Avoided relays (e.g. ones we already query) aren't planned.
         org.junit.Assert.assertFalse(o.plan(listOf("bob"), lists, avoid = setOf("wss://big")).containsKey("wss://big"))
     }
+
+    @Test
+    fun replyTreeNestsRepliesInReadingOrder() {
+        fun reply(id: String, parent: String, at: Long) = Event(id, "pk", at, Kind.TEXT_NOTE,
+            listOf(listOf("e", "focus", "", "root"), listOf("e", parent, "", "reply")), "", "")
+        val rows = com.example.btcwidget.nostr.core.ReplyTree.flatten("focus", listOf(
+            reply("b", "focus", 20), reply("a", "focus", 10), reply("a1", "a", 30), reply("a1x", "a1", 40), reply("b1", "b", 25)
+        ))
+        assertEquals(listOf("a" to 0, "a1" to 1, "a1x" to 2, "b" to 0, "b1" to 1), rows.map { it.event.id to it.depth })
+    }
 }
