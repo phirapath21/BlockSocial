@@ -69,7 +69,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     var query by rememberSaveable { mutableStateOf("") }
-    var tab by rememberSaveable { mutableStateOf("people") }
+    var tab by rememberSaveable { mutableStateOf("all") }
     var searched by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     var notesLoading by remember { mutableStateOf(false) }
@@ -171,17 +171,54 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
-            EInkChip(text = "PEOPLE" + if (searched != null && !loading) " ${people.size}" else "", selected = tab == "people", onClick = { tab = "people" })
-            EInkChip(text = "POSTS" + if (searched != null && !notesLoading) " ${notes.size}" else "", selected = tab == "posts", onClick = { tab = "posts" })
-            EInkChip(text = "ARTICLES" + if (searched != null && !articlesLoading) " ${articles.size}" else "", selected = tab == "articles", onClick = { tab = "articles" })
+            // The chosen filter is ticked: ✓ ALL, PEOPLE, NOTES…
+            fun label(name: String, id: String, count: Int?) = (if (tab == id) "✓ " else "") + name + (count?.let { " $it" } ?: "")
+            EInkChip(text = label("ALL", "all", null), selected = tab == "all", onClick = { tab = "all" })
+            EInkChip(text = label("PEOPLE", "people", people.size.takeIf { searched != null && !loading }), selected = tab == "people", onClick = { tab = "people" })
+            EInkChip(text = label("NOTES", "notes", notes.size.takeIf { searched != null && !notesLoading }), selected = tab == "notes", onClick = { tab = "notes" })
+            EInkChip(text = label("ARTICLES", "articles", articles.size.takeIf { searched != null && !articlesLoading }), selected = tab == "articles", onClick = { tab = "articles" })
         }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 
         SocialScaffold(vm, navigate) { actions ->
             when {
                 loading && tab == "people" -> Spinner(Modifier.padding(top = 30.dp))
+                searched != null && tab == "all" -> {
+                    val q = searched.orEmpty()
+                    val stillLoading = loading || notesLoading || articlesLoading
+                    if (!stillLoading && people.isEmpty() && notes.isEmpty() && articles.isEmpty() && !q.startsWith("#")) {
+                        EmptyNote("Nothing found for \"$q\".")
+                    } else NoteList(
+                        notes, stats, actions,
+                        header = {
+                            // A bit of everything: top people and articles, then notes.
+                            com.example.btcwidget.nostr.core.HomeFeed.cleanTag(q)?.takeIf { q.startsWith("#") }?.let { tag ->
+                                Text(
+                                    "Open #$tag ›", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.fillMaxWidth().clickable { navigate(HashtagKey(tag)) }.padding(horizontal = 14.dp, vertical = 14.dp)
+                                )
+                                HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+                            }
+                            if (people.isNotEmpty()) {
+                                SectionTitle("People", if (people.size > 3) "See all ${people.size} ›" else null) { tab = "people" }
+                                people.take(3).forEach { p -> PersonRow(p, isFollowing = p.pubkey in following, onClick = { navigate(ProfileKey(p.pubkey)) }) }
+                            }
+                            if (articles.isNotEmpty()) {
+                                SectionTitle("Articles", if (articles.size > 2) "See all ${articles.size} ›" else null) { tab = "articles" }
+                                articles.take(2).forEach { a ->
+                                    ArticleRow(a, onClick = { actions.openArticle(com.example.btcwidget.nostr.core.Nip19.Address(a.event.kind, a.pubkey, a.identifier)) })
+                                }
+                            }
+                            SectionTitle("Notes", null) {}
+                            when {
+                                notesLoading && notes.isEmpty() -> Spinner(Modifier.padding(top = 20.dp))
+                                notes.isEmpty() -> EmptyNote("No notes found for \"$q\".")
+                            }
+                        }
+                    )
+                }
                 // Before searching: Explore, recent notes from everyone or from one relay.
                 searched == null -> ExploreFeed(vm, actions)
                 tab == "people" -> if (people.isEmpty() && searched?.startsWith("#") != true) EmptyNote("No people found for \"$searched\".") else {
@@ -206,9 +243,18 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                     else -> ArticleList(articles, actions)
                 }
                 notesLoading && notes.isEmpty() -> Spinner(Modifier.padding(top = 30.dp))
-                else -> if (notes.isEmpty()) EmptyNote("No posts found for \"$searched\".") else NoteList(notes, stats, actions)
+                else -> if (notes.isEmpty()) EmptyNote("No notes found for \"$searched\".") else NoteList(notes, stats, actions)
             }
         }
+    }
+}
+
+/** A section heading in All results, with an optional "See all" link. */
+@Composable
+private fun SectionTitle(title: String, more: String?, onMore: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = EInk.Value, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        more?.let { Text(it, color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.clickable(onClick = onMore).padding(4.dp)) }
     }
 }
 
