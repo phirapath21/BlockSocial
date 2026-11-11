@@ -84,7 +84,7 @@ fun AlertsScreen(
         val blocked = alerts.any { it.enabled } && !notificationsAllowed
         Text(
             text = if (blocked) {
-                "Notifications are off for Blockface. Allow them in system settings to get alerts."
+                "Notifications are off for Block. Allow them in system settings to get alerts."
             } else {
                 "Checked with each background refresh (every $refreshInterval min). " +
                     "One notification each time a line is crossed."

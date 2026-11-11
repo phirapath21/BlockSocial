@@ -1,4 +1,4 @@
-# Blockface CI — move this file to .github/workflows/android.yml to enable it.
+# Block CI — move this file to .github/workflows/android.yml to enable it.
 #
 #   unit:   JVM unit tests, Android lint (report only), debug + release (R8) builds
 #   ui:     Compose UI tests on an Android emulator

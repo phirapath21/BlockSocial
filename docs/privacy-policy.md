@@ -1,8 +1,8 @@
-# Blockface Privacy Policy
+# Block Privacy Policy
 
-**Effective date:** 10 November 2026
+**Effective date:** 11 November 2026
 
-Blockface ("the app") is a client for Nostr, an open social network, with Bitcoin market and network data, home-screen widgets and alerts. This policy explains what the app does with information. In short: **the developer runs no servers and collects no personal data; there are no ads, analytics or tracking.** What you post on Nostr is public, and it goes to the Nostr relays you use, not to the developer.
+Block ("the app") is a client for Nostr, an open social network, with Bitcoin market and network data, home-screen widgets and alerts. This policy explains what the app does with information. In short: **the developer runs no servers and collects no personal data; there are no ads, analytics or tracking.** What you post on Nostr is public, and it goes to the Nostr relays you use, not to the developer.
 
 ## Information stored on your device
 
@@ -14,7 +14,7 @@ The app keeps the following only on your device, in its private app storage:
 - **Cached market data** — the latest prices, network figures and hourly price history, so widgets and charts work offline.
 - **Widget state** — the mode, range or quote each placed widget shows.
 - **Your Nostr account** — your public key and, depending on how you log in:
-  - **with a signer app** (such as Amber): which signer app to use. Your private key stays in that app and is never seen by Blockface.
+  - **with a signer app** (such as Amber): which signer app to use. Your private key stays in that app and is never seen by Block.
   - **with a remote signer (NIP-46 bunker, such as nsec.app)**: the signer's public key and relays, and a throwaway "client" key the app uses only to talk to that signer, encrypted like a private key. Your private key stays with the signer. Each signing request goes, encrypted, through the signer's relays, which see that your app and the signer are talking; if the signer asks you to approve on a web page, the app opens it in your browser.
   - **with an nsec or a new account**: your private key, encrypted with a key held in the phone's Android Keystore that cannot be exported. It is never sent anywhere, is excluded from Android backup and device transfer, and is deleted when you log out.
 - **Other accounts you add** — if you add more than one Nostr account, the inactive ones are kept the same way (keys still encrypted with the Keystore key), excluded from backup and device transfer, until you remove them from the phone.
@@ -25,7 +25,7 @@ The app keeps the following only on your device, in its private app storage:
 
 Uninstalling the app or clearing its storage deletes all of this.
 
-**Sharing:** when you tap Share on the dashboard, the app saves an image of that metric in its cache and hands it, with a line of text, to the app you choose in Android's share sheet (for example a Nostr client). Blockface sends nothing itself; what happens next is up to the app you picked. Your stack is never offered for sharing.
+**Sharing:** when you tap Share on the dashboard, the app saves an image of that metric in its cache and hands it, with a line of text, to the app you choose in Android's share sheet (for example a Nostr client). Block sends nothing itself; what happens next is up to the app you picked. Your stack is never offered for sharing.
 
 **Showing your key:** for an account whose key is on the phone, Settings › Nostr › More can show your nsec so you can back it up. It is shown only after a warning, with screenshots blocked, and copying marks it as sensitive so Android hides it from clipboard previews.
 
@@ -39,9 +39,9 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Cache:** to open quickly, the app keeps the events it has seen (notes, profiles, relay lists and your own lists) in a private database on the phone, and the last home timeline in its cache. These are public Nostr events (messages stay encrypted); logging out deletes them.
 
-**Zaps:** when you zap, the app asks the recipient's Lightning address provider (the domain in their Lightning address, for example getalby.com) for an invoice and passes it to your Lightning wallet app. That provider sees your IP address, the amount and your signed zap request (who you zapped, and any comment, which become public in the zap receipt). Payment happens in your wallet app; Blockface never holds funds.
+**Zaps:** when you zap, the app asks the recipient's Lightning address provider (the domain in their Lightning address, for example getalby.com) for an invoice and passes it to your Lightning wallet app. That provider sees your IP address, the amount and your signed zap request (who you zapped, and any comment, which become public in the zap receipt). Payment happens in your wallet app; Block never holds funds.
 
-**Private messages (NIP-17):** direct messages are end-to-end encrypted on your phone (NIP-44) and wrapped so relays can't see who sent them, what they say, or exactly when (timestamps are randomized up to two days back). Each message is sent as one encrypted "gift wrap" per recipient, to their inbox relays (their kind-10050 list), plus one copy for you. If you choose "Set up" in Messages, the app publishes your own inbox relay list (public) so others know where to deliver. On your phone, only the still-encrypted wraps are stored (in the local database); decrypted text is kept in memory only. With a signer app, it decrypts and encrypts messages for Blockface. **Photos in messages** have location data removed, are then encrypted on your phone with a new key, and only the encrypted file is uploaded to your media server; the key travels only inside the encrypted message, so the server can't see the photo. Reactions and replies to messages are sent the same private way. **Older messages (NIP-04)** that other apps sent are also read and shown, marked "old format": those were never hidden from relays (who talked to whom, and when), and Blockface never sends new ones. Messages from people you don't follow appear under Requests until you reply.
+**Private messages (NIP-17):** direct messages are end-to-end encrypted on your phone (NIP-44) and wrapped so relays can't see who sent them, what they say, or exactly when (timestamps are randomized up to two days back). Each message is sent as one encrypted "gift wrap" per recipient, to their inbox relays (their kind-10050 list), plus one copy for you. If you choose "Set up" in Messages, the app publishes your own inbox relay list (public) so others know where to deliver. On your phone, only the still-encrypted wraps are stored (in the local database); decrypted text is kept in memory only. With a signer app, it decrypts and encrypts messages for Block. **Photos in messages** have location data removed, are then encrypted on your phone with a new key, and only the encrypted file is uploaded to your media server; the key travels only inside the encrypted message, so the server can't see the photo. Reactions and replies to messages are sent the same private way. **Older messages (NIP-04)** that other apps sent are also read and shown, marked "old format": those were never hidden from relays (who talked to whom, and when), and Block never sends new ones. Messages from people you don't follow appear under Requests until you reply.
 
 **Notifications while the app is closed:** if you're logged in and "Phone notifications" is on (Settings › Nostr), the background refresh (every 15, 30 or 60 minutes) also asks your relays for new replies, mentions, reposts, likes, zaps and private messages addressed to you, decrypts messages on the phone, and shows a notification. Message text is hidden on the lock screen. Turn it off at any time in Settings.
 
@@ -97,7 +97,7 @@ Requests run when you open or refresh the app and in the background at the inter
 ## Permissions
 
 - **Internet** — to fetch the data above.
-- **Storage (Android 9 and below only)** — asked only when you choose "Save image", to save that picture to Pictures/Blockface. Android 10 and later need no permission for this.
+- **Storage (Android 9 and below only)** — asked only when you choose "Save image", to save that picture to Pictures/Block. Android 10 and later need no permission for this.
 - **Notifications** (Android 13 and later) — to show the alerts you switch on. Asked for only when you turn on an alert; you can revoke it in system settings at any time.
 - The background-work library the app uses (Android WorkManager) also declares permissions to check network status, keep scheduled updates after a restart, and run briefly in the background. They are used only to refresh the data above.
 

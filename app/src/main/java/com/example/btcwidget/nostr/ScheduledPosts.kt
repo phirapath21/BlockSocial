@@ -90,11 +90,11 @@ object ScheduledPosts {
                 NostrBackground.notifyAccount(ctx, id.hashCode(), "Scheduled post published", post.content.take(80))
                 Result.success()
             } catch (e: SignerUnavailable) {
-                // A signer app that needs approval can't ask while Blockface is closed.
-                if (runAttemptCount == 0) NostrBackground.notifyAccount(ctx, id.hashCode(), "Scheduled post waiting", "Open Blockface to approve it in your signer app.")
+                // A signer app that needs approval can't ask while Block is closed.
+                if (runAttemptCount == 0) NostrBackground.notifyAccount(ctx, id.hashCode(), "Scheduled post waiting", "Open Block to approve it in your signer app.")
                 if (runAttemptCount < 5) Result.retry() else Result.failure()
             } catch (e: SignerRejected) {
-                NostrBackground.notifyAccount(ctx, id.hashCode(), "Scheduled post not sent", "Your signer declined it. It's kept; open Blockface to post it.")
+                NostrBackground.notifyAccount(ctx, id.hashCode(), "Scheduled post not sent", "Your signer declined it. It's kept; open Block to post it.")
                 Result.failure()
             } catch (e: Exception) {
                 if (runAttemptCount < 5) Result.retry() else {

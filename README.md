@@ -1,4 +1,4 @@
-# Blockface 🪙🕒
+# Block 🪙🕒
 
 *Bitcoin at a glance — a clock face for the blockchain on your home screen.*
 
@@ -12,7 +12,7 @@ A premium, feature-rich Android app and Home Screen widget suite inspired by des
 
 ## 💬 Nostr social
 
-Blockface is also a Nostr client with a familiar timeline layout.
+Block is also a Nostr client with a familiar timeline layout.
 
 - **Layout:** bottom bar (icons) Home · Search · Bitcoin · Notifications · Messages; a side bar (swipe right from the left, or tap your avatar) holds Profile, Widgets, Price alerts and Settings.
 - **Private messages (NIP-17):**
@@ -21,7 +21,7 @@ Blockface is also a Nostr client with a familiar timeline layout.
   - You can start a chat from ✉ in Messages or on a profile. Group chats work by participant set.
   - With Amber, messages are sealed and opened through the signer (nip44_encrypt/decrypt).
   - Only encrypted wraps are cached on disk.
-- **Accounts:** connect a **signer app** (NIP-55, e.g. Amber; recommended, the key never enters Blockface), paste an **nsec** (encrypted with an Android Keystore key, excluded from backup, deleted on logout), or **create a new account** (the nsec is shown once to save). Screens showing a key block screenshots.
+- **Accounts:** connect a **signer app** (NIP-55, e.g. Amber; recommended, the key never enters Block), paste an **nsec** (encrypted with an Android Keystore key, excluded from backup, deleted on logout), or **create a new account** (the nsec is shown once to save). Screens showing a key block screenshots.
 - **Timeline:** notes and reposts from people you follow, pull to refresh, infinite scroll; logged out, a public #bitcoin feed.
 - **Notes:** reply (NIP-10 threads), repost (kind 6), quote (NIP-18 `q` tag), like (kind 7), zap (NIP-57, pays through your Lightning wallet app), share link, delete your own (NIP-09).
 - **Profiles:** banner, avatar, bio, NIP-05, Lightning address, follow/unfollow (kind 3, keeps your other follows), edit your own (kind 0).
@@ -30,7 +30,7 @@ Blockface is also a Nostr client with a familiar timeline layout.
   - New notes wait behind a "↑ N new posts" pill instead of shifting what you're reading.
   - Profiles have *Posts*, *Replies* and *Media* tabs.
   - Images open full screen, laid out like X:
-    - top: back, and ⋮ with *Save image* (to Pictures/Blockface) and *Open in browser*;
+    - top: back, and ⋮ with *Save image* (to Pictures/Block) and *Open in browser*;
     - bottom: the author with Follow, the note's text, Reply · Repost · Like · Bookmark · Share, and a "Post your reply" bar;
     - pinch or double-tap to zoom.
   - The post screen has X's pinned "Post your reply" bar: type in place, add a photo, or ⤢ for the full composer.
@@ -179,7 +179,7 @@ Step-by-step guide: [`docs/RELEASE.md`](docs/RELEASE.md). Store listing text, gr
 4. **Add the Widget**:
    - Go to your home screen.
    - Long press on an empty space, tap **Widgets**.
-   - Scroll down to find **Blockface**.
+   - Scroll down to find **Block**.
    - Drag any of the resizable widgets (Bitcoin metrics, Halving countdown or Bitcoin quotes) onto your home screen!
 
 ---

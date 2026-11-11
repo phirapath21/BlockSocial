@@ -228,7 +228,7 @@ object PriceRepository {
     }
 
     /** Coinbase Exchange rejects requests without a User-Agent. */
-    private const val USER_AGENT = "Blockface-Android"
+    private const val USER_AGENT = "Block-Android"
 
     private fun fetchMstrPrice(): Double {
         val response = httpGet(

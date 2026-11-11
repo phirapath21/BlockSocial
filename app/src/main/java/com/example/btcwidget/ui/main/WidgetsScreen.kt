@@ -96,7 +96,7 @@ fun WidgetsScreen(
         fullWidth("how_to") {
             EInkPanel(title = "Add a widget") {
                 Step(1, "Long-press an empty spot on your home screen.")
-                Step(2, "Open Widgets and find Blockface.")
+                Step(2, "Open Widgets and find Block.")
                 Step(3, "Drag Bitcoin metrics, Price chart, Halving countdown or Bitcoin quotes onto the screen.")
                 Step(4, "Tap Bitcoin metrics to cycle modes, or the chart to switch 24H / 7D.")
             }

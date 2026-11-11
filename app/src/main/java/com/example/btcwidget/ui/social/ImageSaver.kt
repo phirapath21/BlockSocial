@@ -13,12 +13,12 @@ import okhttp3.Request
 import java.io.File
 
 /**
- * Saves an image from the web into the phone's Pictures/Blockface folder. Android 10+
+ * Saves an image from the web into the phone's Pictures/Block folder. Android 10+
  * needs no permission (MediaStore); Android 9 and below needs storage write permission,
  * which the viewer asks for first.
  */
 object ImageSaver {
-    private const val FOLDER = "Blockface"
+    private const val FOLDER = "Block"
 
     /** True when saving needs the storage permission (Android 9 and below). */
     val needsPermission: Boolean get() = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
@@ -32,7 +32,7 @@ object ImageSaver {
             }
             require(bytes.isNotEmpty()) { "Empty image" }
             val ext = when (mime) { "image/png" -> "png"; "image/gif" -> "gif"; "image/webp" -> "webp"; else -> "jpg" }
-            val name = "blockface_${System.currentTimeMillis()}.$ext"
+            val name = "block_${System.currentTimeMillis()}.$ext"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
                     put(MediaStore.Images.Media.DISPLAY_NAME, name)

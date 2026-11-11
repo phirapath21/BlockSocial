@@ -352,7 +352,7 @@ fun MainScreenContent(
                                     .verticalScroll(rememberScrollState())
                                     .padding(horizontal = 12.dp)
                             ) {
-                                HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance")
+                                HeaderSection(title = "BLOCK", subtitle = "Bitcoin at a glance")
                                 if (currentState is MainScreenUiState.Error) {
                                     ErrorScreen(error = currentState.throwable, onRefresh = onRefresh)
                                 } else {

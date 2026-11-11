@@ -94,7 +94,7 @@ fun ImageViewer(
 
     fun save() = scope.launch {
         val result = ImageSaver.save(context, url)
-        Toast.makeText(context, if (result.isSuccess) "Saved to Pictures/Blockface" else "Couldn't save the image", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, if (result.isSuccess) "Saved to Pictures/Block" else "Couldn't save the image", Toast.LENGTH_SHORT).show()
     }
     // Only Android 9 and below need a permission to save.
     val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->

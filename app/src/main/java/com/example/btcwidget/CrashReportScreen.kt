@@ -39,7 +39,7 @@ fun CrashReportScreen(report: String, onContinue: () -> Unit) {
             .safeDrawingPadding()
             .padding(16.dp)
     ) {
-        Text("Blockface closed unexpectedly", color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("Block closed unexpectedly", color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text(
             "This report stays on your phone. Copy or share it to the developer to help fix the problem.",
             color = EInk.Label, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -47,7 +47,7 @@ fun CrashReportScreen(report: String, onContinue: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
             EInkChip(text = "COPY", selected = true, onClick = {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                    .setPrimaryClip(ClipData.newPlainText("Blockface crash report", report))
+                    .setPrimaryClip(ClipData.newPlainText("Block crash report", report))
                 Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
             })
             EInkChip(text = "SHARE", selected = false, onClick = {

@@ -1,6 +1,6 @@
 # CI
 
-`android.yml` is a GitHub Actions workflow for Blockface. It lives here because it
+`android.yml` is a GitHub Actions workflow for Block. It lives here because it
 could not be committed to `.github/workflows/` from the session that wrote it.
 
 To enable it, from the repository root:

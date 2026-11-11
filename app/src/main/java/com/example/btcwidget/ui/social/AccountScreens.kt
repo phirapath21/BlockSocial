@@ -125,7 +125,7 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                     }
                     Option(
                         title = "Connect a signer app",
-                        body = if (hasSigner) "Recommended. Your key stays in the signer (such as Amber); Blockface never sees it."
+                        body = if (hasSigner) "Recommended. Your key stays in the signer (such as Amber); Block never sees it."
                                else "Recommended. Install a signer such as Amber, which keeps your key and approves each post.",
                         button = if (hasSigner) "Connect" else "Get Amber",
                         filled = true
@@ -151,7 +151,7 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                     var connecting by remember { mutableStateOf(false) }
                     Text("Remote signer", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "In your signer (nsec.app, nsecBunker…) create a connection for Blockface and paste its bunker:// link. " +
+                        "In your signer (nsec.app, nsecBunker…) create a connection for Block and paste its bunker:// link. " +
                             "You may need to approve the connection there.",
                         color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
                     )

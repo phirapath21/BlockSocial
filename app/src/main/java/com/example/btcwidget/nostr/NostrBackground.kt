@@ -80,7 +80,7 @@ object NostrBackground {
         if (lines.isEmpty()) return
         post(
             context, CHANNEL_SOCIAL, ID_SOCIAL,
-            title = if (lines.size == 1) "Blockface" else "${lines.size} new on Nostr",
+            title = if (lines.size == 1) "Block" else "${lines.size} new on Nostr",
             text = lines.first(),
             lines = lines.take(6),
             tab = "NOTIFICATIONS",

@@ -67,7 +67,7 @@ object AlertNotifier {
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Price alerts", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "BTC price and fee alerts you set in Blockface"
+                description = "BTC price and fee alerts you set in Block"
             }
         )
     }

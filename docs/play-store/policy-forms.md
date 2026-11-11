@@ -40,7 +40,7 @@ Apps where users post content must, in the app: let users **report** objectionab
 - Violence, sexuality, language, controlled substances, gambling: **No**.
   - Note: one quote in the quote widget contains Thai profanity ("เงินเฟ้อแม่งเหี้ย"). If the questionnaire asks about crude language or profanity, answer **Yes (mild)**, or remove that quote before submitting.
 - **Users can interact / share content: Yes** (Nostr posts, replies, follows). Location sharing / digital purchases: **No**.
-- Zaps pay through the user's own Lightning wallet app; Blockface sells nothing.
+- Zaps pay through the user's own Lightning wallet app; Block sells nothing.
 
 ## Target audience and content
 
@@ -49,7 +49,7 @@ Apps where users post content must, in the app: let users **report** objectionab
 
 ## Financial features declaration
 
-- Blockface shows market data and lets users "zap" (tip) via their own external Lightning wallet: it fetches an invoice and opens the wallet app. It does not hold funds, trade, lend, transfer money itself or act as a wallet or exchange.
+- Block shows market data and lets users "zap" (tip) via their own external Lightning wallet: it fetches an invoice and opens the wallet app. It does not hold funds, trade, lend, transfer money itself or act as a wallet or exchange.
 - Choose the option for apps that provide **no financial features** / information only. If the form requires a cryptocurrency choice, pick the one for **price information or market data only**, not wallets or exchanges.
 
 ## Government apps, news apps, health apps

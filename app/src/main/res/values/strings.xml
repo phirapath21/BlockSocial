@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Blockface</string>
+    <string name="app_name">Block</string>
 
     <!-- Widget picker labels and descriptions -->
     <string name="widget_blockclock_label">Bitcoin metrics</string>

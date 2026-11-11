@@ -1,11 +1,11 @@
-# Google Play listing — Blockface
+# Google Play listing — Block
 
 Copy these into Play Console > Grow > Store presence > Main store listing.
 
 ## App name (max 30)
 
 ```
-Blockface: Bitcoin Widgets
+Block: Bitcoin Widgets
 ```
 
 ## Short description (max 80)
@@ -17,7 +17,7 @@ Bitcoin price, sats, fees and block height as clean home-screen widgets.
 ## Full description (max 4000)
 
 ```
-Blockface puts Bitcoin on your home screen. Clean, readable widgets in a minimal blockclock style show the numbers you check every day — at a glance, without opening an app.
+Block puts Bitcoin on your home screen. Clean, readable widgets in a minimal blockclock style show the numbers you check every day — at a glance, without opening an app.
 
 WIDGETS
 • Bitcoin metrics — price, sats per dollar, block height, fees, hash rate, difficulty, halving countdown, Lightning capacity, Strategy (MSTR) holdings and more. Tap to cycle; choose which metrics and their order.
@@ -36,7 +36,7 @@ IN THE APP
 PRIVATE BY DESIGN
 No account, no ads, no analytics, no tracking. Your settings and holdings stay on your phone. Market data comes straight from public sources such as Coinbase and mempool.space.
 
-Blockface shows information only. It is not a wallet or an exchange and does not give financial advice.
+Block shows information only. It is not a wallet or an exchange and does not give financial advice.
 ```
 
 ## Category and contact

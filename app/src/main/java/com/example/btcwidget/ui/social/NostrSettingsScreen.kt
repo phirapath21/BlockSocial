@@ -57,7 +57,7 @@ fun NostrSettingsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack:
 
             AccountsSection(vm, navigate)
 
-            Section("Phone notifications", "Choose what Blockface notifies you about while it's closed.")
+            Section("Phone notifications", "Choose what Block notifies you about while it's closed.")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 NOTIFICATION_TYPES.forEach { (type, label) ->
                     EInkChip(text = label, selected = type !in off, onClick = { vm.setNotificationType(type, on = type in off) })
