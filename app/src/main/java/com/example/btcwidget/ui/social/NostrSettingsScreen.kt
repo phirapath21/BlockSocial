@@ -80,6 +80,8 @@ fun NostrSettingsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack:
                 valid = { it.startsWith("wss://") }
             ) { urls, done -> if (urls.isNotEmpty()) vm.setDmInbox(urls, done) }
 
+            LinksSection(vm)
+
             VideoSection(vm)
 
             ScheduledSection(vm)
@@ -130,6 +132,17 @@ internal fun AccountRow(profile: com.example.btcwidget.nostr.core.Profile?, pubk
             Text(note, color = EInk.Caption, fontSize = 12.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { actions() }
+    }
+}
+
+/** Where web links open. */
+@Composable
+private fun LinksSection(vm: SocialViewModel) {
+    val inApp by vm.linksInApp.collectAsState()
+    Section("Open links in", "Block's browser keeps the post under the page so you can like or reply while reading. The phone's browser has your logins and saved passwords.")
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        EInkChip(text = (if (inApp) "✓ " else "") + "IN-APP BROWSER", selected = inApp, onClick = { vm.setLinksInApp(true) })
+        EInkChip(text = (if (!inApp) "✓ " else "") + "PHONE'S BROWSER", selected = !inApp, onClick = { vm.setLinksInApp(false) })
     }
 }
 

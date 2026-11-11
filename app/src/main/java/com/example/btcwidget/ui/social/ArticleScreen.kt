@@ -166,7 +166,7 @@ private fun spans(spans: List<Markdown.Span>, actions: NoteActions, navigate: (N
                 is Markdown.Span.Bold -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(s.text) }
                 is Markdown.Span.Italic -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(s.text) }
                 is Markdown.Span.Code -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = EInk.Body)) { append(s.text) }
-                is Markdown.Span.Link -> withLink(LinkAnnotation.Clickable("link", linkStyle) { openLink(s.url, actions, navigate) { uriHandler.openUri(it) } }) {
+                is Markdown.Span.Link -> withLink(LinkAnnotation.Clickable("link", linkStyle) { openLink(s.url, actions, navigate) { actions.openLink(it, null) } }) {
                     append(s.text)
                 }
             }

@@ -54,6 +54,8 @@ fun SocialScaffold(
     var deleteTarget by remember { mutableStateOf<Event?>(null) }
     var viewImage by remember { mutableStateOf<Pair<String, Event>?>(null) }
     var viewVideo by remember { mutableStateOf<Pair<String, Event>?>(null) }
+    var viewWeb by remember { mutableStateOf<Pair<String, Event?>?>(null) }
+    val linksInApp by vm.linksInApp.collectAsState()
     val autoplay by vm.videoAutoplay.collectAsState()
     val bookmarks by vm.bookmarks.collectAsState()
     val pins by vm.pinned.collectAsState()
@@ -89,6 +91,10 @@ fun SocialScaffold(
         isPinned = { it in pins },
         openImage = { url, note -> viewImage = url to note },
         openVideo = { url, note -> viewVideo = url to note },
+        openLink = { url, note ->
+            if (linksInApp && (url.startsWith("https://") || url.startsWith("http://"))) viewWeb = url to note
+            else openExternally(context, url)
+        },
         autoplayVideos = autoplay.allowedNow(context),
         openVideoUrl = viewVideo?.first,
         follow = { pk, on -> signedIn { vm.follow(pk, on) } },
@@ -141,6 +147,10 @@ fun SocialScaffold(
                 )
             }
         )
+    }
+
+    viewWeb?.let { (url, note) ->
+        WebViewer(url, note, note?.let { stats[it.id] } ?: com.example.btcwidget.nostr.NoteStats(), actions, onDismiss = { viewWeb = null })
     }
 
     zapTarget?.let { note ->

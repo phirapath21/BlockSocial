@@ -372,6 +372,15 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         _videoQuality.value = q
     }
 
+    private val _linksInApp = MutableStateFlow(com.example.btcwidget.AppPrefs.linksInApp(application))
+    /** Web links open in Block's browser (true) or the phone's. */
+    val linksInApp: StateFlow<Boolean> = _linksInApp.asStateFlow()
+
+    fun setLinksInApp(inApp: Boolean) {
+        com.example.btcwidget.AppPrefs.setLinksInApp(getApplication(), inApp)
+        _linksInApp.value = inApp
+    }
+
     fun setVideoAutoplay(mode: VideoAutoplay) {
         com.example.btcwidget.AppPrefs.setVideoAutoplay(getApplication(), mode.name)
         _videoAutoplay.value = mode
