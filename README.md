@@ -85,6 +85,7 @@ The **Bitcoin** tab has a hero panel (Stack, Block, Price, Halving, Sats or Fees
   - Latest, or Latest with replies, from people you follow
   - Global, or a single relay
   - A #hashtag
+  - Pictures or Videos (NIP-68 / NIP-71), from follows or everyone
   - A list of people
   - DVM "For you" feeds (NIP-90)
 - **Moving through the feed:**
@@ -99,7 +100,9 @@ The **Bitcoin** tab has a hero panel (Stack, Block, Price, Halving, Sats or Fees
 - **Links:**
   - Link previews in notes.
   - Links open in Block's own browser, with the post underneath, like X; a setting sends them to your phone's browser instead.
-- **More to read:** long-form articles (NIP-23), polls (NIP-88), content warnings (NIP-36), and custom emoji (NIP-30).
+- **More to read:** long-form articles (NIP-23) with highlights (NIP-84: long-press a paragraph), polls (NIP-88), content warnings (NIP-36), custom emoji (NIP-30), and blurred previews while images load (BlurHash).
+- **Live streams (NIP-53):** Communities › LIVE, with the video and live chat.
+- **Picture-in-Picture:** a full-screen video keeps playing in a small window when you leave the app.
 
 **Writing:**
 - Notes with up to 4 photos or a video, uploaded to Blossom servers with EXIF/GPS stripped from photos.
@@ -110,7 +113,7 @@ The **Bitcoin** tab has a hero panel (Stack, Block, Price, Halving, Sats or Fees
 
 **People and lists:**
 - **Profiles:** Posts, Replies, Media and Articles tabs, verified NIP-05 ✓, badges (NIP-58), and a profile QR code you can show or scan.
-- **Following:** follow lists and followers, plus who-to-follow suggestions.
+- **Following:** follow lists and followers, who-to-follow suggestions, follow packs (kind 39089, follow all at once), and followed hashtags (in your contact list, shown in Latest).
 - **Lists of people** (NIP-51), like X's Lists:
   - make them from the side bar, or add someone from their profile with ☰+;
   - read one as a feed, or pin it to Home.
@@ -132,7 +135,7 @@ The **Bitcoin** tab has a hero panel (Stack, Block, Price, Halving, Sats or Fees
 - Phone notifications while the app is closed. These are checked on each background refresh, so they're not instant.
 
 **Safety:**
-- Mute accounts, words, hashtags and threads (NIP-51).
+- Mute accounts, words, hashtags and threads (NIP-51); mutes and bookmarks are private (encrypted) by default.
 - Report notes (NIP-56).
 - An optional web-of-trust filter that hides strangers' replies.
 - In-app [community rules](docs/community-rules.md).
@@ -140,7 +143,7 @@ The **Bitcoin** tab has a hero panel (Stack, Block, Price, Halving, Sats or Fees
 **Relays:**
 - **Defaults:** relay.damus.io, nos.lol and relay.primal.net, plus your NIP-65 relays, or your own list.
 - **Outbox model:** each person's notes are also read from the relays they write to.
-- **Relay status page:** shows which relays are connected, slow or failing, with Retry.
+- **Relays page:** connection status with Retry; your NIP-65 list with read/write per relay; search relays (10007); blocked relays (10006); and each relay's own description (NIP-11).
 
 **Speed:**
 - Events are kept in a local SQLite database, so the app opens instantly.

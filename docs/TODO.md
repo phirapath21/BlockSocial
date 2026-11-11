@@ -62,6 +62,15 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Relay status: which relays are connected, failing or slow, with retry
 - [x] Grouped notifications ("Alice and 5 others liked your note")
 - [x] Feeds keep their scroll position when switching tabs or coming back
+- [x] Blurred image previews (BlurHash)
+- [x] Private bookmarks and mutes (NIP-51 encrypted)
+- [x] Picture-in-Picture video
+- [x] Picture and video posts (NIP-68, NIP-71) and feeds
+- [x] Live streams (NIP-53) with chat
+- [x] Follow hashtags (contact list "t" tags)
+- [x] Follow packs (kind 39089)
+- [x] Highlights (NIP-84)
+- [x] Relay management: NIP-65 read/write, search and blocked relays, NIP-11 info
 - [ ] Instant notifications (needs a push server; today it checks every 15–60 min)
 - [x] Scheduled posts (sent by the phone at that time)
 - [x] Home feed menu like Primal: Latest, with replies, Global, one relay, #hashtag and DVM feeds; add, remove, reorder
