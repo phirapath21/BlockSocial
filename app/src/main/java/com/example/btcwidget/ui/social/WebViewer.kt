@@ -140,7 +140,7 @@ private fun PostSheet(note: Event, stats: NoteStats, actions: NoteActions, level
                 )
             }
             if (level >= 2) Text(
-                translatableText(note, actions), color = EInk.Value, fontSize = 15.sp, maxLines = 8, overflow = TextOverflow.Ellipsis,
+                plainText(note, actions), color = EInk.Value, fontSize = 15.sp, maxLines = 8, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 8.dp).clickable(onClickLabel = "Open post") { onLeave(); actions.openNote(note) }
             )
             ActionRow(note, stats, actions)

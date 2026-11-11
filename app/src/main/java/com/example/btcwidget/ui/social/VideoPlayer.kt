@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.runtime.key
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -49,7 +50,8 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
+import android.view.SurfaceView
+import android.view.TextureView
 import com.example.btcwidget.nostr.core.Event
 import com.example.btcwidget.ui.main.EInk
 import kotlinx.coroutines.delay
@@ -105,15 +107,44 @@ internal fun remainingLabel(durationMs: Long, positionMs: Long): String {
     return "-" + (if (s >= 3600) "${s / 3600}:" + "%02d".format((s % 3600) / 60) else "${s / 60}") + ":" + "%02d".format(s % 60)
 }
 
-/** The video picture itself, without controls (they're drawn in Compose). */
+/**
+ * The video picture itself, without controls (they're drawn in Compose), fitted inside
+ * [modifier]'s bounds at the video's own shape, black around it. In a feed ([inFeed]) it
+ * draws into a TextureView, which scrolls and clips to rounded corners like any view;
+ * full screen it uses a SurfaceView, which costs less battery.
+ */
 @Composable
-internal fun VideoSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
-    AndroidView(
-        factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = false } },
-        update = { it.player = player },
-        modifier = modifier
-    )
+internal fun VideoSurface(player: ExoPlayer, modifier: Modifier = Modifier, inFeed: Boolean = false) {
+    var ratio by remember(player) { mutableStateOf(player.videoSize.ratioOrNull()) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) { ratio = videoSize.ratioOrNull() }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        key(player, inFeed) {
+            AndroidView(
+                factory = { ctx ->
+                    if (inFeed) TextureView(ctx).also { player.setVideoTextureView(it) }
+                    else SurfaceView(ctx).also { player.setVideoSurfaceView(it) }
+                },
+                onRelease = { view ->
+                    when (view) {
+                        is TextureView -> player.clearVideoTextureView(view)
+                        is SurfaceView -> player.clearVideoSurfaceView(view)
+                    }
+                },
+                modifier = ratio?.let { Modifier.aspectRatio(it) } ?: Modifier.fillMaxSize()
+            )
+        }
+    }
 }
+
+/** Width over height as shown (with non-square pixels), or null before the video's size is known. */
+private fun VideoSize.ratioOrNull(): Float? =
+    if (width > 0 && height > 0) width * pixelWidthHeightRatio / height else null
 
 /**
  * A video in a note, like X's timeline: when [VideoAutoplay] allows it, it plays muted
@@ -169,7 +200,7 @@ fun VideoPlayer(url: String, note: Event, actions: NoteActions) {
         contentAlignment = Alignment.Center
     ) {
         val p = player
-        if (p != null) VideoSurface(p, Modifier.fillMaxSize())
+        if (p != null) VideoSurface(p, Modifier.fillMaxSize(), inFeed = true)
         if (p == null || !play) {
             Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
                 Icon(Glyphs.Play, contentDescription = "Play video", tint = Color.White, modifier = Modifier.size(34.dp))

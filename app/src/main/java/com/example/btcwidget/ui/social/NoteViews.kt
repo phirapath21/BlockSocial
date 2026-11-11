@@ -99,9 +99,6 @@ class NoteActions(
     val pollTally: suspend (com.example.btcwidget.nostr.core.Poll) -> com.example.btcwidget.nostr.core.Poll.Tally?,
     /** Votes; the callback gets whether it was sent. Logged out, goes to log in instead. */
     val vote: (com.example.btcwidget.nostr.core.Poll, List<String>, (Boolean) -> Unit) -> Unit,
-    /** Translates the note (text without links), or shows the original if it is translated. */
-    val translate: (Event, String) -> Unit,
-    val translation: (String) -> SocialViewModel.Translation?,
     val resolveArticle: suspend (com.example.btcwidget.nostr.core.Nip19.Address) -> com.example.btcwidget.nostr.core.Article?,
     val openArticle: (com.example.btcwidget.nostr.core.Nip19.Address) -> Unit,
     val linkPreview: suspend (String) -> com.example.btcwidget.nostr.core.LinkPreview?,
@@ -152,7 +149,7 @@ fun NoteCard(
                 }
             }
             ReplyingTo(note, actions, Modifier.padding(top = 10.dp))
-            NoteBody(note, actions, fontSize = 17, offerTranslate = true, collapse = false)
+            NoteBody(note, actions, fontSize = 17, collapse = false)
             Text(fullTimestamp(note.createdAt), color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
             ActionRow(note, stats, actions)
             return@Column
@@ -236,9 +233,6 @@ private fun NoteMenu(note: Event, actions: NoteActions, onDismiss: () -> Unit) {
     val mine = note.pubkey == actions.me
     val name = actions.profileOf(note.pubkey)?.bestName ?: Profile.shortNpub(note.pubkey)
     val items = buildList {
-        if (note.content.isNotBlank()) add(SheetAction(
-            Glyphs.Translate, if (actions.translation(note.id) is SocialViewModel.Translation.Done) "Show original" else "Translate post"
-        ) { actions.translate(note, translatableText(note, actions)) })
         add(SheetAction(if (actions.isBookmarked(note.id)) Glyphs.Bookmarked else Glyphs.Bookmark, if (actions.isBookmarked(note.id)) "Remove bookmark" else "Bookmark") { actions.bookmark(note) })
         add(SheetAction(Glyphs.Stats, "Reposts, likes and zaps") { actions.openEngagement(note, 1) })
         add(SheetAction(Glyphs.Share, "Share post") { actions.share(note) })
@@ -256,7 +250,7 @@ private fun NoteMenu(note: Event, actions: NoteActions, onDismiss: () -> Unit) {
 
 /** Note text with tappable links, hashtags and mentions; images and quoted notes below it. */
 @Composable
-fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int = 0, offerTranslate: Boolean = false, collapse: Boolean = true) {
+fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int = 0, collapse: Boolean = true) {
     // NIP-36: hide behind a warning until the reader chooses to see it.
     val warning = note.firstTag("content-warning") ?: note.tags.firstOrNull { it.firstOrNull() == "content-warning" }
     var revealed by remember(note.id) { mutableStateOf(false) }
@@ -321,26 +315,13 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         }
     }
     val shown = text.text.trim()
-    val translation = actions.translation(note.id)
     // Long notes are cut in timelines, profiles and quotes, with "Read more" opening the post.
     val maxLines = when {
         !collapse -> Int.MAX_VALUE
         depth > 0 -> QUOTE_LINES
         else -> TIMELINE_LINES
     }
-    if (translation is SocialViewModel.Translation.Done) {
-        var cut by remember(note.id, translation.text) { mutableStateOf(false) }
-        Text(
-            translation.text, color = EInk.Value, fontSize = fontSize.sp, lineHeight = (fontSize * 1.35).sp,
-            maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { cut = it.hasVisualOverflow },
-            modifier = Modifier.padding(top = 2.dp)
-        )
-        if (cut) ReadMore(note, actions)
-        Text(
-            "Translated from ${translation.from} · Show original", color = EInk.Caption, fontSize = 13.sp,
-            modifier = Modifier.padding(top = 4.dp).clickable { actions.translate(note, "") }
-        )
-    } else if (shown.isNotEmpty()) {
+    if (shown.isNotEmpty()) {
         var cut by remember(note.id) { mutableStateOf(false) }
         Text(
             text = text,
@@ -354,14 +335,6 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
             modifier = Modifier.padding(top = 2.dp)
         )
         if (cut) ReadMore(note, actions)
-        when {
-            translation == SocialViewModel.Translation.Loading ->
-                Text("Translating…", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-            offerTranslate -> Text(
-                "Translate post", color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 6.dp).clickable { actions.translate(note, translatableText(note, actions)) }
-            )
-        }
     }
     if (note.kind == com.example.btcwidget.nostr.core.Kind.POLL) {
         com.example.btcwidget.nostr.core.Poll.of(note)?.let { PollView(it, actions) }
@@ -433,8 +406,8 @@ private fun ReadMore(note: Event, actions: NoteActions) {
     )
 }
 
-/** The words of a note for translating: mentions as names, links kept, media and quotes left out. */
-internal fun translatableText(note: Event, actions: NoteActions): String =
+/** A note's words as plain text: mentions as names, links kept, media and quotes left out. */
+internal fun plainText(note: Event, actions: NoteActions): String =
     Content.parse(note.content).joinToString("") { seg ->
         when (seg) {
             is Content.Segment.Text -> seg.text

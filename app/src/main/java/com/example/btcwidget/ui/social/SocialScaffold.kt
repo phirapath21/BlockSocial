@@ -69,7 +69,6 @@ fun SocialScaffold(
     val following by vm.following.collectAsState()
     val stats by vm.stats.collectAsState()
     val nwcWallet by vm.nwc.collectAsState()
-    val translations by vm.translations.collectAsState()
     val customEmojis by vm.emojis.collectAsState()
 
     LaunchedEffect(vm) {
@@ -114,8 +113,6 @@ fun SocialScaffold(
         customEmojis = customEmojis,
         pollTally = { vm.pollTally(it) },
         vote = { poll, ids, done -> if (account == null) { navigate(LoginKey); done(false) } else vm.vote(poll, ids, done) },
-        translate = { n, text -> vm.toggleTranslation(n, text) },
-        translation = { translations[it] },
         resolveArticle = { vm.article(it) },
         openArticle = { a -> navigate(com.example.btcwidget.ArticleKey(Nip19.naddr(a.kind, a.pubkey, a.identifier, a.relays))) },
         linkPreview = { vm.linkPreview(it) },
