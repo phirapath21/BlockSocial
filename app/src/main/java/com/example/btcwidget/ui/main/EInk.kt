@@ -64,15 +64,6 @@ object EInk {
     /** Face for screen titles (the app's own look, whatever the widget theme). */
     val TitleFont: FontFamily get() = FontFamily.Monospace
 
-    /** Block's one accent (Bitcoin orange): marks what you did, never decoration. */
-    val Accent get() = Color(0xFFF7931A)
-
-    /** Blockclock-style panels: nearly square, thin border. */
-    val PanelShape = RoundedCornerShape(6.dp)
-
-    /** Labels, names and numbers read like the blockclock: monospace capitals. */
-    val Mono: FontFamily get() = FontFamily.Monospace
-
     val BodyShape = RoundedCornerShape(16.dp)
     val ChipShape = RoundedCornerShape(50)
 }

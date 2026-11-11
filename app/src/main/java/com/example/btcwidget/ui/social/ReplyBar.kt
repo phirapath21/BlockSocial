@@ -76,8 +76,7 @@ fun ReplyBar(
     val fill = if (dark) Color(0xF02A2F36) else EInk.Body.copy(alpha = 0.97f)
     val ink = if (dark) Color(0xFFEDEFF1) else EInk.Value
     val hint = if (dark) Color(0xFF9AA0A6) else EInk.Caption
-    // A Block panel: nearly square, thin border.
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(22.dp)
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
@@ -104,7 +103,7 @@ fun ReplyBar(
                 if (me != null) Avatar(profiles[me], me, size = 32) else Box(Modifier.size(32.dp).clip(CircleShape).background(hint))
             }
             Box(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = if (active) 9.dp else 0.dp)) {
-                if (text.isEmpty()) Text("WRITE A REPLY…", color = hint, fontSize = 13.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, modifier = Modifier.padding(top = 2.dp))
+                if (text.isEmpty()) Text("Post your reply", color = hint, fontSize = 16.sp)
                 BasicTextField(
                     value = text,
                     onValueChange = { text = it },
@@ -152,13 +151,13 @@ fun ReplyBar(
                 }
                 Box(Modifier.weight(1f))
                 Text(
-                    if (sending) "SENDING…" else "SEND",
-                    color = if (canSend) Color.Black else hint,
-                    fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    if (sending) "Replying…" else "Reply",
+                    color = if (canSend) (if (dark) Color.Black else EInk.Background) else hint,
+                    fontSize = 15.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .padding(end = 4.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (canSend) EInk.Accent else hint.copy(alpha = 0.25f))
+                        .clip(RoundedCornerShape(50))
+                        .background(if (canSend) ink else hint.copy(alpha = 0.25f))
                         .clickable(enabled = canSend, onClickLabel = "Send reply") {
                             sending = true
                             vm.send(text.trim(), target, null, images) { ok ->
