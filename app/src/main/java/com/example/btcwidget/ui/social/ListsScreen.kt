@@ -64,7 +64,7 @@ fun ListsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, owner: String? 
     val mine by vm.lists.collectAsState()
     val me = account?.pubkey
     val own = owner == null || owner == me
-    val theirs by produceState<List<PeopleList>?>(null, owner) { if (!own && owner != null) value = vm.listsBy(owner) }
+    val theirs by produceState<List<PeopleList>?>(null, owner) { if (!own) value = vm.listsBy(owner) }
     LaunchedEffect(me, own) { if (own && me != null) vm.loadLists() }
     var creating by remember { mutableStateOf(false) }
 

@@ -21,6 +21,9 @@ android {
     // Kotlin package / R class namespace. Independent of applicationId, so the code keeps its package.
     namespace = "com.example.btcwidget"
     compileSdk = 36
+    // The NDK is only used to strip debug data from the native libraries we ship (secp256k1);
+    // without a set version the build packaged them unstripped, about 5 MB over all CPU types.
+    ndkVersion = "27.2.12479018"
     defaultConfig {
         // Store identity: unique on Google Play and permanent once published.
         applicationId = "io.github.phirapath21.btcwidget"
