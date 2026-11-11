@@ -65,7 +65,7 @@ class WidgetConfigActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         setContent {
-            BTCWidgetTheme(darkTheme = true, dynamicColor = false) {
+            BTCWidgetTheme {
                 WidgetConfigScreen(
                     choices = choices,
                     selectedMode = current,

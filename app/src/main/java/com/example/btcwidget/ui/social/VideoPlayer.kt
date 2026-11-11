@@ -274,16 +274,10 @@ private fun QualityButton(player: ExoPlayer) {
             "$label ▾", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClickLabel = "Video quality") { open = true }.padding(horizontal = 10.dp, vertical = 8.dp)
         )
-        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            androidx.compose.material3.DropdownMenuItem(
-                text = { Text((if (!manual) "✓ " else "") + "Auto") },
-                onClick = { open = false; player.chooseQuality(null, context) }
-            )
+        BlockDropdown(expanded = open, onDismiss = { open = false }) {
+            BlockDropdownItem("Auto", selected = !manual) { open = false; player.chooseQuality(null, context) }
             options.forEach { o ->
-                androidx.compose.material3.DropdownMenuItem(
-                    text = { Text((if (manual && player.videoSize.height == o.height) "✓ " else "") + o.label) },
-                    onClick = { open = false; player.chooseQuality(o, context) }
-                )
+                BlockDropdownItem(o.label, selected = manual && player.videoSize.height == o.height) { open = false; player.chooseQuality(o, context) }
             }
         }
     }

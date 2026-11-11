@@ -19,14 +19,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -218,12 +215,12 @@ fun ListScreen(vm: SocialViewModel, owner: String, d: String, navigate: (NavKey)
         editing = false
         vm.renameList(list, title, about)
     }
-    if (list != null && confirmDelete) AlertDialog(
-        onDismissRequest = { confirmDelete = false },
-        title = { Text("Delete “${list.title}”?") },
-        text = { Text("The list is removed from your relays. The people in it aren't told.") },
-        confirmButton = { TextButton(onClick = { confirmDelete = false; vm.deleteList(list); onBack() }) { Text("Delete") } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } }
+    if (list != null && confirmDelete) ConfirmDialog(
+        title = "Delete “${list.title}”?",
+        text = "The list is removed from your relays and your Home feeds. The people in it aren't told.",
+        confirmLabel = "Delete",
+        onConfirm = { confirmDelete = false; vm.deleteList(list); onBack() },
+        onDismiss = { confirmDelete = false }
     )
     if (list != null && adding) AddPeopleSheet(vm, list, onClose = { adding = false })
 }
@@ -261,7 +258,7 @@ private fun AddPeopleSheet(vm: SocialViewModel, list: PeopleList, onClose: () ->
         results = vm.searchPeople(q)
         searching = false
     }
-    ModalBottomSheet(onDismissRequest = onClose, containerColor = EInk.Background) {
+    BlockSheet(onDismiss = onClose) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Text("Add to ${current.title}", color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp))
             OutlinedTextField(
@@ -295,7 +292,7 @@ fun AddToListSheet(vm: SocialViewModel, pubkey: String, onClose: () -> Unit) {
     LaunchedEffect(Unit) { vm.loadLists() }
     var creating by remember { mutableStateOf(false) }
     val name = vm.profiles.collectAsState().value[pubkey]?.bestName ?: Profile.shortNpub(pubkey)
-    ModalBottomSheet(onDismissRequest = onClose, containerColor = EInk.Background) {
+    BlockSheet(onDismiss = onClose) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Text("Lists with $name", color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             when (val l = lists) {
@@ -335,32 +332,18 @@ fun AddToListSheet(vm: SocialViewModel, pubkey: String, onClose: () -> Unit) {
 @Composable
 private fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, onDone: (String) -> Unit) {
     var name by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(value = name, onValueChange = { name = it.take(80) }, singleLine = true, placeholder = { Text("Name, e.g. Bitcoin devs") }, colors = fieldColors)
-        },
-        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onDone(name) }) { Text("Create") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+    BlockDialog(onDismiss = onDismiss, title = title, confirmLabel = "Create", confirmEnabled = name.isNotBlank(), onConfirm = { onDone(name) }) {
+        OutlinedTextField(value = name, onValueChange = { name = it.take(80) }, singleLine = true, placeholder = { Text("Name, e.g. Bitcoin devs") }, colors = fieldColors, modifier = Modifier.fillMaxWidth())
+    }
 }
 
 @Composable
 private fun EditListDialog(list: PeopleList, onDismiss: () -> Unit, onDone: (String, String?) -> Unit) {
     var name by remember { mutableStateOf(list.title) }
     var about by remember { mutableStateOf(list.description.orEmpty()) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit list") },
-        text = {
-            Column {
-                OutlinedTextField(value = name, onValueChange = { name = it.take(80) }, singleLine = true, label = { Text("Name") }, colors = fieldColors)
-                Spacer(Modifier.size(8.dp))
-                OutlinedTextField(value = about, onValueChange = { about = it.take(280) }, label = { Text("Description (optional)") }, colors = fieldColors)
-            }
-        },
-        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onDone(name, about) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+    BlockDialog(onDismiss = onDismiss, title = "Edit list", confirmLabel = "Save", confirmEnabled = name.isNotBlank(), onConfirm = { onDone(name, about) }) {
+        OutlinedTextField(value = name, onValueChange = { name = it.take(80) }, singleLine = true, label = { Text("Name") }, colors = fieldColors, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.size(8.dp))
+        OutlinedTextField(value = about, onValueChange = { about = it.take(280) }, label = { Text("Description (optional)") }, colors = fieldColors, modifier = Modifier.fillMaxWidth())
+    }
 }

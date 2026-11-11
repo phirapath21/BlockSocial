@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -223,39 +221,37 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, larg
             Text(" · " + relativeTime(note.createdAt), color = EInk.Caption, fontSize = 14.sp, maxLines = 1)
         }
         Box {
-            Text(
-                text = "⋯",
-                color = EInk.Caption,
-                fontSize = 18.sp,
-                modifier = Modifier
-                    .clickable(onClickLabel = "More options") { menu = true }
-                    .padding(horizontal = 6.dp)
-            )
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Share") }, onClick = { menu = false; actions.share(note) })
-                DropdownMenuItem(text = { Text("Reposts, likes and zaps") }, onClick = { menu = false; actions.openEngagement(note, 1) })
-                if (note.content.isNotBlank()) DropdownMenuItem(
-                    text = { Text(if (actions.translation(note.id) is SocialViewModel.Translation.Done) "Show original" else "Translate") },
-                    onClick = { menu = false; actions.translate(note, translatableText(note, actions)) }
-                )
-                DropdownMenuItem(
-                    text = { Text(if (actions.isBookmarked(note.id)) "Remove bookmark" else "Bookmark") },
-                    onClick = { menu = false; actions.bookmark(note) }
-                )
-                if (note.pubkey == actions.me) {
-                    DropdownMenuItem(
-                        text = { Text(if (actions.isPinned(note.id)) "Unpin from profile" else "Pin to profile") },
-                        onClick = { menu = false; actions.pin(note) }
-                    )
-                    DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; actions.delete(note) })
-                } else {
-                    DropdownMenuItem(text = { Text("Mute this account") }, onClick = { menu = false; actions.mute(note.pubkey) })
-                    DropdownMenuItem(text = { Text("Mute this conversation") }, onClick = { menu = false; actions.muteThread(note) })
-                    DropdownMenuItem(text = { Text("Report") }, onClick = { menu = false; actions.report(note) })
-                }
-            }
+            Box(
+                Modifier.padding(start = 2.dp).size(32.dp).clip(CircleShape).clickable(onClickLabel = "More options") { menu = true },
+                contentAlignment = Alignment.Center
+            ) { Text("⋯", color = EInk.Caption, fontSize = 18.sp) }
+            if (menu) NoteMenu(note, actions, onDismiss = { menu = false })
         }
     }
+}
+
+/** A note's ⋯ menu, as a sheet from the bottom like X's. */
+@Composable
+private fun NoteMenu(note: Event, actions: NoteActions, onDismiss: () -> Unit) {
+    val mine = note.pubkey == actions.me
+    val name = actions.profileOf(note.pubkey)?.bestName ?: Profile.shortNpub(note.pubkey)
+    val items = buildList {
+        if (note.content.isNotBlank()) add(SheetAction(
+            Glyphs.Translate, if (actions.translation(note.id) is SocialViewModel.Translation.Done) "Show original" else "Translate post"
+        ) { actions.translate(note, translatableText(note, actions)) })
+        add(SheetAction(if (actions.isBookmarked(note.id)) Glyphs.Bookmarked else Glyphs.Bookmark, if (actions.isBookmarked(note.id)) "Remove bookmark" else "Bookmark") { actions.bookmark(note) })
+        add(SheetAction(Glyphs.Stats, "Reposts, likes and zaps") { actions.openEngagement(note, 1) })
+        add(SheetAction(Glyphs.Share, "Share post") { actions.share(note) })
+        if (mine) {
+            add(SheetAction(Glyphs.Pin, if (actions.isPinned(note.id)) "Unpin from profile" else "Pin to profile") { actions.pin(note) })
+            add(SheetAction(Glyphs.Delete, "Delete post", destructive = true) { actions.delete(note) })
+        } else {
+            add(SheetAction(Glyphs.SoundOff, "Mute $name") { actions.mute(note.pubkey) })
+            add(SheetAction(Glyphs.MuteThread, "Mute this conversation") { actions.muteThread(note) })
+            add(SheetAction(Glyphs.Flag, "Report post", destructive = true) { actions.report(note) })
+        }
+    }
+    ActionSheet(onDismiss, items)
 }
 
 /** Note text with tappable links, hashtags and mentions; images and quoted notes below it. */
@@ -551,18 +547,7 @@ internal fun ActionRow(note: Event, stats: NoteStats, actions: NoteActions) {
         ActionButton(Glyphs.Comment, stats.replies, "Reply", tint = null) { actions.reply(note) }
         Box {
             ActionButton(Glyphs.Repost, stats.reposts, if (stats.repostedByMe) "Reposted" else "Repost or quote", tint = ActionColors.Repost.takeIf { stats.repostedByMe }) { repostMenu = true }
-            DropdownMenu(expanded = repostMenu, onDismissRequest = { repostMenu = false }) {
-                DropdownMenuItem(
-                    text = { Text(if (stats.repostedByMe) "Reposted" else "Repost") },
-                    leadingIcon = { Icon(Glyphs.Repost, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    onClick = { repostMenu = false; actions.repost(note) }, enabled = !stats.repostedByMe
-                )
-                DropdownMenuItem(
-                    text = { Text("Quote") },
-                    leadingIcon = { Icon(Glyphs.Comment, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    onClick = { repostMenu = false; actions.quote(note) }
-                )
-            }
+            if (repostMenu) RepostSheet(note, stats, actions, onDismiss = { repostMenu = false })
         }
         Box {
             var picker by remember { mutableStateOf(false) }
@@ -627,12 +612,21 @@ private fun ActionButton(
     }
 }
 
+/** Repost or quote, as a small sheet like X's. */
+@Composable
+internal fun RepostSheet(note: Event, stats: NoteStats, actions: NoteActions, onDismiss: () -> Unit, beforeQuote: () -> Unit = {}) {
+    ActionSheet(onDismiss, listOf(
+        SheetAction(Glyphs.Repost, if (stats.repostedByMe) "Reposted" else "Repost", enabled = !stats.repostedByMe) { actions.repost(note) },
+        SheetAction(Glyphs.Quote, "Quote") { beforeQuote(); actions.quote(note) }
+    ))
+}
+
 /** Emoji to react with, like X's long-press: common ones, then the note's and your custom emoji. */
 private val QUICK_REACTIONS = listOf("🤙", "🔥", "😂", "🫂", "👀", "⚡", "🙏", "💯", "😢", "🧡")
 
 @Composable
 private fun ReactionMenu(expanded: Boolean, note: Event, actions: NoteActions, onDismiss: () -> Unit) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+    BlockDropdown(expanded = expanded, onDismiss = onDismiss) {
         val custom = remember(note.id) { com.example.btcwidget.nostr.core.CustomEmoji.of(note) } + actions.customEmojis
         Column(Modifier.padding(horizontal = 8.dp).widthIn(max = 280.dp)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

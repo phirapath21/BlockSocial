@@ -7,13 +7,20 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
+import com.example.btcwidget.ui.main.EInk
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -172,12 +179,12 @@ fun SocialScaffold(
         })
     }
     deleteTarget?.let { note ->
-        AlertDialog(
-            onDismissRequest = { deleteTarget = null },
-            title = { Text("Delete this note?") },
-            text = { Text("Relays are asked to delete it. Copies others already saved may remain.") },
-            confirmButton = { TextButton(onClick = { deleteTarget = null; vm.delete(note) }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancel") } }
+        ConfirmDialog(
+            title = "Delete post?",
+            text = "Relays are asked to delete it, and it's removed from your profile and timelines. Copies others already saved may remain.",
+            confirmLabel = "Delete",
+            onConfirm = { deleteTarget = null; vm.delete(note) },
+            onDismiss = { deleteTarget = null }
         )
     }
 }
@@ -187,59 +194,59 @@ private fun ZapDialog(recipientName: String, inApp: Boolean, onDismiss: () -> Un
     var amount by remember { mutableStateOf("21") }
     var comment by remember { mutableStateOf("") }
     val sats = amount.toLongOrNull()?.takeIf { it > 0 }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("⚡ Zap $recipientName") },
-        text = {
-            Column {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(21L, 100L, 500L, 1000L, 5000L).forEach { preset ->
-                        EInkChip(text = "$preset", selected = sats == preset, onClick = { amount = preset.toString() })
-                    }
-                }
-                OutlinedTextField(
-                    value = amount,
-                    onValueChange = { v -> amount = v.filter { it.isDigit() }.take(9) },
-                    label = { Text("Sats") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.padding(top = 10.dp)
-                )
-                OutlinedTextField(
-                    value = comment,
-                    onValueChange = { comment = it.take(140) },
-                    label = { Text("Comment (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
+    BlockDialog(
+        onDismiss = onDismiss,
+        title = "Zap $recipientName",
+        confirmLabel = sats?.let { "Zap ${"%,d".format(it)} sats" } ?: "Zap",
+        confirmEnabled = sats != null,
+        onConfirm = { sats?.let { onZap(it, comment) } }
+    ) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(21L, 100L, 500L, 1000L, 5000L, 21000L).forEach { preset ->
+                val on = sats == preset
                 Text(
-                    if (inApp) "Pays from your connected wallet (NWC)." else "Opens your Lightning wallet to pay. Connect a wallet in Settings › Nostr to zap in one tap.",
-                    modifier = Modifier.padding(top = 8.dp)
+                    "⚡ ${"%,d".format(preset)}", fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    color = if (on) Color.Black else EInk.Value,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) ZapOrange else EInk.Track)
+                        .clickable { amount = preset.toString() }.padding(horizontal = 14.dp, vertical = 8.dp)
                 )
             }
-        },
-        confirmButton = { TextButton(enabled = sats != null, onClick = { sats?.let { onZap(it, comment) } }) { Text("Zap") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+        }
+        OutlinedTextField(
+            value = amount,
+            onValueChange = { v -> amount = v.filter { it.isDigit() }.take(9) },
+            label = { Text("Sats") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
+        )
+        OutlinedTextField(
+            value = comment,
+            onValueChange = { comment = it.take(140) },
+            label = { Text("Comment (optional)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        )
+        Text(
+            if (inApp) "Pays from your connected wallet (NWC)." else "Opens your Lightning wallet to pay. Connect a wallet in Settings › Nostr to zap in one tap.",
+            color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)
+        )
+    }
 }
+
+private val ZapOrange = Color(0xFFF7931A)
 
 @Composable
 private fun ReportDialog(onDismiss: () -> Unit, onReport: (String) -> Unit) {
     // NIP-56 report types.
     val reasons = listOf("spam" to "Spam", "nudity" to "Nudity", "profanity" to "Hateful or abusive", "illegal" to "Illegal", "impersonation" to "Impersonation", "other" to "Other")
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Report note") },
-        text = {
-            Column {
-                reasons.forEach { (code, label) ->
-                    TextButton(onClick = { onReport(code) }) { Text(label) }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+    BlockDialog(
+        onDismiss = onDismiss,
+        title = "Report post",
+        text = "Why are you reporting it? The report is public and goes to your relays (NIP-56)."
+    ) {
+        reasons.forEach { (code, label) -> ChoiceRow(label) { onReport(code) } }
+    }
 }
 
 /** Opens a Lightning wallet for [invoice]; without one, copies it. */

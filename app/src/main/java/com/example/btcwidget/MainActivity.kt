@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
       navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
     )
     setContent {
-      BTCWidgetTheme(darkTheme = true, dynamicColor = false) {
+      BTCWidgetTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
           // After a crash, show what happened (to copy into a bug report) before the app.
           var crash by remember { mutableStateOf(CrashLog.read(this)) }

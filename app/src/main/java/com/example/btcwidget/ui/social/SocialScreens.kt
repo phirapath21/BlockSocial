@@ -406,7 +406,7 @@ private fun FeedMenu(vm: SocialViewModel, onClose: () -> Unit) {
     val feeds by vm.homeFeeds.collectAsState()
     val current by vm.homeFeed.collectAsState()
     var editing by remember { mutableStateOf(false) }
-    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onClose, containerColor = EInk.Background) {
+    BlockSheet(onDismiss = onClose) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
             feeds.forEachIndexed { i, f ->
                 val selected = f == current
@@ -592,6 +592,8 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     }
     var tab by androidx.compose.runtime.saveable.rememberSaveable(pubkey) { mutableStateOf(0) }
     var addToList by remember(pubkey) { mutableStateOf(false) }
+    var profileMenu by remember(pubkey) { mutableStateOf(false) }
+    var showQr by remember(pubkey) { mutableStateOf(false) }
     val badges by produceState<List<com.example.btcwidget.nostr.core.Badges.Definition>>(emptyList(), pubkey) { value = vm.badgesOf(pubkey) }
     // Loaded the first time the Articles tab opens.
     var articles by remember(pubkey) { mutableStateOf<List<com.example.btcwidget.nostr.core.Article>?>(null) }
@@ -620,6 +622,27 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         if (onBack != null) SocialTopBar(profile?.bestName ?: "Profile", onBack)
         if (addToList) AddToListSheet(vm, pubkey, onClose = { addToList = false })
+        if (showQr) ProfileQrDialog(vm, pubkey, navigate, onDismiss = { showQr = false })
+        if (profileMenu) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val name = profile?.bestName ?: Profile.shortNpub(pubkey)
+            val loggedIn = account != null
+            ActionSheet(onDismiss = { profileMenu = false }, actions = buildList {
+                if (loggedIn && !isMe) add(SheetAction(Glyphs.AddToList, "Add or remove from Lists") { addToList = true })
+                add(SheetAction(Glyphs.Share, "Share profile") { shareProfile(context, pubkey, name) })
+                add(SheetAction(Glyphs.Qr, "QR code") { showQr = true })
+                add(SheetAction(Glyphs.Copy, "Copy npub") {
+                    (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                        .setPrimaryClip(android.content.ClipData.newPlainText("npub", Nip19.npub(pubkey)))
+                    android.widget.Toast.makeText(context, "npub copied", android.widget.Toast.LENGTH_SHORT).show()
+                })
+                add(SheetAction(Glyphs.Person, "Lists by $name") { navigate(com.example.btcwidget.ListsKey(pubkey)) })
+                if (loggedIn && !isMe) {
+                    if (pubkey in muted) add(SheetAction(Glyphs.SoundOn, "Unmute $name") { vm.mute(pubkey, false) })
+                    else add(SheetAction(Glyphs.SoundOff, "Mute $name", destructive = true) { vm.mute(pubkey, true) })
+                }
+            })
+        }
         SocialScaffold(vm, navigate) { actions ->
             NoteList(
                 items = shown, stats = stats, actions = actions,
@@ -649,7 +672,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         onOpenFollowing = { navigate(com.example.btcwidget.FollowsKey(pubkey, followers = false)) },
                         onOpenFollowers = { navigate(com.example.btcwidget.FollowsKey(pubkey, followers = true)) },
                         onUnmute = { vm.mute(pubkey, false) },
-                        onAddToList = if (account != null && !isMe) ({ addToList = true }) else null,
+                        onMore = { profileMenu = true },
                         onOpenLists = { navigate(com.example.btcwidget.ListsKey(pubkey)) },
                         actions = actions
                     )
@@ -689,7 +712,7 @@ private fun ProfileHeader(
     onOpenFollowing: () -> Unit,
     onOpenFollowers: () -> Unit,
     onUnmute: () -> Unit,
-    onAddToList: (() -> Unit)?,
+    onMore: () -> Unit,
     onOpenLists: () -> Unit,
     actions: NoteActions
 ) {
@@ -708,11 +731,11 @@ private fun ProfileHeader(
             ) { Avatar(profile, pubkey, size = 76) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp, end = 14.dp), horizontalArrangement = Arrangement.End) {
+            PillButton("⋯", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onMore)
             when {
                 isMe -> PillButton("Edit profile", filled = false, onClick = onEdit)
                 isMuted -> PillButton("Unmute", filled = false, onClick = onUnmute)
                 else -> {
-                    if (onAddToList != null) PillButton("☰+", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onAddToList)
                     PillButton("✉", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onMessage)
                     if (profile?.lud16 != null || profile?.lud06 != null) {
                         PillButton("⚡", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = { actions.zap(fakeProfileNote(pubkey)) })
@@ -764,6 +787,13 @@ private fun ProfileHeader(
     }
 }
 
+/** Shares a link to the profile (njump.me opens in any browser or Nostr app). */
+private fun shareProfile(context: android.content.Context, pubkey: String, name: String) {
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+        .putExtra(android.content.Intent.EXTRA_TEXT, "$name on Nostr: https://njump.me/" + Nip19.npub(pubkey))
+    context.startActivity(android.content.Intent.createChooser(send, "Share profile").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
 /** Zapping a profile (no note): a stand-in event that only carries the recipient. */
 private fun fakeProfileNote(pubkey: String) =
     com.example.btcwidget.nostr.core.Event("", pubkey, 0, -1, emptyList(), "", "")
@@ -788,11 +818,11 @@ private fun BadgesRow(badges: List<com.example.btcwidget.nostr.core.Badges.Defin
         }
     }
     open?.let { b ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { open = null },
-            title = { Text(b.name) },
-            text = { Text(b.description ?: "A badge awarded on Nostr.") },
-            confirmButton = { androidx.compose.material3.TextButton(onClick = { open = null }) { Text("OK") } }
-        )
+        BlockDialog(onDismiss = { open = null }, title = b.name, text = b.description ?: "A badge awarded on Nostr.", dismissLabel = "Close") {
+            if (b.image != null) coil3.compose.AsyncImage(
+                model = b.image, contentDescription = b.name, contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp)
+            )
+        }
     }
 }

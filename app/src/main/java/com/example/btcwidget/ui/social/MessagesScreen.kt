@@ -24,13 +24,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -184,36 +182,36 @@ private fun NewMessageDialog(vm: SocialViewModel, onDismiss: () -> Unit, onOpen:
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("New message") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = input, onValueChange = { input = it; error = null },
-                    label = { Text("npub or name@domain") }, singleLine = true, isError = error != null
-                )
-                Text(
-                    error ?: "Or open someone's profile and tap ✉.",
-                    color = if (error != null) EInk.Alert else EInk.Caption, fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-                TextButton(onClick = onNewGroup, modifier = Modifier.padding(top = 4.dp)) { Text("New group chat ›") }
+    BlockDialog(
+        onDismiss = onDismiss,
+        title = "New message",
+        confirmLabel = if (busy) "Looking…" else "Open chat",
+        confirmEnabled = !busy && input.isNotBlank(),
+        onConfirm = {
+            busy = true
+            scope.launch {
+                val target = vm.resolve(input)
+                busy = false
+                if (target is NostrRepository.Direct.ProfileTarget) onOpen(target.pubkey)
+                else error = "Couldn't find that person. Try their npub."
             }
-        },
-        confirmButton = {
-            TextButton(enabled = !busy && input.isNotBlank(), onClick = {
-                busy = true
-                scope.launch {
-                    val target = vm.resolve(input)
-                    busy = false
-                    if (target is NostrRepository.Direct.ProfileTarget) onOpen(target.pubkey)
-                    else error = "Couldn't find that person. Try their npub."
-                }
-            }) { Text(if (busy) "…" else "Open") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+        }
+    ) {
+        OutlinedTextField(
+            value = input, onValueChange = { input = it; error = null },
+            label = { Text("npub or name@domain") }, singleLine = true, isError = error != null,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            error ?: "Or open someone's profile and tap ✉.",
+            color = if (error != null) EInk.Alert else EInk.Caption, fontSize = 13.sp,
+            modifier = Modifier.padding(top = 6.dp)
+        )
+        Text(
+            "New group chat ›", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 10.dp).clickable(onClick = onNewGroup).padding(vertical = 6.dp)
+        )
+    }
 }
 
 /** Pick people you follow (or paste npubs) for a group chat. */
@@ -231,36 +229,37 @@ private fun NewGroupDialog(vm: SocialViewModel, onDismiss: () -> Unit, onStart: 
             q.isEmpty() || profiles[pk]?.let { p -> listOfNotNull(p.name, p.displayName, p.nip05).any { it.lowercase().contains(q) } } == true
         }.sortedBy { profiles[it]?.bestName?.lowercase() ?: "~" }.take(40)
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("New group chat") },
-        text = {
-            Column {
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search follows or paste an npub") }, singleLine = true)
-                if (picked.isNotEmpty()) Text(
-                    picked.joinToString(", ") { profiles[it]?.bestName ?: Profile.shortNpub(it) },
-                    color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)
-                )
-                LazyColumn(Modifier.padding(top = 6.dp).heightIn(max = 280.dp)) {
-                    val rows = (listOfNotNull(pasted) + matches).distinct()
-                    items(rows, key = { it }) { pk ->
-                        val on = pk in picked
-                        Row(
-                            Modifier.fillMaxWidth().clickable { picked = if (on) picked - pk else (picked + pk).take(MAX_GROUP) }.padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(if (on) "☑" else "☐", color = EInk.Value, fontSize = 18.sp, modifier = Modifier.padding(end = 8.dp))
-                            Avatar(profiles[pk], pk, size = 28)
-                            Text(profiles[pk]?.bestName ?: Profile.shortNpub(pk), color = EInk.Value, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
-                        }
-                    }
+    BlockDialog(
+        onDismiss = onDismiss,
+        title = "New group chat",
+        confirmLabel = if (picked.size >= 2) "Start with ${picked.size} people" else "Pick at least 2 people",
+        confirmEnabled = picked.size >= 2,
+        onConfirm = { onStart(picked) }
+    ) {
+        OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search follows or paste an npub") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        if (picked.isNotEmpty()) Text(
+            picked.joinToString(", ") { profiles[it]?.bestName ?: Profile.shortNpub(it) },
+            color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)
+        )
+        // A plain column (at most 40 rows): the dialog itself scrolls.
+        Column(Modifier.padding(top = 6.dp)) {
+            (listOfNotNull(pasted) + matches).distinct().forEach { pk ->
+                val on = pk in picked
+                Row(
+                    Modifier.fillMaxWidth().clickable { picked = if (on) picked - pk else (picked + pk).take(MAX_GROUP) }.padding(vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Avatar(profiles[pk], pk, size = 32)
+                    Text(profiles[pk]?.bestName ?: Profile.shortNpub(pk), color = EInk.Value, fontSize = 15.sp, modifier = Modifier.weight(1f).padding(start = 10.dp), maxLines = 1)
+                    Box(
+                        Modifier.size(22.dp).clip(CircleShape).background(if (on) androidx.compose.ui.graphics.Color(0xFFF7931A) else EInk.Track),
+                        contentAlignment = Alignment.Center
+                    ) { if (on) Text("✓", color = androidx.compose.ui.graphics.Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
                 }
-                Text("Everyone in the group sees each other and every message. Up to $MAX_GROUP people.", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             }
-        },
-        confirmButton = { TextButton(enabled = picked.size >= 2, onClick = { onStart(picked) }) { Text("Start") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+        }
+        Text("Everyone in the group sees each other and every message. Up to $MAX_GROUP people.", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+    }
 }
 
 /** Each message is wrapped once per member, so groups stay small. */
@@ -363,18 +362,27 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                                         modifier = Modifier.padding(top = 2.dp)
                                     )
                                 }
-                                androidx.compose.material3.DropdownMenu(expanded = menuFor == m.id, onDismissRequest = { menuFor = null }) {
-                                    Row(Modifier.padding(horizontal = 8.dp)) {
-                                        DM_REACTIONS.forEach { e ->
-                                            Text(e, fontSize = 22.sp, modifier = Modifier.clip(CircleShape).clickable { menuFor = null; vm.reactDm(peers, m, e) }.padding(5.dp))
+                                if (menuFor == m.id) ActionSheet(
+                                    onDismiss = { menuFor = null },
+                                    actions = buildList {
+                                        add(SheetAction(Glyphs.Reply, "Reply") { replyTo = m })
+                                        if (m.kind != com.example.btcwidget.nostr.core.Nip17.FILE) add(SheetAction(Glyphs.Copy, "Copy text") {
+                                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(m.content))
+                                        })
+                                    },
+                                    header = {
+                                        // Quick reactions, as on X: a row of emoji above the actions.
+                                        Row(
+                                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly
+                                        ) {
+                                            DM_REACTIONS.forEach { e ->
+                                                Text(e, fontSize = 26.sp, modifier = Modifier.clip(CircleShape).clickable(onClickLabel = "React $e") { menuFor = null; vm.reactDm(peers, m, e) }.padding(6.dp))
+                                            }
                                         }
+                                        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(vertical = 4.dp))
                                     }
-                                    androidx.compose.material3.DropdownMenuItem(text = { Text("Reply") }, onClick = { menuFor = null; replyTo = m })
-                                    if (m.kind != com.example.btcwidget.nostr.core.Nip17.FILE) androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text("Copy") },
-                                        onClick = { menuFor = null; clipboard.setText(androidx.compose.ui.text.AnnotatedString(m.content)) }
-                                    )
-                                }
+                                )
                             }
                             reactions[m.id]?.takeIf { it.isNotEmpty() }?.let { rs ->
                                 Text(

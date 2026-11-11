@@ -532,36 +532,33 @@ internal fun ScheduleDialog(initial: Long?, onDismiss: () -> Unit, onClear: () -
         set(java.util.Calendar.HOUR_OF_DAY, time.hour); set(java.util.Calendar.MINUTE, time.minute); set(java.util.Calendar.SECOND, 0)
     }.timeInMillis / 1000
     val valid = chosen() > now.timeInMillis / 1000 + 60
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Schedule post") },
-        text = {
-            Column {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    (0..6).forEach { d ->
-                        val label = when (d) {
-                            0 -> "TODAY"; 1 -> "TOMORROW"
-                            else -> java.text.SimpleDateFormat("EEE d", java.util.Locale.ENGLISH).format(java.util.Date(System.currentTimeMillis() + d * 86_400_000L)).uppercase()
-                        }
-                        com.example.btcwidget.ui.main.EInkChip(text = label, selected = day == d, onClick = { day = d })
-                    }
+    BlockDialog(
+        onDismiss = onDismiss,
+        title = "Schedule post",
+        confirmLabel = if (initial != null) "Update" else "Schedule",
+        confirmEnabled = valid,
+        onConfirm = { onPick(chosen()) }
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            (0..6).forEach { d ->
+                val label = when (d) {
+                    0 -> "TODAY"; 1 -> "TOMORROW"
+                    else -> java.text.SimpleDateFormat("EEE d", java.util.Locale.ENGLISH).format(java.util.Date(System.currentTimeMillis() + d * 86_400_000L)).uppercase()
                 }
-                androidx.compose.material3.TimeInput(state = time, modifier = Modifier.padding(top = 12.dp))
-                Text(
-                    if (valid) "It's signed and sent at that time. Your phone must be on and online; a signer app may ask you to approve then."
-                    else "Pick a time in the future.",
-                    color = if (valid) EInk.Caption else EInk.Alert, fontSize = 12.sp
-                )
-            }
-        },
-        confirmButton = { androidx.compose.material3.TextButton(enabled = valid, onClick = { onPick(chosen()) }) { Text("Set") } },
-        dismissButton = {
-            Row {
-                if (initial != null) androidx.compose.material3.TextButton(onClick = onClear) { Text("Post now instead") }
-                androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
+                com.example.btcwidget.ui.main.EInkChip(text = label, selected = day == d, onClick = { day = d })
             }
         }
-    )
+        androidx.compose.material3.TimeInput(state = time, modifier = Modifier.padding(top = 14.dp))
+        Text(
+            if (valid) "It's signed and sent at that time. Your phone must be on and online; a signer app may ask you to approve then."
+            else "Pick a time in the future.",
+            color = if (valid) EInk.Caption else EInk.Alert, fontSize = 13.sp
+        )
+        if (initial != null) Text(
+            "Post now instead", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 12.dp).clickable(onClick = onClear).padding(vertical = 6.dp)
+        )
+    }
 }
 
 /** A small dark label over an image; a spinner while [text] is null (uploading). */
