@@ -149,7 +149,7 @@ fun ImageViewer(
             onDispose { bars.show(types) }
         }
         val player = if (video) {
-            val p = remember(url) { newPlayer(context, url) {} .apply { volume = 1f; playWhenReady = true } }
+            val p = remember(url) { newPlayer(context, url, fullScreen = true) {}.apply { volume = 1f; playWhenReady = true } }
             DisposableEffect(p) { onDispose { VideoPositions[url] = p.currentPosition; p.release() } }
             p
         } else null
