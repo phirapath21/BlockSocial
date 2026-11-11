@@ -126,6 +126,7 @@ fun SocialScaffold(
             url, note, stats[note.id] ?: com.example.btcwidget.nostr.NoteStats(), actions,
             onDismiss = { viewImage = null },
             urls = noteImageUrls(note),
+            statusBar = { PublishStatusBar(vm) },
             replyBar = { onActive ->
                 ReplyBar(
                     vm, note, dark = true,
@@ -142,6 +143,7 @@ fun SocialScaffold(
             url, note, stats[note.id] ?: com.example.btcwidget.nostr.NoteStats(), actions,
             onDismiss = { viewVideo = null },
             video = true,
+            statusBar = { PublishStatusBar(vm) },
             replyBar = { onActive ->
                 ReplyBar(
                     vm, note, dark = true,

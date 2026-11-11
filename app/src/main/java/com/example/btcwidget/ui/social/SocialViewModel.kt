@@ -1,5 +1,7 @@
 package com.example.btcwidget.ui.social
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -615,7 +617,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun like(note: Event) = act("Couldn't like") { repo.like(note) }
     fun react(note: Event, content: String, emojiUrl: String?) = act("Couldn't react") { repo.react(note, content, emojiUrl) }
     val emojis get() = repo.emojis
-    fun repost(note: Event) = act("Couldn't repost") { repo.repost(note); say("Reposted") }
+    fun repost(note: Event) = tracked("Reposting", "Reposted", "Couldn't repost") { repo.repost(note) }
     fun follow(pubkey: String, follow: Boolean) = act(if (follow) "Couldn't follow" else "Couldn't unfollow") { repo.setFollowing(pubkey, follow) }
     fun mute(pubkey: String, mute: Boolean) = act("Couldn't update mutes") {
         repo.setMuted(pubkey, mute)
@@ -640,7 +642,12 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         onResult: (Boolean) -> Unit
     ) {
         var ok = false
-        act("Couldn't post", finally = { onResult(ok) }) {
+        val (working, done) = when {
+            replyTo != null -> "Replying" to "Replied"
+            quote != null -> "Quoting" to "Quoted"
+            else -> "Posting" to "Posted"
+        }
+        tracked(working, done, "Couldn't post", finally = { onResult(ok) }) {
             // Image URLs go in the text (so every client shows them) with imeta tags (NIP-92).
             val body = (listOf(text.trim()) + images.map { it.url }).filter { it.isNotEmpty() }.joinToString("\n")
             val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height) } +
@@ -853,6 +860,85 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun disconnectNwc() { repo.disconnectNwc(); say("Wallet disconnected") }
 
     private fun say(message: String) { _messages.tryEmit(message) }
+
+    // ---- Progress of what's being sent (repost, reply, post) ----
+
+    /** What the status bar at the top shows while something is being published. */
+    data class PublishActivity(
+        val id: Long,
+        val title: String,
+        val status: String,
+        /** 0..1, or null while waiting with no way to tell how long (signing). */
+        val progress: Float?,
+        val state: State
+    ) {
+        enum class State { WORKING, DONE, FAILED }
+    }
+
+    private val _activity = MutableStateFlow<PublishActivity?>(null)
+    /** The latest publish in progress (or just finished), or null when there's nothing to show. */
+    val activity: StateFlow<PublishActivity?> = _activity.asStateFlow()
+    private val nextActivity = java.util.concurrent.atomic.AtomicLong()
+
+    /**
+     * Runs [block] like [act], showing its progress in the status bar: signing (and with which
+     * signer), then relays answering, then [done] with a tick, or [failure] in red.
+     */
+    private fun tracked(working: String, done: String, failure: String, finally: () -> Unit = {}, block: suspend () -> Unit) {
+        val id = nextActivity.incrementAndGet()
+        // A newer action replaces an older one in the bar; an older one never covers a newer.
+        fun show(a: PublishActivity) = _activity.update { cur -> if (cur == null || cur.id <= id) a else cur }
+        fun clearLater(ms: Long) = viewModelScope.launch { delay(ms); _activity.update { if (it?.id == id) null else it } }
+        val finishedFlag = java.util.concurrent.atomic.AtomicBoolean(false)
+        val tracker = com.example.btcwidget.nostr.PublishTracker { stage ->
+            when (stage) {
+                is com.example.btcwidget.nostr.PublishTracker.Stage.Signing -> if (!finishedFlag.get()) show(
+                    PublishActivity(id, working, when (stage.signer) {
+                        com.example.btcwidget.nostr.SignerType.AMBER -> "Waiting for your signer app…"
+                        com.example.btcwidget.nostr.SignerType.BUNKER -> "Waiting for your remote signer…"
+                        else -> "Signing…"
+                    }, null, PublishActivity.State.WORKING)
+                )
+                is com.example.btcwidget.nostr.PublishTracker.Stage.Sending -> {
+                    val total = stage.total.coerceAtLeast(1)
+                    if (!finishedFlag.get()) show(PublishActivity(
+                        id, working,
+                        if (stage.answered == 0) "Sending to ${stage.total} relays…" else "Sending · ${stage.answered} of ${stage.total} relays answered",
+                        // Never quite full until it's done: the first acceptance finishes it.
+                        (0.1f + 0.85f * stage.answered / total).coerceAtMost(0.95f), PublishActivity.State.WORKING
+                    ))
+                    // Done already: keep counting the relays that have it while the tick shows.
+                    else _activity.update { cur ->
+                        if (cur?.id == id && cur.state == PublishActivity.State.DONE)
+                            cur.copy(status = "On ${stage.accepted} of ${stage.total} relays") else cur
+                    }
+                }
+            }
+        }
+        show(PublishActivity(id, working, "Preparing…", null, PublishActivity.State.WORKING))
+        viewModelScope.launch {
+            try {
+                withContext(tracker) { block() }
+                finishedFlag.set(true)
+                show(PublishActivity(id, "$done ✓", "Sent", 1f, PublishActivity.State.DONE))
+                clearLater(1_800)
+            } catch (e: CancellationException) {
+                _activity.update { if (it?.id == id) null else it }
+                throw e
+            } catch (e: SignerRejected) {
+                finishedFlag.set(true)
+                show(PublishActivity(id, failure, "Cancelled in the signer", 1f, PublishActivity.State.FAILED))
+                clearLater(3_000)
+            } catch (e: Exception) {
+                finishedFlag.set(true)
+                Log.d("SocialViewModel", failure, e)
+                show(PublishActivity(id, failure, e.message ?: "Check your connection and try again.", 1f, PublishActivity.State.FAILED))
+                clearLater(4_000)
+            } finally {
+                finally()
+            }
+        }
+    }
 
     private fun act(failure: String, finally: () -> Unit = {}, block: suspend () -> Unit) {
         viewModelScope.launch {
