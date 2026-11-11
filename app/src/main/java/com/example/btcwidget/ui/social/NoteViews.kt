@@ -152,7 +152,7 @@ fun NoteCard(
                 }
             }
             ReplyingTo(note, actions, Modifier.padding(top = 10.dp))
-            NoteBody(note, actions, fontSize = 17, offerTranslate = true)
+            NoteBody(note, actions, fontSize = 17, offerTranslate = true, collapse = false)
             Text(fullTimestamp(note.createdAt), color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
             ActionRow(note, stats, actions)
             return@Column
@@ -258,7 +258,7 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, larg
 
 /** Note text with tappable links, hashtags and mentions; images and quoted notes below it. */
 @Composable
-fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int = 0, offerTranslate: Boolean = false) {
+fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int = 0, offerTranslate: Boolean = false, collapse: Boolean = true) {
     // NIP-36: hide behind a warning until the reader chooses to see it.
     val warning = note.firstTag("content-warning") ?: note.tags.firstOrNull { it.firstOrNull() == "content-warning" }
     var revealed by remember(note.id) { mutableStateOf(false) }
@@ -324,21 +324,38 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
     }
     val shown = text.text.trim()
     val translation = actions.translation(note.id)
+    // Long notes are cut in timelines, profiles and quotes, with "Read more" opening the post.
+    val maxLines = when {
+        !collapse -> Int.MAX_VALUE
+        depth > 0 -> QUOTE_LINES
+        else -> TIMELINE_LINES
+    }
     if (translation is SocialViewModel.Translation.Done) {
-        Text(translation.text, color = EInk.Value, fontSize = fontSize.sp, lineHeight = (fontSize * 1.35).sp, modifier = Modifier.padding(top = 2.dp))
+        var cut by remember(note.id, translation.text) { mutableStateOf(false) }
+        Text(
+            translation.text, color = EInk.Value, fontSize = fontSize.sp, lineHeight = (fontSize * 1.35).sp,
+            maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { cut = it.hasVisualOverflow },
+            modifier = Modifier.padding(top = 2.dp)
+        )
+        if (cut) ReadMore(note, actions)
         Text(
             "Translated from ${translation.from} · Show original", color = EInk.Caption, fontSize = 13.sp,
             modifier = Modifier.padding(top = 4.dp).clickable { actions.translate(note, "") }
         )
     } else if (shown.isNotEmpty()) {
+        var cut by remember(note.id) { mutableStateOf(false) }
         Text(
             text = text,
             inlineContent = emojiContent,
             color = EInk.Value,
             fontSize = fontSize.sp,
             lineHeight = (fontSize * 1.35).sp,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { cut = it.hasVisualOverflow },
             modifier = Modifier.padding(top = 2.dp)
         )
+        if (cut) ReadMore(note, actions)
         when {
             translation == SocialViewModel.Translation.Loading ->
                 Text("Translating…", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
@@ -392,6 +409,19 @@ private fun LinkCard(url: String, actions: NoteActions) {
             p.description?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
         }
     }
+}
+
+/** Lines a note shows before "Read more" in a timeline (about X's length), and in a quote. */
+private const val TIMELINE_LINES = 10
+private const val QUOTE_LINES = 5
+
+/** Opens the full post, under text that was cut short. */
+@Composable
+private fun ReadMore(note: Event, actions: NoteActions) {
+    Text(
+        "Read more…", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 4.dp).clickable(onClickLabel = "Read the whole post") { actions.openNote(note) }.padding(vertical = 2.dp)
+    )
 }
 
 /** The words of a note for translating: mentions as names, links kept, media and quotes left out. */
