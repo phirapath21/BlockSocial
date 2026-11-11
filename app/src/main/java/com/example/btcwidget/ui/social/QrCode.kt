@@ -1,5 +1,7 @@
 package com.example.btcwidget.ui.social
 
+import com.example.btcwidget.ui.main.EInk
+import androidx.compose.foundation.border
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -14,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,25 +67,36 @@ fun ProfileQrDialog(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> U
     val profile = vm.profiles.value[pubkey]
     val npub = remember(pubkey) { Nip19.npub(pubkey) }
     val scan = rememberQrScan(vm, navigate, onOpened = onDismiss)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(profile?.bestName ?: Profile.shortNpub(pubkey), maxLines = 1) },
-        text = {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                QrCode("nostr:$npub", Modifier.size(240.dp).clip(RoundedCornerShape(12.dp)))
-                Text(
-                    npub.take(16) + "…" + npub.takeLast(8), fontSize = 13.sp, fontFamily = FontFamily.Monospace,
-                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp)
-                )
-                Text("Scan with any Nostr app to follow.", fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { copyText(context, npub) }) { Text("Copy npub") }
-                    TextButton(onClick = { shareText(context, "nostr:$npub") }) { Text("Share") }
-                }
+    BlockDialog(
+        onDismiss = onDismiss,
+        title = profile?.bestName ?: Profile.shortNpub(pubkey),
+        confirmLabel = "Scan a code",
+        onConfirm = scan,
+        dismissLabel = "Close"
+    ) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            // White quiet zone around the code, so every scanner reads it on the dark dialog.
+            Box(Modifier.clip(RoundedCornerShape(16.dp)).background(Color.White).padding(12.dp)) {
+                QrCode("nostr:$npub", Modifier.size(220.dp))
             }
-        },
-        confirmButton = { TextButton(onClick = scan) { Text("Scan a code") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+            Text(
+                npub.take(16) + "…" + npub.takeLast(8), color = EInk.Caption, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp)
+            )
+            Text("Scan with any Nostr app to follow.", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+            Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SmallPill("Copy npub") { copyText(context, npub) }
+                SmallPill("Share") { shareText(context, "nostr:$npub") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmallPill(label: String, onClick: () -> Unit) {
+    Text(
+        label, color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, EInk.Track, RoundedCornerShape(50)).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp)
     )
 }
 

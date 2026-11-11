@@ -16,12 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -113,12 +111,12 @@ private fun AccountsSection(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
         EInkChip(text = "+ ADD ACCOUNT", selected = false, onClick = { vm.prepareAddAccount(); navigate(com.example.btcwidget.LoginKey) })
     }
     removing?.let { pk ->
-        AlertDialog(
-            onDismissRequest = { removing = null },
-            title = { Text("Remove this account from the phone?") },
-            text = { Text("Its key (if stored here), drafts and settings are deleted from this phone. The account itself stays on Nostr. Make sure you have its nsec if you want to use it again.") },
-            confirmButton = { TextButton(onClick = { vm.removeSavedAccount(pk); removing = null }) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } }
+        ConfirmDialog(
+            title = "Remove this account from the phone?",
+            text = "Its key (if stored here), drafts and settings are deleted from this phone. The account itself stays on Nostr. Make sure you have its nsec if you want to use it again.",
+            confirmLabel = "Remove",
+            onConfirm = { vm.removeSavedAccount(pk); removing = null },
+            onDismiss = { removing = null }
         )
     }
 }
@@ -303,17 +301,13 @@ private fun ExportKeySection(vm: SocialViewModel) {
         }
     }
     if (confirm) {
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = { Text("Show your private key?") },
-            text = {
-                Text(
-                    "Never share it or paste it into a website. Anyone who sees it controls your account, " +
-                        "and Nostr can't reset it. Make sure no one is looking at your screen."
-                )
-            },
-            confirmButton = { TextButton(onClick = { confirm = false; nsec = vm.exportNsec() }) { Text("Show") } },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } }
+        ConfirmDialog(
+            title = "Show your private key?",
+            text = "Never share it or paste it into a website. Anyone who sees it controls your account, " +
+                "and Nostr can't reset it. Make sure no one is looking at your screen.",
+            confirmLabel = "Show key",
+            onConfirm = { confirm = false; nsec = vm.exportNsec() },
+            onDismiss = { confirm = false }
         )
     }
 }

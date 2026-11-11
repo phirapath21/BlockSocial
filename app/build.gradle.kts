@@ -126,12 +126,8 @@ dependencies {
   // Animated GIFs in notes, and video playback
   implementation(libs.coil.gif)
   implementation(libs.media3.exoplayer)
-  implementation(libs.media3.ui)
   // HLS (.m3u8) streams: the videos that offer several qualities to choose from
   implementation(libs.media3.exoplayer.hls)
-  // Translating notes on the device (models download once from Google)
-  implementation(libs.mlkit.translate)
-  implementation(libs.mlkit.language.id)
   // QR codes: drawing them (ZXing) and scanning them with Google's code scanner, which runs in
   // Play services so the app needs no camera permission
   implementation(libs.zxing.core)
@@ -142,3 +138,6 @@ dependencies {
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 }
+
+// Size report after every release build (and so in CI): see gradle/apk-size.gradle.kts.
+apply(from = rootProject.file("gradle/apk-size.gradle.kts"))

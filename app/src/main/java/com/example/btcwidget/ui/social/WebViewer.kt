@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -80,10 +78,10 @@ fun WebViewer(url: String, note: Event?, stats: NoteStats, actions: NoteActions,
                 BarButton("↻", "Reload") { page.reload() }
                 Box {
                     BarButton("⋮", "More options") { menu = true }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("Open in browser") }, onClick = { menu = false; openExternally(context, page.url.ifBlank { url }) })
-                        DropdownMenuItem(text = { Text("Copy link") }, onClick = { menu = false; copyLink(context, page.url.ifBlank { url }) })
-                        DropdownMenuItem(text = { Text("Share link") }, onClick = { menu = false; shareLink(context, page.url.ifBlank { url }) })
+                    BlockDropdown(expanded = menu, onDismiss = { menu = false }) {
+                        BlockDropdownItem("Open in browser", Glyphs.OpenInBrowser) { menu = false; openExternally(context, page.url.ifBlank { url }) }
+                        BlockDropdownItem("Copy link", Glyphs.Link) { menu = false; copyLink(context, page.url.ifBlank { url }) }
+                        BlockDropdownItem("Share link", Glyphs.Share) { menu = false; shareLink(context, page.url.ifBlank { url }) }
                     }
                 }
             }
@@ -142,7 +140,7 @@ private fun PostSheet(note: Event, stats: NoteStats, actions: NoteActions, level
                 )
             }
             if (level >= 2) Text(
-                translatableText(note, actions), color = EInk.Value, fontSize = 15.sp, maxLines = 8, overflow = TextOverflow.Ellipsis,
+                plainText(note, actions), color = EInk.Value, fontSize = 15.sp, maxLines = 8, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 8.dp).clickable(onClickLabel = "Open post") { onLeave(); actions.openNote(note) }
             )
             ActionRow(note, stats, actions)

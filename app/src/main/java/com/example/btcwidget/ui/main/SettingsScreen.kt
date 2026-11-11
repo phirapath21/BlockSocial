@@ -28,8 +28,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.btcwidget.AppTheme
@@ -299,36 +297,29 @@ fun NostrSettingsPanel(
     if (walletDialog) {
         var uri by remember { mutableStateOf("") }
         var error by remember { mutableStateOf<String?>(null) }
-        AlertDialog(
-            onDismissRequest = { walletDialog = false },
-            title = { Text("Connect a wallet") },
-            text = {
-                Column {
-                    Text(
-                        "In your wallet (Alby Hub, Primal, Coinos, Mutiny…) create a Nostr Wallet Connect link and paste it here. " +
-                            "Set a spending budget there: anyone with this link can spend up to it. It's stored encrypted on this phone.",
-                        fontSize = 13.sp
-                    )
-                    OutlinedTextField(
-                        value = uri,
-                        onValueChange = { uri = it.trim(); error = null },
-                        label = { Text("nostr+walletconnect://…") },
-                        singleLine = true,
-                        isError = error != null,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-                    )
-                    error?.let { Text(it, color = EInk.Alert, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
-                }
-            },
-            confirmButton = {
-                TextButton(enabled = uri.isNotBlank(), onClick = {
-                    val e = onConnectWallet(uri)
-                    if (e == null) walletDialog = false else error = e
-                }) { Text("Connect") }
-            },
-            dismissButton = { TextButton(onClick = { walletDialog = false }) { Text("Cancel") } }
-        )
+        com.example.btcwidget.ui.social.BlockDialog(
+            onDismiss = { walletDialog = false },
+            title = "Connect a wallet",
+            text = "In your wallet (Alby Hub, Primal, Coinos, Mutiny…) create a Nostr Wallet Connect link and paste it here. " +
+                "Set a spending budget there: anyone with this link can spend up to it. It's stored encrypted on this phone.",
+            confirmLabel = "Connect",
+            confirmEnabled = uri.isNotBlank(),
+            onConfirm = {
+                val e = onConnectWallet(uri)
+                if (e == null) walletDialog = false else error = e
+            }
+        ) {
+            OutlinedTextField(
+                value = uri,
+                onValueChange = { uri = it.trim(); error = null },
+                label = { Text("nostr+walletconnect://…") },
+                singleLine = true,
+                isError = error != null,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
+            error?.let { Text(it, color = EInk.Alert, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+        }
     }
     Spacer(modifier = Modifier.height(12.dp))
 }

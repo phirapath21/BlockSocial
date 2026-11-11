@@ -25,8 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -183,16 +181,16 @@ fun ImageViewer(
                 Spacer(Modifier.weight(1f))
                 Box {
                     RoundIcon(Glyphs.More, "More options") { menu = true }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        if (!video) DropdownMenuItem(text = { Text("Save image") }, onClick = {
-                            menu = false
+                    if (menu) ActionSheet(onDismiss = { menu = false }, actions = buildList {
+                        if (!video) add(SheetAction(Glyphs.Download, "Save image") {
                             if (ImageSaver.needsPermission) storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else save()
                         })
-                        DropdownMenuItem(text = { Text("Open in browser") }, onClick = {
-                            menu = false
-                            uriHandler.openUri(current)
+                        add(SheetAction(Glyphs.OpenInBrowser, "Open in browser") { uriHandler.openUri(current) })
+                        add(SheetAction(Glyphs.Link, "Copy link") {
+                            (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                                .setPrimaryClip(android.content.ClipData.newPlainText("link", current))
                         })
-                    }
+                    })
                 }
             }
 
@@ -243,10 +241,7 @@ fun ImageViewer(
                     PillAction(Glyphs.Comment, stats.replies, "Reply", Modifier.weight(1f)) { onDismiss(); actions.reply(note) }
                     Box(Modifier.weight(1f)) {
                         PillAction(Glyphs.Repost, stats.reposts, "Repost or quote", Modifier.fillMaxWidth(), active = stats.repostedByMe) { repostMenu = true }
-                        DropdownMenu(expanded = repostMenu, onDismissRequest = { repostMenu = false }) {
-                            DropdownMenuItem(text = { Text("Repost") }, enabled = !stats.repostedByMe, onClick = { repostMenu = false; actions.repost(note) })
-                            DropdownMenuItem(text = { Text("Quote") }, onClick = { repostMenu = false; onDismiss(); actions.quote(note) })
-                        }
+                        if (repostMenu) RepostSheet(note, stats, actions, onDismiss = { repostMenu = false }, beforeQuote = onDismiss)
                     }
                     PillAction(
                         if (stats.likedByMe) Glyphs.Liked else Glyphs.Like, stats.likes,

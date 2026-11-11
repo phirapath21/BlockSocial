@@ -99,7 +99,7 @@ The **Bitcoin** tab has a hero panel (Stack, Block, Price, Halving, Sats or Fees
 - **Links:**
   - Link previews in notes.
   - Links open in Block's own browser, with the post underneath, like X; a setting sends them to your phone's browser instead.
-- **More to read:** long-form articles (NIP-23), polls (NIP-88), on-device translation (ML Kit), content warnings (NIP-36), and custom emoji (NIP-30).
+- **More to read:** long-form articles (NIP-23), polls (NIP-88), content warnings (NIP-36), and custom emoji (NIP-30).
 
 **Writing:**
 - Notes with up to 4 photos or a video, uploaded to Blossom servers with EXIF/GPS stripped from photos.
@@ -204,6 +204,7 @@ On Windows use `gradlew.bat` instead of `./gradlew`. Or open the folder in Andro
   - unit tests, lint (reported only), a debug build and a release build with R8;
   - then the UI tests on an emulator.
   - The debug APK can be downloaded from each run's **Artifacts**.
+- **APK size report:** after every release build (so on every CI run) a table shows what takes the room: code, native libraries per CPU type, resources, and code by library (Compose, ExoPlayer, OkHttp…). It's printed in the build log and on the run's **Summary** page, and saved to `app/build/reports/apk-size.md`. Locally: `./gradlew assembleRelease`.
 
 ## Project structure
 
@@ -231,8 +232,8 @@ app/src/main/java/com/example/btcwidget/
 - **UI and navigation:** Jetpack Compose (Material 3) and Navigation 3.
 - **Background and network:** WorkManager, OkHttp and Kotlin coroutines.
 - **Signatures:** ACINQ secp256k1.
-- **Media:** Coil 3 for images and GIFs; Media3 ExoPlayer for video, including HLS.
-- **On-device features:** ML Kit for translation; ZXing and the Google code scanner for QR codes.
+- **Media:** Coil 3 for images and GIFs; Media3 ExoPlayer for video, including HLS (controls drawn in Compose).
+- **QR codes:** ZXing to draw them, and the Google code scanner to scan them.
 
 **Data sources:**
 - **Market:** Coinbase, Kraken, Bitkub, Yahoo Finance (MSTR).

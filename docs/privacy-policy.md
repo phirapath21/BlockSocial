@@ -63,8 +63,6 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Link previews:** to show a card for a web link in a note, the app reads the start of that page (title, description and image) from the linked site, which can see your IP address. Nothing about you is sent beyond a normal web request.
 
-**Translating notes:** when you tap Translate, the note is translated on your phone with Google's ML Kit; its text is not sent anywhere. The first time you translate from a language, the app downloads that language's model (about 30 MB) from Google's servers. ML Kit, a Google library inside the app, also sends Google basic information about how the translation feature runs (such as device type, app version and performance), never the text of notes; see Google's ML Kit terms and privacy information. Nothing is downloaded or sent to Google until you first translate.
-
 **Polls:** your vote is a public event signed by your key, sent to your relays and to the relays the poll names (where its votes are collected). Anyone can see how you voted.
 
 **Who to follow and badges:** suggestions are worked out on your phone from the public follow lists of people you follow (fetched from your relays and indexers). Profile badges (NIP-58) are loaded from the same relays.
@@ -73,7 +71,7 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Feeds from DVMs:** under Search › Feeds you can ask a Data Vending Machine (NIP-90) for a feed. The request goes through your relays to that service and is signed with a new throwaway key each time, so the service doesn't learn who asked, except for feeds marked "personalized", which use your account so they can tailor results.
 
-**QR codes:** your profile's QR code is drawn on the phone. Scanning a code uses Google's code scanner in Google Play services: the camera screen runs there, Block gets only the scanned text and needs no camera permission, and the scanner may be downloaded by Play services the first time. Pictures from the camera are processed on the phone.
+**QR codes:** your profile's QR code is drawn on the phone. Scanning a code uses Google's code scanner in Google Play services: the camera screen runs there, Block gets only the scanned text and needs no camera permission, and the scanner may be downloaded by Play services the first time. Pictures from the camera are processed on the phone. Like Google's other ML Kit services, the scanner may send Google basic information about how it runs (such as device type, app version and performance), never what it scanned; see Google's ML Kit terms and privacy information.
 
 **New accounts:** the setup after creating an account publishes only what you choose: your name, about and picture (public profile), the people you follow, and your message inbox list. The topics you pick are stored on the phone as Home feeds; finding people for them asks the search relays for recent notes with those hashtags.
 
@@ -113,7 +111,7 @@ Requests run when you open or refresh the app and in the background at the inter
 
 - No accounts on any developer server: your Nostr key is yours, and the developer cannot see, recover or reset it.
 - No advertising or advertising identifiers.
-- No analytics, crash-reporting or tracking SDKs. (Google's ML Kit, used only when you translate a note, reports its own usage information to Google as described above.)
+- No analytics, crash-reporting or tracking SDKs. (Google's code scanner, used only when you scan a QR code, reports its own usage information to Google as described above.)
 - No selling or sharing of personal data — the developer does not collect any.
 - No access to your contacts, location, camera, microphone, files or other apps.
 

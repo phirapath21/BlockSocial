@@ -5,7 +5,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -48,13 +53,16 @@ class MainScreenTest {
         }
     }
 
+    /** The hero chip; the dashboard's title is also "BLOCK", but isn't clickable. */
+    private val blockChip = hasText("BLOCK") and hasClickAction()
+
     @Test
     fun dashboard_showsHeroPanelForSelectedMetric() {
         setContent()
-        composeTestRule.onNodeWithText("BLOCK").assertExists()
+        composeTestRule.onNode(blockChip).assertExists()
         composeTestRule.onNodeWithContentDescription("BTC USD \$74455. Market price of bitcoin").assertExists()
 
-        composeTestRule.onNodeWithText("BLOCK").performClick()
+        composeTestRule.onNode(blockChip).performClick()
         composeTestRule.onNodeWithContentDescription("BLOCK HGHT 925000. Bitcoin block height").assertExists()
     }
 
@@ -66,6 +74,16 @@ class MainScreenTest {
         }
         // Profile and Settings moved to the side bar.
         composeTestRule.onNodeWithContentDescription("Settings").assertDoesNotExist()
+    }
+
+    private val sats = "SATS 1USD 1343. Sats per 1 dollar"
+
+    /**
+     * Scrolls the Widgets page (its one lazy grid) until a node matching [target] is composed:
+     * panels below the how-to and stack cards aren't until scrolled to.
+     */
+    private fun scrollWidgetsTo(target: androidx.compose.ui.test.SemanticsMatcher) {
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(target)
     }
 
     /** Opens the side bar with the top-left button and picks [page]. */
@@ -104,7 +122,9 @@ class MainScreenTest {
             )
         }
         // The switched-off SATS panel is still shown, with its switch off.
-        composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertExists()
+        scrollWidgetsTo(hasContentDescription(sats))
+        composeTestRule.onNodeWithContentDescription(sats).assertExists()
+        scrollWidgetsTo(hasText("OFF WIDGET"))
         composeTestRule.onNodeWithText("OFF WIDGET").assertExists().performClick()
         composeTestRule.onNodeWithText("OFF WIDGET").assertDoesNotExist()
     }
@@ -139,8 +159,9 @@ class MainScreenTest {
                 onToggleCategory = { c -> collapsed = if (c in collapsed) collapsed - c else collapsed + c }
             )
         }
-        val sats = "SATS 1USD 1343. Sats per 1 dollar"
+        scrollWidgetsTo(hasContentDescription(sats))
         composeTestRule.onNodeWithContentDescription(sats).assertExists()
+        scrollWidgetsTo(hasText("MARKET"))
         composeTestRule.onNodeWithText("MARKET").performClick()
         composeTestRule.onNodeWithContentDescription(sats).assertDoesNotExist()
     }
@@ -156,8 +177,9 @@ class MainScreenTest {
     fun dashboard_hasNoMetricPanels() {
         setContent()
         // Only the hero shows on the dashboard; metric panels live in the Widgets tab.
-        composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription(sats).assertDoesNotExist()
         openFromSideBar("Widgets")
-        composeTestRule.onNodeWithContentDescription("SATS 1USD 1343. Sats per 1 dollar").assertExists()
+        scrollWidgetsTo(hasContentDescription(sats))
+        composeTestRule.onNodeWithContentDescription(sats).assertExists()
     }
 }
