@@ -132,6 +132,17 @@ fun ImageViewer(
         }
         // Video: its own player, carrying on from the timeline, with sound on.
         var chrome by remember { mutableStateOf(true) }
+        val (rotated, rotate) = rememberVideoOrientation()
+        // Landscape video: only the picture and its controls, nothing else over it.
+        val landscape = video && androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        // Landscape video fills the screen: the system bars hide (a swipe brings them back).
+        if (dialogWindow != null) DisposableEffect(landscape) {
+            val bars = androidx.core.view.WindowCompat.getInsetsController(dialogWindow, dialogWindow.decorView)
+            bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            val types = androidx.core.view.WindowInsetsCompat.Type.systemBars()
+            if (landscape) bars.hide(types) else bars.show(types)
+            onDispose { bars.show(types) }
+        }
         val player = if (video) {
             val p = remember(url) { newPlayer(context, url) {} .apply { volume = 1f; playWhenReady = true } }
             DisposableEffect(p) { onDispose { VideoPositions[url] = p.currentPosition; p.release() } }
@@ -167,7 +178,7 @@ fun ImageViewer(
             )
 
             // Top: back and more.
-            if (chrome) Row(
+            if (chrome && !landscape) Row(
                 Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -189,7 +200,11 @@ fun ImageViewer(
             }
 
             // Bottom: author, text, actions (and the video controls).
-            if (chrome) Column(
+            if (chrome && landscape && player != null) VideoControls(
+                player, url, landscape = true, onRotate = rotate,
+                Modifier.align(Alignment.BottomCenter).background(Scrim).safeDrawingPadding().padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            if (chrome && !landscape) Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
@@ -248,7 +263,7 @@ fun ImageViewer(
                     Spacer(Modifier.height(12.dp))
                     replyBar { replying = it }
                 }
-                if (player != null && !replying) VideoControls(player, url, Modifier.padding(top = 8.dp))
+                if (player != null && !replying) VideoControls(player, url, landscape = rotated, onRotate = rotate, modifier = Modifier.padding(top = 8.dp))
             }
         }
     }
