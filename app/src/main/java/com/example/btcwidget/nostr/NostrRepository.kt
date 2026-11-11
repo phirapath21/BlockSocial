@@ -317,6 +317,8 @@ class NostrRepository private constructor(private val context: Context) {
         bookmarkEvent = null
         pinEvent = null
         _lists.value = null
+        privateMutes = null
+        privateBookmarks = null
         _pinned.value = emptyList()
         emojiListEvent = null
         _emojis.value = emptyMap()
@@ -351,8 +353,10 @@ class NostrRepository private constructor(private val context: Context) {
         latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = withPendingFollows(it.tagValues("p").toSet()) } }
         latest(Kind.PINNED)?.let { if (it.createdAt >= (pinEvent?.createdAt ?: 0)) { pinEvent = it; _pinned.value = it.tagValues("e") } }
         latest(Kind.EMOJI_LIST)?.let { if (it.createdAt >= (emojiListEvent?.createdAt ?: 0)) { emojiListEvent = it; _emojis.value = com.example.btcwidget.nostr.core.CustomEmoji.of(it) } }
-        latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { bookmarkEvent = it; _bookmarks.value = it.tagValues("e").reversed() } }
-        latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { muteEvent = it; _muted.value = it.tagValues("p").toSet(); _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(it) } }
+        latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { if (it.content != bookmarkEvent?.content) privateBookmarks = null; bookmarkEvent = it; applyBookmarks() } }
+        latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { if (it.content != muteEvent?.content) privateMutes = null; muteEvent = it; applyMutes() } }
+        // Their private parts are encrypted: open them without prompting a signer app.
+        scope.launch { runCatching { openPrivateLists(interactive = false) } }
         latest(MEDIA_SERVER_LIST)?.let { mediaServerList = it; mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(it) }
         latest(Kind.RELAY_LIST)?.let { list ->
             relayList = list
@@ -1170,24 +1174,102 @@ class NostrRepository private constructor(private val context: Context) {
         }
     }
 
-    /** Mutes (or unmutes) [target] with a public NIP-51 mute list. */
+    // ---- Private list entries (NIP-51: tags encrypted to yourself in the list's content) ----
+
+    /** Decrypted private tags of the mute and bookmark lists; null while they couldn't be read. */
+    @Volatile private var privateMutes: List<List<String>>? = null
+    @Volatile private var privateBookmarks: List<List<String>>? = null
+
+    /** New mutes and bookmarks go in the private part (the default), or the public tags. */
+    private val privateByDefault get() = com.example.btcwidget.AppPrefs.privateLists(context)
+
+    private fun applyMutes() {
+        val list = muteEvent
+        val priv = privateMutes.orEmpty()
+        _muted.value = (list?.tagValues("p").orEmpty() + priv.filter { it.size >= 2 && it[0] == "p" }.map { it[1] }).toSet()
+        _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(list, priv)
+    }
+
+    private fun applyBookmarks() {
+        // Newest first: public then private entries, each in the order added.
+        val all = bookmarkEvent?.tagValues("e").orEmpty() + privateBookmarks.orEmpty().filter { it.size >= 2 && it[0] == "e" }.map { it[1] }
+        _bookmarks.value = all.distinct().reversed()
+    }
+
+    /** The private tags of [list]: empty if it has none, null if they can't be decrypted (yet). */
+    private suspend fun readPrivate(list: Event?, interactive: Boolean): List<List<String>>? {
+        val content = list?.content?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val me = pubkey ?: return null
+        val s = signer ?: return null
+        val plain = runCatching {
+            if (com.example.btcwidget.nostr.core.PrivateTags.isNip04(content)) s.nip04Decrypt(content, me, interactive)
+            else s.nip44Decrypt(content, me, interactive)
+        }.getOrNull() ?: return null
+        return com.example.btcwidget.nostr.core.PrivateTags.parse(plain)
+    }
+
+    /** Opens the private parts of the mute and bookmark lists, then applies them. */
+    private suspend fun openPrivateLists(interactive: Boolean) {
+        if (privateMutes == null) readPrivate(muteEvent, interactive)?.let { privateMutes = it; applyMutes() }
+        if (privateBookmarks == null) readPrivate(bookmarkEvent, interactive)?.let { privateBookmarks = it; applyBookmarks() }
+    }
+
+    /**
+     * New tags and content for a list after removing entries matching [matches] from both its
+     * public and private parts, and adding [entry] to one of them. The private part is only
+     * re-encrypted when it changes, and never written over when it couldn't be read.
+     */
+    private suspend fun editList(
+        list: Event?,
+        knownPrivate: List<List<String>>?,
+        matches: (List<String>) -> Boolean,
+        entry: List<String>?,
+        private: Boolean
+    ): Triple<List<List<String>>, String, List<List<String>>?> {
+        val me = requireMe()
+        val publicTags = list?.tags.orEmpty().filterNot { it.size >= 2 && matches(it) }
+        var priv = knownPrivate
+        val needsPrivate = (entry != null && private) || (entry == null && priv == null && list?.content?.isNotBlank() == true)
+        if (priv == null && needsPrivate) {
+            priv = readPrivate(list, interactive = true)
+            if (priv == null && entry != null) throw IllegalStateException("Couldn't open your private list (the signer didn't decrypt it)")
+        }
+        if (priv == null) {
+            // Unreadable private part left exactly as it was.
+            return Triple(if (entry != null) publicTags + listOf(entry) else publicTags, list?.content.orEmpty(), null)
+        }
+        val keptPrivate = priv.filterNot { it.size >= 2 && matches(it) }
+        val newPrivate = if (entry != null && private) keptPrivate + listOf(entry) else keptPrivate
+        val newPublic = if (entry != null && !private) publicTags + listOf(entry) else publicTags
+        val content = when {
+            newPrivate == priv && !list?.content.isNullOrBlank() -> list!!.content
+            newPrivate.isEmpty() -> ""
+            else -> requireSigner().nip44Encrypt(com.example.btcwidget.nostr.core.PrivateTags.serialize(newPrivate), me)
+        }
+        return Triple(newPublic, content, newPrivate)
+    }
+
+    /** Mutes (or unmutes) [target]: privately by default (NIP-51 encrypted entry). */
     suspend fun setMuted(target: String, mute: Boolean) = setMuteEntry("p", target, mute)
 
     /**
      * Adds or removes one entry ("p" account, "word", "t" hashtag or "e" thread) on the mute
      * list, keeping everything else on it (including other apps' private entries).
      */
-    suspend fun setMuteEntry(type: String, value: String, mute: Boolean) {
+    suspend fun setMuteEntry(type: String, value: String, mute: Boolean, private: Boolean = privateByDefault) {
         val me = requireMe()
         if (!accountFresh) loadAccount()
         val v = if (type == "word" || type == "t") value.trim().lowercase().removePrefix("#") else value
         if (v.isEmpty()) return
-        val others = muteEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == type && it[1].equals(v, ignoreCase = true) }
-        val tags = if (mute) others + listOf(listOf(type, v)) else others
-        val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, muteEvent?.content.orEmpty()))
+        val (tags, content, priv) = editList(
+            muteEvent, privateMutes,
+            matches = { it[0] == type && it[1].equals(v, ignoreCase = true) },
+            entry = if (mute) listOf(type, v) else null, private = private
+        )
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, content))
         muteEvent = event
-        _muted.value = event.tagValues("p").toSet()
-        _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(event)
+        privateMutes = priv
+        applyMutes()
         saveAccount()
     }
 
@@ -1195,10 +1277,11 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun unmuteAllThreads() {
         val me = requireMe()
         if (!accountFresh) loadAccount()
-        val tags = muteEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "e" }
-        val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, muteEvent?.content.orEmpty()))
+        val (tags, content, priv) = editList(muteEvent, privateMutes, matches = { it[0] == "e" }, entry = null, private = false)
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, content))
         muteEvent = event
-        _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(event)
+        privateMutes = priv
+        applyMutes()
         saveAccount()
     }
 
@@ -1346,11 +1429,15 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun setBookmarked(note: Event, on: Boolean) {
         val me = requireMe()
         if (!accountFresh) loadAccount()
-        val others = bookmarkEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "e" && it[1] == note.id }
-        val tags = if (on) others + listOf(listOf("e", note.id, relayHint())) else others
-        val event = publish(UnsignedEvent(me, Events.now(), Kind.BOOKMARKS, tags, bookmarkEvent?.content.orEmpty()))
+        val (tags, content, priv) = editList(
+            bookmarkEvent, privateBookmarks,
+            matches = { it[0] == "e" && it[1] == note.id },
+            entry = if (on) listOf("e", note.id, relayHint()) else null, private = privateByDefault
+        )
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.BOOKMARKS, tags, content))
         bookmarkEvent = event
-        _bookmarks.value = event.tagValues("e").reversed()
+        privateBookmarks = priv
+        applyBookmarks()
         saveAccount()
     }
 

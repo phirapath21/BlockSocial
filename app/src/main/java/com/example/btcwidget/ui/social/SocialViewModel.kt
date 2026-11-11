@@ -387,6 +387,14 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     /** Web links open in Block's browser (true) or the phone's. */
     val linksInApp: StateFlow<Boolean> = _linksInApp.asStateFlow()
 
+    private val _privateLists = MutableStateFlow(com.example.btcwidget.AppPrefs.privateLists(application))
+    /** New bookmarks and mutes are private (encrypted to you) or public. */
+    val privateLists: StateFlow<Boolean> = _privateLists.asStateFlow()
+    fun setPrivateLists(private: Boolean) {
+        com.example.btcwidget.AppPrefs.setPrivateLists(getApplication(), private)
+        _privateLists.value = private
+    }
+
     fun setLinksInApp(inApp: Boolean) {
         com.example.btcwidget.AppPrefs.setLinksInApp(getApplication(), inApp)
         _linksInApp.value = inApp
