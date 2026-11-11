@@ -5,6 +5,8 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.DisposableEffect
@@ -243,21 +245,21 @@ fun ImageViewer(
                 // While replying, as on X: the photo, author and text stay; the buttons make way.
                 if (!replying) Spacer(Modifier.height(12.dp))
                 if (!replying) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PillAction(Glyphs.Comment, stats.replies, "Reply", Modifier.weight(1f)) { onDismiss(); actions.reply(note) }
+                    PillAction("REPLY", stats.replies, "Reply", Modifier.weight(1f)) { onDismiss(); actions.reply(note) }
                     Box(Modifier.weight(1f)) {
-                        PillAction(Glyphs.Repost, stats.reposts, "Repost or quote", Modifier.fillMaxWidth(), active = stats.repostedByMe) { repostMenu = true }
+                        PillAction(if (stats.repostedByMe) "BOOSTED" else "BOOST", stats.reposts, "Repost or quote", Modifier.fillMaxWidth(), active = stats.repostedByMe) { repostMenu = true }
                         DropdownMenu(expanded = repostMenu, onDismissRequest = { repostMenu = false }) {
-                            DropdownMenuItem(text = { Text("Repost") }, enabled = !stats.repostedByMe, onClick = { repostMenu = false; actions.repost(note) })
-                            DropdownMenuItem(text = { Text("Quote") }, onClick = { repostMenu = false; onDismiss(); actions.quote(note) })
+                            DropdownMenuItem(text = { Text("BOOST", fontFamily = FontFamily.Monospace) }, enabled = !stats.repostedByMe, onClick = { repostMenu = false; actions.repost(note) })
+                            DropdownMenuItem(text = { Text("QUOTE", fontFamily = FontFamily.Monospace) }, onClick = { repostMenu = false; onDismiss(); actions.quote(note) })
                         }
                     }
                     PillAction(
-                        if (stats.likedByMe) Glyphs.Liked else Glyphs.Like, stats.likes,
+                        if (stats.likedByMe) "LIKED" else "LIKE", stats.likes,
                         if (stats.likedByMe) "Liked" else "Like", Modifier.weight(1f), active = stats.likedByMe
                     ) { actions.like(note) }
                     val marked = actions.isBookmarked(note.id)
-                    PillAction(if (marked) Glyphs.Bookmarked else Glyphs.Bookmark, null, if (marked) "Remove bookmark" else "Bookmark", active = marked) { actions.bookmark(note) }
-                    PillAction(Glyphs.Share, null, "Share") { actions.share(note) }
+                    PillAction(if (marked) "SAVED" else "SAVE", null, if (marked) "Remove bookmark" else "Bookmark", active = marked) { actions.bookmark(note) }
+                    PillAction("SHARE", null, "Share") { actions.share(note) }
                 }
                 if (replyBar != null) {
                     Spacer(Modifier.height(12.dp))
@@ -283,21 +285,24 @@ private fun RoundIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
 
 /** A rounded action button with an optional count, as in X's media viewer. */
 @Composable
-private fun PillAction(icon: ImageVector, count: Int?, label: String, modifier: Modifier = Modifier, active: Boolean = false, onClick: () -> Unit) {
+/** Block's readout buttons over the photo: LABEL count in monospace; what you did in the accent. */
+private fun PillAction(text: String, count: Int?, label: String, modifier: Modifier = Modifier, active: Boolean = false, onClick: () -> Unit) {
+    val color = if (active) com.example.btcwidget.ui.main.EInk.Accent else OnDark
     Row(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(50))
+            .height(40.dp)
+            .clip(com.example.btcwidget.ui.main.EInk.PanelShape)
             .background(ButtonFill)
+            .border(0.5.dp, Color(0x33FFFFFF), com.example.btcwidget.ui.main.EInk.PanelShape)
             .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = 10.dp)
     ) {
-        Icon(icon, contentDescription = label, tint = if (active && label == "Liked") Color(0xFFF91880) else OnDark, modifier = Modifier.size(22.dp))
+        Text(text, color = color, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, maxLines = 1)
         if (count != null && count > 0) {
-            Spacer(Modifier.width(6.dp))
-            Text(compactCount(count), color = OnDark, fontSize = 15.sp)
+            Spacer(Modifier.width(5.dp))
+            Text(compactCount(count), color = color, fontSize = 12.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
         }
     }
 }

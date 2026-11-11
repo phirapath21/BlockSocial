@@ -353,8 +353,8 @@ private fun FeedHeader(feed: com.example.btcwidget.nostr.core.HomeFeed, open: Bo
     Column(
         Modifier.fillMaxWidth().clickable(onClickLabel = "Choose feed", onClick = onOpen).padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text(feed.title + if (open) "  ⌃" else "  ⌄", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(feed.subtitle, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(feed.title.uppercase() + if (open) "  ▴" else "  ▾", color = EInk.Value, fontSize = 18.sp, fontFamily = EInk.Mono, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(feed.subtitle, color = EInk.Caption, fontSize = 12.sp, fontFamily = EInk.Mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
