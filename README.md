@@ -204,6 +204,7 @@ On Windows use `gradlew.bat` instead of `./gradlew`. Or open the folder in Andro
   - unit tests, lint (reported only), a debug build and a release build with R8;
   - then the UI tests on an emulator.
   - The debug APK can be downloaded from each run's **Artifacts**.
+- **APK size report:** after every release build (so on every CI run) a table shows what takes the room: code, native libraries per CPU type, resources, and code by library (Compose, ExoPlayer, ML Kit…). It's printed in the build log and on the run's **Summary** page, and saved to `app/build/reports/apk-size.md`. Locally: `./gradlew assembleRelease`.
 
 ## Project structure
 

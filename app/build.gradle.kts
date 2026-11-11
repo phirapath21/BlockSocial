@@ -142,3 +142,6 @@ dependencies {
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 }
+
+// Size report after every release build (and so in CI): see gradle/apk-size.gradle.kts.
+apply(from = rootProject.file("gradle/apk-size.gradle.kts"))
