@@ -1,5 +1,7 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -190,42 +192,45 @@ private fun ReplyingTo(note: Event, actions: NoteActions, modifier: Modifier = M
 }
 
 /**
- * Name, handle and the short time on the right ("· 1h"), then ⋯. In the opened post
- * ([large]) the handle goes on its own line and the full date sits under the text instead.
+ * The author line, as Amethyst lays it out: the name in bold (with ✓ when their NIP-05
+ * address is verified), then the short time ("• 20m") and ⋮ at the far right. In the opened
+ * post ([large]) the handle has its own line below and the full date sits under the text, so
+ * only ⋮ is on the right.
  */
 @Composable
-private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, large: Boolean = false) {
+private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, large: Boolean = false, small: Boolean = false) {
     var menu by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = author?.bestName ?: Profile.shortNpub(note.pubkey),
-            color = EInk.Value,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
-        )
-        if (large) {
-            Spacer(Modifier.weight(1f))
-        } else {
-            // The handle gives way when space is short; the time always shows, top right.
+        // Name and ✓ take all the room the time and ⋮ leave; a long name ends in "…".
+        Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = " " + handleText(author, note.pubkey),
-                color = EInk.Caption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+                text = author?.bestName ?: Profile.shortNpub(note.pubkey),
+                color = EInk.Value,
+                fontSize = if (small) 15.sp else 16.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
-            Text(" · " + relativeTime(note.createdAt), color = EInk.Caption, fontSize = 14.sp, maxLines = 1)
+            if (isVerified(author, note.pubkey)) Text(
+                " ✓", color = VerifiedOrange, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { contentDescription = "verified" }
+            )
         }
+        if (!large) Text(
+            "• " + relativeTime(note.createdAt), color = EInk.Caption, fontSize = if (small) 13.sp else 14.sp, maxLines = 1
+        )
         Box {
             Box(
-                Modifier.padding(start = 2.dp).size(32.dp).clip(CircleShape).clickable(onClickLabel = "More options") { menu = true },
+                Modifier.padding(start = 2.dp).size(if (small) 28.dp else 32.dp).clip(CircleShape).clickable(onClickLabel = "More options") { menu = true },
                 contentAlignment = Alignment.Center
-            ) { Text("⋯", color = EInk.Caption, fontSize = 18.sp) }
+            ) { Icon(Glyphs.More, contentDescription = null, tint = EInk.Caption, modifier = Modifier.size(if (small) 16.dp else 18.dp)) }
             if (menu) NoteMenu(note, actions, onDismiss = { menu = false })
         }
     }
 }
+
+private val VerifiedOrange = androidx.compose.ui.graphics.Color(0xFFF7931A)
 
 /** A note's ⋯ menu, as a sheet from the bottom like X's. */
 @Composable
@@ -496,10 +501,9 @@ private fun QuotedNote(id: String, actions: NoteActions) {
         } else {
             val author = actions.profileOf(q.pubkey)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(author, q.pubkey, size = 20, onClick = { actions.openProfile(q.pubkey) })
-                Spacer(Modifier.width(6.dp))
-                Text(author?.bestName ?: Profile.shortNpub(q.pubkey), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text(" · " + relativeTime(q.createdAt), color = EInk.Caption, fontSize = 13.sp)
+                Avatar(author, q.pubkey, size = 24, onClick = { actions.openProfile(q.pubkey) })
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f)) { AuthorLine(q, author, actions, small = true) }
             }
             NoteBody(q, actions, fontSize = 14, depth = 1)
         }

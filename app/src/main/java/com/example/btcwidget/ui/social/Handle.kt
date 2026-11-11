@@ -25,3 +25,13 @@ fun handleText(profile: Profile?, pubkey: String): String {
         else -> Profile.shortNpub(pubkey)
     }
 }
+
+/** Whether [profile]'s NIP-05 address is confirmed by its domain (checked once, then remembered). */
+@Composable
+fun isVerified(profile: Profile?, pubkey: String): Boolean {
+    val repo = NostrRepository.get(LocalContext.current)
+    val verified by repo.nip05Verified.collectAsState()
+    val id = profile?.nip05?.trim()?.takeIf { it.isNotEmpty() } ?: return false
+    LaunchedEffect(pubkey, id) { repo.verifyNip05(pubkey, id) }
+    return verified["$pubkey|$id"] == true
+}
