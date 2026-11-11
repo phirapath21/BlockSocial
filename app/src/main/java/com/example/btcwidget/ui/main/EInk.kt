@@ -30,28 +30,28 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.btcwidget.AndroidDrawSurface
 import com.example.btcwidget.AppTheme
-import com.example.btcwidget.R
 import com.example.btcwidget.BlockclockDisplay
 import com.example.btcwidget.BlockclockPainter
 import com.example.btcwidget.BlockclockScene
 import java.util.Locale
 
 /**
- * App palette, matching the panels painted by BlockclockPainter. Colors follow [theme],
- * which is snapshot state: composables and draw lambdas that read them update when the
- * theme changes.
+ * App palette. The app itself (Nostr screens, menus, settings) always uses the Classic
+ * colours; the chosen [theme] only changes how widgets are drawn: the home-screen widgets,
+ * their previews in the app ([EInkDevice]) and share cards. [theme] is snapshot state, so
+ * those previews update when it changes.
  */
 object EInk {
+    /** The widget theme. Not used for the app's own colours. */
     var theme: AppTheme by mutableStateOf(AppTheme.CLASSIC)
 
-    private val ui get() = theme.palette.ui
+    private val ui get() = AppTheme.CLASSIC.palette.ui
     val Background get() = Color(ui.background)
     val Body get() = Color(ui.body)
     val BodyStroke get() = Color(ui.bodyStroke)
@@ -61,9 +61,8 @@ object EInk {
     val Track get() = Color(ui.track)
     val Alert get() = Color(ui.alert)
 
-    /** Face for screen titles: the terminal face in Retro, monospace otherwise. */
-    val TitleFont: FontFamily get() = if (theme == AppTheme.RETRO) PixelFont else FontFamily.Monospace
-    private val PixelFont = FontFamily(Font(R.font.vt323))
+    /** Face for screen titles (the app's own look, whatever the widget theme). */
+    val TitleFont: FontFamily get() = FontFamily.Monospace
 
     val BodyShape = RoundedCornerShape(16.dp)
     val ChipShape = RoundedCornerShape(50)

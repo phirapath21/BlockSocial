@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
 /**
- * Outline action icons (Material Design shapes, Apache 2.0) for the image viewer, which
+ * Outline action icons (Material Design shapes, Apache 2.0) for notes and the image viewer, which
  * aren't in the core icon set. An object, so they build on first use.
  */
 object Glyphs {
@@ -15,6 +15,15 @@ object Glyphs {
         name = name, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f
     ).addPath(pathData = addPathNodes(path), fill = SolidColor(Color.Black)).build()
 
+    /** Drawn with a line rather than filled, for shapes the core set lacks (the zap bolt). */
+    private fun stroked(name: String, path: String, width: Float = 1.8f): ImageVector = ImageVector.Builder(
+        name = name, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f
+    ).addPath(
+        pathData = addPathNodes(path), fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = width,
+        strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round, strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round
+    ).build()
+
+    val Zap = stroked("Zap", "M13,2.5L4.5,13.5h6.5l-1,8 8.5,-11h-6.5z")
     val Comment = icon("Comment", "M20,2H4c-1.1,0 -2,0.9 -2,2v18l4,-4h14c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2zM20,16H6l-2,2V4h16v12z")
     val Repost = icon("Repost", "M7,7h10v3l4,-4 -4,-4v3H5v6h2V7zM17,17H7v-3l-4,4 4,4v-3h12v-6h-2v4z")
     val Like = icon(

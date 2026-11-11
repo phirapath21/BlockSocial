@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -465,49 +466,83 @@ private fun ActionRow(note: Event, stats: NoteStats, actions: NoteActions) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(top = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        ActionButton("💬", stats.replies, "Reply", highlighted = false) { actions.reply(note) }
+        ActionButton(Glyphs.Comment, stats.replies, "Reply", tint = null) { actions.reply(note) }
         Box {
-            ActionButton("⟲", stats.reposts, "Repost or quote", highlighted = stats.repostedByMe) { repostMenu = true }
+            ActionButton(Glyphs.Repost, stats.reposts, if (stats.repostedByMe) "Reposted" else "Repost or quote", tint = ActionColors.Repost.takeIf { stats.repostedByMe }) { repostMenu = true }
             DropdownMenu(expanded = repostMenu, onDismissRequest = { repostMenu = false }) {
-                DropdownMenuItem(text = { Text("Repost") }, onClick = { repostMenu = false; actions.repost(note) }, enabled = !stats.repostedByMe)
-                DropdownMenuItem(text = { Text("Quote") }, onClick = { repostMenu = false; actions.quote(note) })
+                DropdownMenuItem(
+                    text = { Text(if (stats.repostedByMe) "Reposted" else "Repost") },
+                    leadingIcon = { Icon(Glyphs.Repost, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    onClick = { repostMenu = false; actions.repost(note) }, enabled = !stats.repostedByMe
+                )
+                DropdownMenuItem(
+                    text = { Text("Quote") },
+                    leadingIcon = { Icon(Glyphs.Comment, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    onClick = { repostMenu = false; actions.quote(note) }
+                )
             }
         }
         Box {
             var picker by remember { mutableStateOf(false) }
-            val mine = stats.myReaction?.takeIf { stats.likedByMe && it != "+" && com.example.btcwidget.nostr.core.CustomEmoji.code(it) == null }
+            // An emoji reaction shows as that emoji; a like (or custom emoji) as the heart.
+            val emoji = stats.myReaction?.takeIf { stats.likedByMe && it != "+" && com.example.btcwidget.nostr.core.CustomEmoji.code(it) == null }
             ActionButton(
-                if (stats.likedByMe) mine ?: "♥" else "♡", stats.likes, if (stats.likedByMe) "Liked" else "Like", highlighted = stats.likedByMe,
+                if (stats.likedByMe) Glyphs.Liked else Glyphs.Like, stats.likes, if (stats.likedByMe) "Liked" else "Like",
+                tint = ActionColors.Like.takeIf { stats.likedByMe }, emoji = emoji,
                 onLongClick = { if (!stats.likedByMe) picker = true }
             ) { actions.like(note) }
             ReactionMenu(picker, note, actions, onDismiss = { picker = false })
         }
-        ActionButton("⚡", (stats.zapMsat / 1000).toInt(), "Zap", highlighted = false) { actions.zap(note) }
-        Spacer(Modifier.width(24.dp))
+        val sats = (stats.zapMsat / 1000).toInt()
+        // Not coloured: the zap total isn't split by who zapped.
+        ActionButton(Glyphs.Zap, sats, "Zap", tint = null) { actions.zap(note) }
+        val saved = actions.isBookmarked(note.id)
+        ActionButton(if (saved) Glyphs.Bookmarked else Glyphs.Bookmark, 0, if (saved) "Remove bookmark" else "Bookmark", tint = EInk.Value.takeIf { saved }) { actions.bookmark(note) }
     }
 }
 
+/** Colours that mark what you did, as on X: liked, reposted. */
+private object ActionColors {
+    val Like get() = androidx.compose.ui.graphics.Color(0xFFF91880)
+    val Repost get() = androidx.compose.ui.graphics.Color(0xFF00BA7C)
+}
+
+/** An icon with its count; [tint] colours it when it's something you did. */
 @Composable
-private fun ActionButton(icon: String, count: Int, label: String, highlighted: Boolean, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+private fun ActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    count: Int,
+    label: String,
+    tint: androidx.compose.ui.graphics.Color?,
+    emoji: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit
+) {
+    val color = tint ?: EInk.Caption
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
+            .heightIn(min = 40.dp)
             .clip(RoundedCornerShape(50))
             .combinedClickable(
                 onClickLabel = label, role = Role.Button, onClick = onClick,
                 onLongClickLabel = if (onLongClick != null) "React with an emoji" else null, onLongClick = onLongClick
             )
-            .padding(horizontal = 6.dp, vertical = 4.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
-        Text(icon, color = if (highlighted) EInk.Value else EInk.Caption, fontSize = 15.sp)
+        if (emoji != null) Text(emoji, fontSize = 16.sp)
+        else Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(18.dp))
         if (count > 0) {
             Text(
-                text = " " + compactCount(count),
-                color = if (highlighted) EInk.Value else EInk.Caption,
-                fontSize = 13.sp
+                text = compactCount(count),
+                color = color,
+                fontSize = 13.sp,
+                fontWeight = if (tint != null) FontWeight.Bold else FontWeight.Normal,
+                modifier = Modifier.padding(start = 5.dp)
             )
         }
     }

@@ -88,7 +88,7 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         EInkPanel(title = "Display") {
-            SettingRow("Theme", note = "App and widgets") {
+            SettingRow("Widget theme", note = "Home-screen widgets and their previews; the app keeps its own look") {
                 AppTheme.entries.forEach { option ->
                     EInkChip(
                         // First word only, so three chips fit beside the label.
