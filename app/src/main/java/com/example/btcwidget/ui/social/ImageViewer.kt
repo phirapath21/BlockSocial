@@ -118,6 +118,12 @@ fun ImageViewer(
 
     // Not fitting system windows, so the reply bar can rise above the keyboard (imePadding).
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        // The dialog has its own window: let it report the keyboard too, so the reply card rides above it.
+        val dialogWindow = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        androidx.compose.runtime.SideEffect {
+            @Suppress("DEPRECATION")
+            dialogWindow?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             AsyncImage(
                 model = url,
