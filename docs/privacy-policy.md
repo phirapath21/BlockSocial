@@ -55,7 +55,7 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Wallet (Nostr Wallet Connect):** if you connect a wallet in Settings › Nostr, the connection link is stored on your phone encrypted with the Android Keystore, is excluded from backup, and is removed when you disconnect or log out. When you zap, the app sends an encrypted payment request for that invoice to your wallet's relay, and your wallet pays it. The developer never sees the link, your balance or your payments.
 
-**Images and videos:** pictures (including animated GIFs) in notes and profiles are loaded from the addresses they point to, which can see your IP address. Videos start loading by themselves (muted) when they scroll into view, if video autoplay allows it on your connection (Settings › Nostr › More › Video autoplay: Always, Wi-Fi only (the default), Mobile data only, or Never); otherwise only when you tap them.
+**Images and videos:** pictures (including animated GIFs) in notes and profiles are loaded from the addresses they point to, which can see your IP address. Videos start loading by themselves (muted) when they scroll into view, if video autoplay allows it on your connection (Settings › Nostr › More › Video autoplay: Always, Wi-Fi only (the default), or Never); otherwise only when you tap them.
 
 **Link previews:** to show a card for a web link in a note, the app reads the start of that page (title, description and image) from the linked site, which can see your IP address. Nothing about you is sent beyond a normal web request.
 

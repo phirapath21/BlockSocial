@@ -8,7 +8,6 @@ import android.net.NetworkCapabilities
 enum class VideoAutoplay(val label: String) {
     ALWAYS("Always"),
     WIFI_ONLY("Wi-Fi only"),
-    MOBILE_ONLY("Mobile data only"),
     NEVER("Never");
 
     /** Whether autoplay is allowed on the connection the phone is using now. */
@@ -18,17 +17,13 @@ enum class VideoAutoplay(val label: String) {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
         val wifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-        val mobile = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-        return when (this) {
-            WIFI_ONLY -> wifi
-            MOBILE_ONLY -> mobile && !wifi
-            else -> false
-        }
+        return this == WIFI_ONLY && wifi
     }
 
     companion object {
         /** Saving data and battery: Wi-Fi only unless chosen otherwise. */
         val DEFAULT = WIFI_ONLY
+        /** Unknown names (e.g. the removed "mobile data only") fall back to the default. */
         fun fromName(name: String?) = entries.firstOrNull { it.name == name } ?: DEFAULT
     }
 }

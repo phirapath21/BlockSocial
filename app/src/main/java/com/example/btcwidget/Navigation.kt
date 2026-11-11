@@ -19,12 +19,16 @@ fun MainNavigation() {
   val backStack = rememberNavBackStack(Main)
   // One SocialViewModel for every screen (scoped to the Activity): they share the cache.
   val social: SocialViewModel = viewModel()
+  val activity = androidx.activity.compose.LocalActivity.current
   val navigate: (androidx.navigation3.runtime.NavKey) -> Unit = { backStack.add(it) }
-  val back: () -> Unit = { backStack.removeLastOrNull() }
+  // Never pop the main screen: an empty back stack crashes NavDisplay. That happened when two
+  // "go back"s landed together (e.g. a screen's done and back callbacks both firing).
+  val back: () -> Unit = { if (backStack.size > 1) backStack.removeLastOrNull() }
 
   NavDisplay(
     backStack = backStack,
-    onBack = { backStack.removeLastOrNull() },
+    // System back on the main screen leaves the app instead.
+    onBack = { if (backStack.size > 1) backStack.removeLastOrNull() else activity?.finish() },
     entryProvider =
       entryProvider {
         entry<Main> { MainScreen(onItemClick = navigate) }
