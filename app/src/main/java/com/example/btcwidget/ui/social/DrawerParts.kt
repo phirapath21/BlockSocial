@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -16,7 +17,7 @@ import com.example.btcwidget.ui.main.EInk
 
 /** Top of the side bar: avatar, name, handle and follow count, or a log-in prompt. */
 @Composable
-fun DrawerAccountHeader(vm: SocialViewModel, onLogin: () -> Unit) {
+fun DrawerAccountHeader(vm: SocialViewModel, onLogin: () -> Unit, navigate: (androidx.navigation3.runtime.NavKey) -> Unit = {}) {
     val account by vm.account.collectAsState()
     val profiles by vm.profiles.collectAsState()
     val following by vm.following.collectAsState()
@@ -30,8 +31,15 @@ fun DrawerAccountHeader(vm: SocialViewModel, onLogin: () -> Unit) {
         return
     }
     val profile = profiles[me]
+    var showQr by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (showQr) ProfileQrDialog(vm, me, navigate, onDismiss = { showQr = false })
     Column {
-        Avatar(profile, me, size = 52)
+        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Avatar(profile, me, size = 52)
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            // Your profile as a QR code (and a scanner), to follow each other in person.
+            QrButton("My QR code") { showQr = true }
+        }
         Text(
             profile?.bestName ?: Profile.shortNpub(me),
             color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold,

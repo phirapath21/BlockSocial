@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -78,6 +79,8 @@ fun ImageViewer(
     stats: NoteStats,
     actions: NoteActions,
     onDismiss: () -> Unit,
+    /** Every picture in the note, to swipe between (starting at [url]). */
+    urls: List<String> = listOf(url),
     /** Show [url] as a video with X-style controls instead of an image. Tap shows or hides everything around it. */
     video: Boolean = false,
     /** The reply card under the actions, told when it opens; null hides it. */
@@ -87,13 +90,17 @@ fun ImageViewer(
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     var replying by remember { mutableStateOf(false) }
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    val pictures = remember(urls, url) { urls.ifEmpty { listOf(url) } }
+    val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = pictures.indexOf(url).coerceAtLeast(0)) { pictures.size }
+    // The picture on screen (Save and Open in browser act on it).
+    val current = if (video) url else pictures.getOrElse(pager.currentPage) { url }
+    var zoomed by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(pager.currentPage) { zoomed = false }
     var menu by remember { mutableStateOf(false) }
     var repostMenu by remember { mutableStateOf(false) }
 
     fun save() = scope.launch {
-        val result = ImageSaver.save(context, url)
+        val result = ImageSaver.save(context, current)
         Toast.makeText(context, if (result.isSuccess) "Saved to Pictures/Block" else "Couldn't save the image", Toast.LENGTH_SHORT).show()
     }
     // Only Android 9 and below need a permission to save.
@@ -152,29 +159,19 @@ fun ImageViewer(
             if (player != null) VideoSurface(
                 player,
                 Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { chrome = !chrome }) }
-            ) else AsyncImage(
-                model = url,
-                contentDescription = "Image",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            scale = (scale * zoom).coerceIn(1f, 5f)
-                            offset = if (scale == 1f) Offset.Zero else offset + pan
-                        }
-                    }
-                    .pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = {
-                            if (scale > 1f) { scale = 1f; offset = Offset.Zero } else scale = 2.5f
-                        })
-                    }
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offset.x
-                        translationY = offset.y
-                    }
+            ) else androidx.compose.foundation.pager.HorizontalPager(
+                state = pager,
+                // Swipe between pictures; a zoomed picture pans instead.
+                userScrollEnabled = !zoomed,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                ZoomableImage(pictures[page], onZoom = { if (page == pager.currentPage) zoomed = it })
+            }
+            // "2 / 4" when the note has several pictures.
+            if (!video && pictures.size > 1 && chrome) Text(
+                "${pager.currentPage + 1} / ${pictures.size}", color = OnDark, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 18.dp)
+                    .clip(RoundedCornerShape(50)).background(Scrim).padding(horizontal = 10.dp, vertical = 4.dp)
             )
 
             // Top: back and more.
@@ -193,7 +190,7 @@ fun ImageViewer(
                         })
                         DropdownMenuItem(text = { Text("Open in browser") }, onClick = {
                             menu = false
-                            uriHandler.openUri(url)
+                            uriHandler.openUri(current)
                         })
                     }
                 }
@@ -300,4 +297,36 @@ private fun PillAction(icon: ImageVector, count: Int?, label: String, modifier: 
             Text(compactCount(count), color = OnDark, fontSize = 15.sp)
         }
     }
+}
+
+/** One picture: pinch or double-tap to zoom, drag to pan once zoomed. [onZoom] says when it's zoomed. */
+@Composable
+private fun ZoomableImage(url: String, onZoom: (Boolean) -> Unit) {
+    var scale by remember(url) { mutableFloatStateOf(1f) }
+    var offset by remember(url) { mutableStateOf(Offset.Zero) }
+    fun set(s: Float, o: Offset) {
+        scale = s; offset = if (s == 1f) Offset.Zero else o
+        onZoom(s > 1f)
+    }
+    val transform = androidx.compose.foundation.gestures.rememberTransformableState { zoom, pan, _ ->
+        set((scale * zoom).coerceIn(1f, 5f), offset + pan)
+    }
+    AsyncImage(
+        model = url,
+        contentDescription = "Image",
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .fillMaxSize()
+            // Panning only when zoomed, so a plain swipe moves to the next picture.
+            .transformable(transform, canPan = { scale > 1f })
+            .pointerInput(url) {
+                detectTapGestures(onDoubleTap = { if (scale > 1f) set(1f, Offset.Zero) else set(2.5f, offset) })
+            }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = offset.x
+                translationY = offset.y
+            }
+    )
 }

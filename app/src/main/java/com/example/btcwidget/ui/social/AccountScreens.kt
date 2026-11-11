@@ -87,11 +87,20 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
 
 /** Log in with a signer app (recommended), an nsec, or create a new account. */
 @Composable
-fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onOpenRules: () -> Unit = {}) {
+fun LoginScreen(
+    vm: SocialViewModel,
+    onBack: () -> Unit,
+    onDone: () -> Unit,
+    onOpenRules: () -> Unit = {},
+    /** Where to start: "choose", or straight to "nsec", "bunker" or "create" (from the landing page). */
+    startMode: String = "choose",
+    /** After a new account is made and its key saved: onboarding. Defaults to [onDone]. */
+    onCreated: () -> Unit = onDone
+) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val hasSigner = remember { AmberSigner.isInstalled(context) }
-    var mode by remember { mutableStateOf("choose") }   // choose | bunker | nsec | create | backup
+    var mode by remember { mutableStateOf(startMode) }   // choose | bunker | nsec | create | backup
     var input by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -100,7 +109,7 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
     if (mode == "nsec" || mode == "backup") SecureScreen()
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar(if (mode == "backup") "Save your key" else "Nostr account", onBack = { if (mode == "choose" || mode == "backup") { if (mode == "backup") onDone() else onBack() } else mode = "choose" })
+        SocialTopBar(if (mode == "backup") "Save your key" else "Nostr account", onBack = { if (mode == "choose" || mode == "backup") { if (mode == "backup") onCreated() else onBack() } else if (startMode != "choose") onBack() else mode = "choose" })
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(20.dp)
         ) {
@@ -223,7 +232,7 @@ fun LoginScreen(vm: SocialViewModel, onBack: () -> Unit, onDone: () -> Unit, onO
                     )
                     Row(Modifier.padding(top = 14.dp)) {
                         PillButton("Copy", filled = false, modifier = Modifier.padding(end = 8.dp)) { copySecret(context, nsec) }
-                        PillButton("I saved it") { newNsec = null; onDone() }
+                        PillButton("I saved it") { newNsec = null; onCreated() }
                     }
                 }
             }

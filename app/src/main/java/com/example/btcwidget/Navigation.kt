@@ -16,9 +16,13 @@ import com.example.btcwidget.ui.social.ThreadScreen
 
 @Composable
 fun MainNavigation() {
-  val backStack = rememberNavBackStack(Main)
   // One SocialViewModel for every screen (scoped to the Activity): they share the cache.
   val social: SocialViewModel = viewModel()
+  val context = androidx.compose.ui.platform.LocalContext.current
+  // Not logged in and new here: the welcome page first (Main stays underneath).
+  // Decided once at launch: logging in later must not swap the back stack out from under us.
+  val showLanding = androidx.compose.runtime.saveable.rememberSaveable { social.account.value == null && !AppPrefs.landingDone(context) }
+  val backStack = rememberNavBackStack(*(if (showLanding) arrayOf<androidx.navigation3.runtime.NavKey>(Main, LandingKey) else arrayOf<androidx.navigation3.runtime.NavKey>(Main)))
   val activity = androidx.activity.compose.LocalActivity.current
   val navigate: (androidx.navigation3.runtime.NavKey) -> Unit = { backStack.add(it) }
   // Never pop the main screen: an empty back stack crashes NavDisplay. That happened when two
@@ -36,7 +40,30 @@ fun MainNavigation() {
         entry<ProfileKey> { key -> ProfileScreen(social, key.pubkey, navigate, back) }
         entry<HashtagKey> { key -> HashtagScreen(social, key.tag, navigate, back) }
         entry<ComposeKey> { key -> ComposeScreen(social, key.replyTo, key.quote, back) }
-        entry<LoginKey> { LoginScreen(social, onBack = back, onDone = back, onOpenRules = { navigate(RulesKey) }) }
+        entry<LoginKey> { LoginScreen(social, onBack = back, onDone = back, onOpenRules = { navigate(RulesKey) }, onCreated = { back(); navigate(OnboardingKey) }) }
+        // Leaving the welcome flow: drop the welcome page and the login screen under it.
+        val leaveLanding: () -> Unit = {
+          AppPrefs.setLandingDone(context)
+          backStack.removeAll { it is LandingKey || it is LoginWithKey }
+        }
+        entry<LandingKey> {
+          com.example.btcwidget.ui.social.LandingScreen(
+            social,
+            onCreate = { navigate(LoginWithKey("create")) },
+            onNsec = { navigate(LoginWithKey("nsec")) },
+            onBunker = { navigate(LoginWithKey("bunker")) },
+            onLoggedIn = leaveLanding,
+            onBrowse = leaveLanding,
+            onOpenRules = { navigate(RulesKey) }
+          )
+        }
+        entry<LoginWithKey> { key ->
+          LoginScreen(
+            social, onBack = back, onDone = leaveLanding, onOpenRules = { navigate(RulesKey) }, startMode = key.mode,
+            onCreated = { leaveLanding(); navigate(OnboardingKey) }
+          )
+        }
+        entry<OnboardingKey> { com.example.btcwidget.ui.social.OnboardingScreen(social, onFinish = back) }
         entry<EditProfileKey> { EditProfileScreen(social, back) }
         entry<ChatKey> { key -> com.example.btcwidget.ui.social.ChatScreen(social, key.peers.split(','), navigate, back) }
         entry<FollowsKey> { key -> com.example.btcwidget.ui.social.FollowListScreen(social, key.pubkey, key.followers, navigate, back) }

@@ -31,6 +31,7 @@ object AppPrefs {
     private const val HISTORY_AT = "history_fetched_at"
     private const val VIDEO_AUTOPLAY = "video_autoplay"
     private const val VIDEO_QUALITY = "video_quality"
+    private const val LANDING_DONE = "landing_done"
     private fun modeEnabled(mode: Int) = "mode_enabled_$mode"
     private fun widgetMode(id: Int) = "mode_$id"
     private fun halvingMode(id: Int) = "halving_mode_$id"
@@ -50,6 +51,10 @@ object AppPrefs {
         prefs(context).edit().apply(block).apply()
 
     // ---- Display ----
+
+    /** Whether the welcome page was passed (logged in, or chose to look around first). */
+    fun landingDone(context: Context): Boolean = prefs(context).getBoolean(LANDING_DONE, false)
+    fun setLandingDone(context: Context) = edit(context) { putBoolean(LANDING_DONE, true) }
 
     /** When videos in notes play by themselves (muted): a [com.example.btcwidget.ui.social.VideoAutoplay] name. */
     fun videoAutoplay(context: Context): String? = prefs(context).getString(VIDEO_AUTOPLAY, null)

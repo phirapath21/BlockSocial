@@ -411,6 +411,18 @@ private fun LinkCard(url: String, actions: NoteActions) {
     }
 }
 
+/** The pictures in a note, in the order they appear (links imeta marks as images included). */
+internal fun noteImageUrls(note: Event): List<String> {
+    val images = com.example.btcwidget.nostr.core.Imeta.imageUrls(note)
+    return Content.parse(note.content.trim()).mapNotNull { seg ->
+        when {
+            seg is Content.Segment.Image -> seg.url
+            seg is Content.Segment.Link && seg.url in images -> seg.url
+            else -> null
+        }
+    }.distinct()
+}
+
 /** Lines a note shows before "Read more" in a timeline (about X's length), and in a quote. */
 private const val TIMELINE_LINES = 10
 private const val QUOTE_LINES = 5

@@ -20,6 +20,15 @@ import kotlinx.serialization.Serializable
 /** Logging in or creating a Nostr account. */
 @Serializable data object LoginKey : NavKey
 
+/** The welcome page for someone not logged in: what Block is, and the ways to log in. */
+@Serializable data object LandingKey : NavKey
+
+/** A login method chosen on the landing page: "nsec", "bunker" or "create". */
+@Serializable data class LoginWithKey(val mode: String) : NavKey
+
+/** Setting up a new account: profile, topics, people to follow, inbox. */
+@Serializable data object OnboardingKey : NavKey
+
 /** A private conversation; [peers] are pubkeys joined with commas. */
 @Serializable data class ChatKey(val peers: String) : NavKey
 

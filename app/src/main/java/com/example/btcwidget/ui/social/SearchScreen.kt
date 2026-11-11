@@ -79,6 +79,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
     var articlesLoading by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
     val focus = remember { FocusRequester() }
+    val scanQr = rememberQrScan(vm, navigate)
     // Opened as its own screen: start typing. As a tab, don't pop the keyboard on every visit.
     LaunchedEffect(Unit) { if (onBack != null) runCatching { focus.requestFocus() } }
 
@@ -167,6 +168,11 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                     focusedContainerColor = EInk.Body, unfocusedContainerColor = EInk.Body
                 ),
                 modifier = Modifier.weight(1f).focusRequester(focus)
+            )
+            // Scan someone's QR code (a profile, post or article) instead of typing.
+            Text(
+                "▣", color = EInk.Value, fontSize = 22.sp,
+                modifier = Modifier.padding(start = 6.dp).clickable(onClickLabel = "Scan a QR code", onClick = scanQr).padding(8.dp)
             )
         }
         Row(
