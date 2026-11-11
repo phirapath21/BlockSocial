@@ -432,10 +432,13 @@ internal fun plainText(note: Event, actions: NoteActions): String =
 private fun NoteImage(note: Event, url: String, actions: NoteActions) {
     var ratio by remember(note.id, url) { mutableStateOf(com.example.btcwidget.nostr.core.Imeta.aspectRatio(note, url)) }
     val shape = RoundedCornerShape(14.dp)
+    // A soft blur of the picture, at its size, until it has loaded (when the note gives one).
+    val blur = rememberBlurhashPainter(remember(note.id, url) { com.example.btcwidget.nostr.core.Imeta.blurhash(note, url) })
     AsyncImage(
         model = url,
         contentDescription = "Image",
         contentScale = ContentScale.Crop,
+        placeholder = blur,
         onSuccess = { state ->
             val size = state.painter.intrinsicSize
             if (size.width > 0f && size.height > 0f) ratio = size.width / size.height

@@ -61,14 +61,22 @@ object Blossom {
 
 /** NIP-92 media metadata for a URL in a note. */
 object Imeta {
-    fun tag(url: String, mime: String, sha256: String, width: Int? = null, height: Int? = null): List<String> =
+    fun tag(url: String, mime: String, sha256: String, width: Int? = null, height: Int? = null, blurhash: String? = null): List<String> =
         listOfNotNull(
             "imeta",
             "url $url",
             "m $mime",
             "x $sha256",
-            if (width != null && height != null) "dim ${width}x$height" else null
+            if (width != null && height != null) "dim ${width}x$height" else null,
+            blurhash?.takeIf { Blurhash.isValid(it) }?.let { "blurhash $it" }
         )
+
+    /** The blurred preview (BlurHash) that [event]'s imeta gives for [url], if any. */
+    fun blurhash(event: Event, url: String): String? =
+        event.tags.filter { it.firstOrNull() == "imeta" }.firstNotNullOfOrNull { tag ->
+            val fields = tag.drop(1).associate { it.substringBefore(' ') to it.substringAfter(' ', "") }
+            fields["blurhash"]?.takeIf { fields["url"] == url && Blurhash.isValid(it) }
+        }
 
     /** URLs that [event]'s imeta tags mark as videos. */
     fun videoUrls(event: Event): Set<String> =

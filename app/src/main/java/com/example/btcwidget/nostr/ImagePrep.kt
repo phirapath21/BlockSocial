@@ -9,7 +9,7 @@ import android.net.Uri
 import java.io.ByteArrayOutputStream
 
 /** An image ready to upload: re-encoded bytes without metadata. */
-class PreparedImage(val bytes: ByteArray, val mime: String, val width: Int, val height: Int)
+class PreparedImage(val bytes: ByteArray, val mime: String, val width: Int, val height: Int, val blurhash: String? = null)
 
 /**
  * Turns a picked photo into an upload: decoded, rotated upright, scaled to at most
@@ -46,11 +46,21 @@ object ImagePrep {
 
         val out = ByteArrayOutputStream()
         upright.compress(Bitmap.CompressFormat.JPEG, QUALITY, out)
-        val result = PreparedImage(out.toByteArray(), "image/jpeg", upright.width, upright.height)
+        val result = PreparedImage(out.toByteArray(), "image/jpeg", upright.width, upright.height, blurhashOf(upright))
         if (upright !== decoded) upright.recycle()
         decoded.recycle()
         return result
     }
+
+    /** A BlurHash of [bitmap], worked out on a 32-pixel-wide copy (the result is the same, much faster). */
+    private fun blurhashOf(bitmap: Bitmap): String? = runCatching {
+        val w = 32
+        val h = (32f * bitmap.height / bitmap.width).toInt().coerceIn(1, 64)
+        val small = Bitmap.createScaledBitmap(bitmap, w, h, true)
+        val pixels = IntArray(w * h).also { small.getPixels(it, 0, w, 0, 0, w, h) }
+        if (small !== bitmap) small.recycle()
+        com.example.btcwidget.nostr.core.Blurhash.encode(pixels, w, h, 4, 3)
+    }.getOrNull()
 
     private fun ExifInterface.rotationDegrees(): Int = when (getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
         ExifInterface.ORIENTATION_ROTATE_90 -> 90

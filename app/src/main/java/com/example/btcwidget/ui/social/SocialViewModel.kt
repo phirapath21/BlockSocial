@@ -528,7 +528,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     // ---- Images ----
 
     /** An uploaded image waiting to be posted. */
-    data class Attachment(val url: String, val mime: String, val sha256: String, val width: Int, val height: Int) {
+    data class Attachment(val url: String, val mime: String, val sha256: String, val width: Int, val height: Int, val blurhash: String? = null) {
         val isVideo get() = mime.startsWith("video/")
     }
 
@@ -552,7 +552,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
                 com.example.btcwidget.nostr.ImagePrep.prepare(getApplication(), uri)
             }
             val blob = repo.uploadImage(prepared)
-            result = Attachment(blob.url, prepared.mime, blob.sha256, prepared.width, prepared.height)
+            result = Attachment(blob.url, prepared.mime, blob.sha256, prepared.width, prepared.height, prepared.blurhash)
         }
     }
 
@@ -650,7 +650,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         tracked(working, done, "Couldn't post", finally = { onResult(ok) }) {
             // Image URLs go in the text (so every client shows them) with imeta tags (NIP-92).
             val body = (listOf(text.trim()) + images.map { it.url }).filter { it.isNotEmpty() }.joinToString("\n")
-            val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height) } +
+            val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height, it.blurhash) } +
                 // NIP-36: other apps hide the note behind a warning until tapped.
                 listOfNotNull(contentWarning?.let { listOf("content-warning", it) })
             val event = when {
@@ -677,7 +677,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun schedule(text: String, images: List<Attachment>, contentWarning: String?, at: Long): Boolean {
         val me = repo.pubkey ?: return false
         val body = (listOf(text.trim()) + images.map { it.url }).filter { it.isNotEmpty() }.joinToString("\n")
-        val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height) } +
+        val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height, it.blurhash) } +
             listOfNotNull(contentWarning?.let { listOf("content-warning", it) })
         com.example.btcwidget.nostr.ScheduledPosts.schedule(getApplication(), me, at, body, tags)
         refreshScheduled()
