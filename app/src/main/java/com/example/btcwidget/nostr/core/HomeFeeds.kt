@@ -33,6 +33,13 @@ sealed interface HomeFeed {
         override val id get() = "dvm:$pubkey:$dvmId:$name"
     }
 
+    /** Notes by the people in a list (NIP-51 kind 30000), yours or someone else's. */
+    data class People(val owner: String, val d: String, val name: String) : HomeFeed {
+        override val title get() = "List: $name"
+        override val subtitle get() = "Notes by the people in this list"
+        override val id get() = "list:$owner:$d:$name"
+    }
+
     companion object {
         val DEFAULTS: List<HomeFeed> = listOf(Following(false), Following(true), Global(null))
 
@@ -44,6 +51,8 @@ sealed interface HomeFeed {
             id.startsWith("tag:") -> cleanTag(id.removePrefix("tag:"))?.let { Hashtag(it) }
             id.startsWith("dvm:") -> id.removePrefix("dvm:").split(':', limit = 3).takeIf { it.size == 3 && Hex.isKey(it[0]) && it[1].isNotEmpty() }
                 ?.let { Dvm(it[0], it[1], it[2].ifBlank { "Feed" }) }
+            id.startsWith("list:") -> id.removePrefix("list:").split(':', limit = 3).takeIf { it.size == 3 && Hex.isKey(it[0]) && it[1].isNotEmpty() }
+                ?.let { People(it[0], it[1], it[2].ifBlank { "List" }) }
             else -> null
         }
 

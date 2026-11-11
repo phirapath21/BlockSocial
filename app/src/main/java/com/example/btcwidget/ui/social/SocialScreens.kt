@@ -2,6 +2,10 @@ package com.example.btcwidget.ui.social
 
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.style.TextOverflow
+import com.example.btcwidget.nostr.core.Event
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -64,6 +68,7 @@ import com.example.btcwidget.LoginKey
 import com.example.btcwidget.nostr.FeedItem
 import com.example.btcwidget.nostr.NoteStats
 import com.example.btcwidget.nostr.NostrNotification
+import com.example.btcwidget.nostr.NotificationGroup
 import com.example.btcwidget.nostr.core.Nip19
 import com.example.btcwidget.nostr.core.Profile
 import com.example.btcwidget.ui.main.EInk
@@ -161,7 +166,8 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val home by vm.home.collectAsState()
     val stats by vm.stats.collectAsState()
     val newPosts by vm.newPosts.collectAsState()
-    val listState = rememberLazyListState()
+    val feed by vm.homeFeed.collectAsState()
+    val listState = vm.listState("home:" + feed.id)
     val scope = rememberCoroutineScope()
     LaunchedEffect(account) { vm.start() }
 
@@ -171,7 +177,6 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 WelcomeScreen(vm, actions, onLogin = { navigate(LoginKey) })
             } else {
                 val shown = home.items
-                val feed by vm.homeFeed.collectAsState()
                 var feedMenu by remember { mutableStateOf(false) }
                 Column(Modifier.fillMaxSize()) {
                     FeedHeader(feed, open = feedMenu) { feedMenu = true }
@@ -298,9 +303,10 @@ fun NotificationsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 when {
                     state.loading -> Spinner(Modifier.padding(top = 40.dp))
                     state.items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) { item { EmptyNote(state.error ?: "No notifications yet.") } }
-                    else -> LazyColumn(Modifier.fillMaxSize()) {
-                        items(state.items, key = { it.event.id }) { n ->
-                            NotificationRow(n, profiles[n.actor], actions)
+                    else -> {
+                        val groups = remember(state.items) { NotificationGroup.of(state.items) }
+                        LazyColumn(state = vm.listState("notifications"), modifier = Modifier.fillMaxSize()) {
+                            items(groups, key = { it.key }) { g -> NotificationRow(g, profiles, actions) }
                         }
                     }
                 }
@@ -309,41 +315,75 @@ fun NotificationsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     }
 }
 
+/**
+ * One row: a reply or mention as the note itself; likes, reposts and zaps of one note folded
+ * together, X-style: the icon, a row of faces, "Alice, Bob and 3 others liked your note",
+ * and a line of the note they're about.
+ */
 @Composable
-private fun NotificationRow(n: NostrNotification, actor: Profile?, actions: NoteActions) {
-    val name = actor?.bestName ?: Profile.shortNpub(n.actor)
-    val (icon, verb) = when (n.type) {
-        NostrNotification.Type.REPLY -> "💬" to "replied"
-        NostrNotification.Type.MENTION -> "@" to "mentioned you"
-        NostrNotification.Type.REPOST -> "⟲" to "reposted your note"
-        NostrNotification.Type.LIKE -> "♥" to "liked your note"
-        NostrNotification.Type.ZAP -> "⚡" to "zapped ${n.zapMsat / 1000} sats"
-    }
+private fun NotificationRow(g: NotificationGroup, profiles: Map<String, Profile>, actions: NoteActions) {
+    val n = g.latest
     if (n.type == NostrNotification.Type.REPLY || n.type == NostrNotification.Type.MENTION) {
         NoteCard(n.event, NoteStats(), actions)
         return
     }
+    val orange = androidx.compose.ui.graphics.Color(0xFFF7931A)
+    val (icon, tint) = when (n.type) {
+        NostrNotification.Type.REPOST -> "⟲" to EInk.Value
+        NostrNotification.Type.LIKE -> "♥" to orange
+        else -> "⚡" to orange
+    }
+    val actors = g.actors
+    val names = actors.take(2).map { profiles[it]?.bestName ?: Profile.shortNpub(it) }
+    val verb = when (n.type) {
+        NostrNotification.Type.REPOST -> "reposted your note"
+        NostrNotification.Type.LIKE -> if (g.items.all { it.event.content == "+" || it.event.content.isBlank() }) "liked your note"
+            else "reacted " + g.items.map { it.event.content }.filter { it != "+" && it.isNotBlank() && it.length <= 8 }.distinct().take(5).joinToString("")
+        else -> "zapped ${formatSats(g.totalMsat / 1000)} sats"
+    }
+    val target by produceState<Event?>(null, g.noteId) { value = g.noteId?.let { runCatching { actions.resolveNote(it) }.getOrNull() } }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = n.noteId != null) { n.noteId?.let { id -> actions.openNote(n.event.copy(id = id)) } }
+            .clickable(enabled = g.noteId != null) {
+                val id = g.noteId ?: return@clickable
+                actions.openNote(target ?: n.event.copy(id = id))
+            }
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
-        Text(icon, color = EInk.Value, fontSize = 20.sp, modifier = Modifier.width(34.dp))
+        Text(icon, color = tint, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(40.dp).padding(start = 6.dp))
         Column(Modifier.weight(1f)) {
-            Avatar(actor, n.actor, size = 32, onClick = { actions.openProfile(n.actor) })
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                actors.take(7).forEach { pk -> Avatar(profiles[pk], pk, size = 32, onClick = { actions.openProfile(pk) }) }
+                if (actors.size > 7) Text("+${actors.size - 7}", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(start = 2.dp))
+            }
             Text(
-                text = "$name $verb · ${relativeTime(n.event.createdAt)}",
-                color = EInk.Value, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp)
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(NotificationGroup.names(names, actors.size)) }
+                    append(" $verb")
+                    withStyle(SpanStyle(color = EInk.Caption)) { append(" · " + relativeTime(g.createdAt)) }
+                },
+                color = EInk.Value, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp)
             )
-            if (n.type == NostrNotification.Type.ZAP && n.event.firstTag("description") != null) {
-                val comment = com.example.btcwidget.nostr.core.Zaps.parseReceipt(n.event)?.comment.orEmpty()
-                if (comment.isNotBlank()) Text(comment, color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
+            if (n.type == NostrNotification.Type.ZAP) {
+                // The newest zap comment, if any.
+                val comment = g.items.firstNotNullOfOrNull { z ->
+                    z.event.firstTag("description")?.let { com.example.btcwidget.nostr.core.Zaps.parseReceipt(z.event)?.comment?.takeIf { c -> c.isNotBlank() } }
+                }
+                if (comment != null) Text("“$comment”", color = EInk.Value, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+            target?.let {
+                Text(
+                    it.content.replace('\n', ' ').trim(), color = EInk.Caption, fontSize = 14.sp, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp)
+                )
             }
         }
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
+
+private fun formatSats(sats: Long): String = "%,d".format(sats)
 
 // ---- Home feed menu ----
 
@@ -551,6 +591,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
         value = vm.pinnedNoteOf(pubkey)
     }
     var tab by androidx.compose.runtime.saveable.rememberSaveable(pubkey) { mutableStateOf(0) }
+    var addToList by remember(pubkey) { mutableStateOf(false) }
     val badges by produceState<List<com.example.btcwidget.nostr.core.Badges.Definition>>(emptyList(), pubkey) { value = vm.badgesOf(pubkey) }
     // Loaded the first time the Articles tab opens.
     var articles by remember(pubkey) { mutableStateOf<List<com.example.btcwidget.nostr.core.Article>?>(null) }
@@ -578,6 +619,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         if (onBack != null) SocialTopBar(profile?.bestName ?: "Profile", onBack)
+        if (addToList) AddToListSheet(vm, pubkey, onClose = { addToList = false })
         SocialScaffold(vm, navigate) { actions ->
             NoteList(
                 items = shown, stats = stats, actions = actions,
@@ -607,6 +649,8 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         onOpenFollowing = { navigate(com.example.btcwidget.FollowsKey(pubkey, followers = false)) },
                         onOpenFollowers = { navigate(com.example.btcwidget.FollowsKey(pubkey, followers = true)) },
                         onUnmute = { vm.mute(pubkey, false) },
+                        onAddToList = if (account != null && !isMe) ({ addToList = true }) else null,
+                        onOpenLists = { navigate(com.example.btcwidget.ListsKey(pubkey)) },
                         actions = actions
                     )
                     BadgesRow(badges)
@@ -645,6 +689,8 @@ private fun ProfileHeader(
     onOpenFollowing: () -> Unit,
     onOpenFollowers: () -> Unit,
     onUnmute: () -> Unit,
+    onAddToList: (() -> Unit)?,
+    onOpenLists: () -> Unit,
     actions: NoteActions
 ) {
     Column {
@@ -666,6 +712,7 @@ private fun ProfileHeader(
                 isMe -> PillButton("Edit profile", filled = false, onClick = onEdit)
                 isMuted -> PillButton("Unmute", filled = false, onClick = onUnmute)
                 else -> {
+                    if (onAddToList != null) PillButton("☰+", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onAddToList)
                     PillButton("✉", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onMessage)
                     if (profile?.lud16 != null || profile?.lud06 != null) {
                         PillButton("⚡", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = { actions.zap(fakeProfileNote(pubkey)) })
@@ -701,7 +748,12 @@ private fun ProfileHeader(
                 Text(
                     "Followers",
                     color = EInk.Label, fontSize = 14.sp,
-                    modifier = Modifier.clickable(onClickLabel = "Show their followers", onClick = onOpenFollowers).padding(vertical = 2.dp)
+                    modifier = Modifier.clickable(onClickLabel = "Show their followers", onClick = onOpenFollowers).padding(end = 18.dp, top = 2.dp, bottom = 2.dp)
+                )
+                Text(
+                    "Lists",
+                    color = EInk.Label, fontSize = 14.sp,
+                    modifier = Modifier.clickable(onClickLabel = "Show their lists", onClick = onOpenLists).padding(vertical = 2.dp)
                 )
             }
             Text(

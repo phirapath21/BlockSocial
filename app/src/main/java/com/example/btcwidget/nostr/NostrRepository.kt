@@ -132,6 +132,10 @@ class NostrRepository private constructor(private val context: Context) {
     /** The user's pinned note ids (NIP-51 kind 10001), first shown first. */
     val pinned: StateFlow<List<String>> = _pinned.asStateFlow()
 
+    private val _lists = MutableStateFlow<List<com.example.btcwidget.nostr.core.PeopleList>?>(null)
+    /** The user's lists of people (NIP-51 kind 30000); null until loaded. */
+    val lists: StateFlow<List<com.example.btcwidget.nostr.core.PeopleList>?> = _lists.asStateFlow()
+
     private val _bookmarks = MutableStateFlow<List<String>>(emptyList())
     /** Note ids the user bookmarked (NIP-51 kind 10003), newest first. */
     val bookmarks: StateFlow<List<String>> = _bookmarks.asStateFlow()
@@ -288,6 +292,7 @@ class NostrRepository private constructor(private val context: Context) {
         muteEvent = null
         bookmarkEvent = null
         pinEvent = null
+        _lists.value = null
         _pinned.value = emptyList()
         emojiListEvent = null
         _emojis.value = emptyMap()
@@ -383,6 +388,10 @@ class NostrRepository private constructor(private val context: Context) {
         }
         is com.example.btcwidget.nostr.core.HomeFeed.Global -> globalFeed(feed.relay, until)
         is com.example.btcwidget.nostr.core.HomeFeed.Hashtag -> hashtagFeed(feed.tag, until)
+        is com.example.btcwidget.nostr.core.HomeFeed.People -> peopleList(feed.owner, feed.d)?.members.orEmpty().let { members ->
+            if (members.isEmpty()) emptyList()
+            else authoredTimeline(members) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = 40) }
+        }
         is com.example.btcwidget.nostr.core.HomeFeed.Dvm ->
             if (until != null) emptyList() else dvmFeed(com.example.btcwidget.nostr.core.Dvm.Service(feed.pubkey, feed.dvmId, feed.name, null, null, false))
     }
@@ -1319,6 +1328,70 @@ class NostrRepository private constructor(private val context: Context) {
                 .maxByOrNull { it.createdAt }?.tagValues("e").orEmpty()
         val id = ids.firstOrNull() ?: return null
         return note(id)?.takeIf { it.pubkey == pubkey }
+    }
+
+    // ---- Lists of people (NIP-51 kind 30000) ----
+
+    /** [owner]'s lists, newest version of each; the user's own are kept in [lists]. */
+    suspend fun peopleLists(owner: String): List<com.example.btcwidget.nostr.core.PeopleList> {
+        val events = queryEverywhere(listOf(Filter(authors = listOf(owner), kinds = listOf(com.example.btcwidget.nostr.core.PeopleList.KIND), limit = 100)), timeoutMs = 5_000)
+        val found = com.example.btcwidget.nostr.core.PeopleList.latest(events)
+        if (owner == pubkey) {
+            // Keep edits made while this was loading (they're newer than what relays sent).
+            val local = _lists.value.orEmpty().associateBy { it.d }
+            val merged = (found.map { f -> local[f.d]?.takeIf { it.createdAt > f.createdAt } ?: f } + local.values.filter { l -> found.none { it.d == l.d } && l.createdAt > 0 })
+                .filter { it.title.isNotBlank() }.sortedBy { it.title.lowercase() }
+            _lists.value = merged
+            return merged
+        }
+        return found
+    }
+
+    /** One list: the user's own from memory when loaded, else from relays. */
+    suspend fun peopleList(owner: String, d: String): com.example.btcwidget.nostr.core.PeopleList? {
+        if (owner == pubkey) _lists.value?.firstOrNull { it.d == d }?.let { return it }
+        val events = queryEverywhere(listOf(Filter(authors = listOf(owner), kinds = listOf(com.example.btcwidget.nostr.core.PeopleList.KIND), tags = mapOf("d" to listOf(d)))), timeoutMs = 5_000)
+        return com.example.btcwidget.nostr.core.PeopleList.latest(events).firstOrNull()
+    }
+
+    private val listLock = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * Changes one of the user's lists (or saves a new one): shown at once, then published.
+     * Edits go out one at a time, each built on the latest version, so quick taps on several
+     * people don't overwrite each other. [change] must be safe to apply twice (add, remove, rename).
+     */
+    suspend fun updateList(
+        list: com.example.btcwidget.nostr.core.PeopleList,
+        change: (com.example.btcwidget.nostr.core.PeopleList) -> com.example.btcwidget.nostr.core.PeopleList = { it }
+    ): com.example.btcwidget.nostr.core.PeopleList {
+        val me = requireMe()
+        require(list.owner == me) { "Not your list" }
+        fun put(l: com.example.btcwidget.nostr.core.PeopleList) {
+            _lists.value = (_lists.value.orEmpty().filter { it.d != l.d } + l).sortedBy { it.title.lowercase() }
+        }
+        put(change(_lists.value?.firstOrNull { it.d == list.d } ?: list))
+        return listLock.withLock {
+            val next = change(_lists.value?.firstOrNull { it.d == list.d } ?: list)
+            try {
+                val signed = publish(next.toEvent(System.currentTimeMillis() / 1000), fast = true)
+                // Keep later edits already on screen; record what's now on the relays.
+                val latest = _lists.value?.firstOrNull { it.d == list.d } ?: next
+                latest.copy(createdAt = signed.createdAt, source = signed).also { put(it) }
+            } catch (e: Exception) {
+                runCatching { peopleLists(me) } // back to what the relays have
+                throw e
+            }
+        }
+    }
+
+    /** Deletes a list: an empty replacement (relays keep only the newest) and a deletion request. */
+    suspend fun deleteList(list: com.example.btcwidget.nostr.core.PeopleList) {
+        val me = requireMe()
+        val now = System.currentTimeMillis() / 1000
+        _lists.value = _lists.value.orEmpty().filter { it.d != list.d }
+        publish(com.example.btcwidget.nostr.core.UnsignedEvent(me, maxOf(now, list.createdAt + 1), com.example.btcwidget.nostr.core.PeopleList.KIND, listOf(listOf("d", list.d)), ""), fast = true)
+        runCatching { publish(com.example.btcwidget.nostr.core.PeopleList.deletion(list, now), fast = true) }
     }
 
     /** The bookmarked notes, in bookmark order (newest first). */

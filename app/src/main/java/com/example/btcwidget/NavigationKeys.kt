@@ -61,3 +61,12 @@ import kotlinx.serialization.Serializable
 
 /** A NIP-29 group, as "host'id". */
 @Serializable data class GroupKey(val address: String) : NavKey
+
+/** Someone's lists of people (NIP-51), from their profile. */
+@Serializable data class ListsKey(val owner: String) : NavKey
+
+/** One list of people, by its owner and "d" tag. */
+@Serializable data class ListKey(val owner: String, val d: String) : NavKey
+
+/** How each relay connection is doing. */
+@Serializable data object RelaysKey : NavKey
