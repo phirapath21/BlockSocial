@@ -72,3 +72,17 @@ class MediaPostsTest {
         }
     }
 }
+
+class HashtagFollowTest {
+    @org.junit.Test
+    fun followingATopicKeepsEverythingElse() {
+        val me = "a".repeat(64); val bob = "b".repeat(64)
+        val current = com.example.btcwidget.nostr.core.Event("id", me, 1, com.example.btcwidget.nostr.core.Kind.CONTACTS,
+            listOf(listOf("p", bob), listOf("t", "Nostr")), "{\"wss://r\":{}}", "")
+        val on = com.example.btcwidget.nostr.core.Events.contactsHashtag(me, current, "#Bitcoin", true)
+        org.junit.Assert.assertEquals(listOf(listOf("p", bob), listOf("t", "Nostr"), listOf("t", "bitcoin")), on.tags)
+        org.junit.Assert.assertEquals(current.content, on.content) // relay map in content kept
+        val off = com.example.btcwidget.nostr.core.Events.contactsHashtag(me, on.signed("s"), "nostr", false)
+        org.junit.Assert.assertEquals(listOf(listOf("p", bob), listOf("t", "bitcoin")), off.tags)
+    }
+}

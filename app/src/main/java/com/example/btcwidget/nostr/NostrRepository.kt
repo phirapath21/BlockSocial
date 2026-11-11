@@ -156,6 +156,10 @@ class NostrRepository private constructor(private val context: Context) {
     /** The user's pinned note ids (NIP-51 kind 10001), first shown first. */
     val pinned: StateFlow<List<String>> = _pinned.asStateFlow()
 
+    private val _followedTags = MutableStateFlow<Set<String>>(emptySet())
+    /** Hashtags the user follows (lowercase), from the "t" tags of their contact list. */
+    val followedTags: StateFlow<Set<String>> = _followedTags.asStateFlow()
+
     private val _lists = MutableStateFlow<List<com.example.btcwidget.nostr.core.PeopleList>?>(null)
     /** The user's lists of people (NIP-51 kind 30000); null until loaded. */
     val lists: StateFlow<List<com.example.btcwidget.nostr.core.PeopleList>?> = _lists.asStateFlow()
@@ -319,6 +323,7 @@ class NostrRepository private constructor(private val context: Context) {
         _lists.value = null
         privateMutes = null
         privateBookmarks = null
+        _followedTags.value = emptySet()
         _pinned.value = emptyList()
         emojiListEvent = null
         _emojis.value = emptyMap()
@@ -350,7 +355,7 @@ class NostrRepository private constructor(private val context: Context) {
     private fun applyAccountEvents(events: List<Event>, fromRelays: Boolean) {
         fun latest(kind: Int) = events.filter { it.kind == kind }.maxByOrNull { it.createdAt }
         latest(Kind.METADATA)?.let { remember(it) }
-        latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = withPendingFollows(it.tagValues("p").toSet()) } }
+        latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = withPendingFollows(it.tagValues("p").toSet()); _followedTags.value = followedTagsOf(it) } }
         latest(Kind.PINNED)?.let { if (it.createdAt >= (pinEvent?.createdAt ?: 0)) { pinEvent = it; _pinned.value = it.tagValues("e") } }
         latest(Kind.EMOJI_LIST)?.let { if (it.createdAt >= (emojiListEvent?.createdAt ?: 0)) { emojiListEvent = it; _emojis.value = com.example.btcwidget.nostr.core.CustomEmoji.of(it) } }
         latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { if (it.content != bookmarkEvent?.content) privateBookmarks = null; bookmarkEvent = it; applyBookmarks() } }
@@ -406,7 +411,14 @@ class NostrRepository private constructor(private val context: Context) {
             )
         }
         val authors = (_following.value + me).toList()
-        return authoredTimeline(authors) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit) }
+        val tags = _followedTags.value.toList()
+        if (tags.isEmpty()) return authoredTimeline(authors) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit) }
+        // Followed hashtags join the timeline, as in Amethyst.
+        return coroutineScope {
+            val people = async { authoredTimeline(authors) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit) } }
+            val topics = async { runCatching { timeline(Filter(kinds = Kind.POSTS, tags = mapOf("t" to tags), until = until, limit = limit / 2)) }.getOrDefault(emptyList()) }
+            (people.await() + topics.await().filter { !hidden(it.note) }).distinctBy { it.key }.sortedByDescending { it.sortTime }
+        }
     }
 
     /** One page of [feed] for Home; [until] pages back (DVM feeds come as one page). */
@@ -1173,6 +1185,7 @@ class NostrRepository private constructor(private val context: Context) {
                 val want = pendingFollows[target] ?: follow
                 val event = publish(Events.contacts(me, contactsEvent, target, want), fast = true)
                 contactsEvent = event
+                _followedTags.value = followedTagsOf(event)
                 if (pendingFollows[target] == want) pendingFollows.remove(target)
                 _following.value = withPendingFollows(event.tagValues("p").toSet())
                 saveAccount()
@@ -1180,6 +1193,33 @@ class NostrRepository private constructor(private val context: Context) {
         } catch (e: Throwable) {
             pendingFollows.remove(target)
             _following.value = withPendingFollows(contactsEvent?.tagValues("p")?.toSet() ?: (_following.value - target))
+            throw e
+        }
+    }
+
+    private fun followedTagsOf(contacts: Event): Set<String> =
+        contacts.tagValues("t").map { it.trim().removePrefix("#").lowercase() }.filter { it.isNotEmpty() }.toSet()
+
+    /**
+     * Follows or unfollows a hashtag, kept in the contact list ("t" tags) so other apps see it
+     * too. Shown at once; published like a follow, one change at a time; undone on failure.
+     */
+    suspend fun setHashtagFollowed(tag: String, follow: Boolean) {
+        val me = requireMe()
+        val t = tag.trim().removePrefix("#").lowercase().takeIf { it.isNotEmpty() } ?: return
+        val before = _followedTags.value
+        _followedTags.value = if (follow) before + t else before - t
+        try {
+            contactsLock.withLock {
+                if (!accountFresh) loadAccount()
+                if (contactsEvent == null && _following.value.isNotEmpty()) error("Couldn't load your follow list; try again")
+                val event = publish(com.example.btcwidget.nostr.core.Events.contactsHashtag(me, contactsEvent, t, follow), fast = true)
+                contactsEvent = event
+                _followedTags.value = followedTagsOf(event)
+                saveAccount()
+            }
+        } catch (e: Throwable) {
+            _followedTags.value = contactsEvent?.let { followedTagsOf(it) } ?: before
             throw e
         }
     }

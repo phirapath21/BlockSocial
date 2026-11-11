@@ -560,13 +560,29 @@ private const val MAX_INDENT = 5
 fun HashtagScreen(vm: SocialViewModel, tag: String, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
     val stats by vm.stats.collectAsState()
     val feed by produceState<List<FeedItem>?>(null, tag) { value = vm.hashtagFeed(tag) }
+    val followed by vm.followedTags.collectAsState()
+    val account by vm.account.collectAsState()
+    val isFollowed = tag.lowercase().removePrefix("#") in followed
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar("#$tag", onBack)
         SocialScaffold(vm, navigate) { actions ->
-            when (val f = feed) {
-                null -> Spinner(Modifier.padding(top = 40.dp))
-                else -> if (f.isEmpty()) EmptyNote("No notes with #$tag yet.") else NoteList(f, stats, actions)
-            }
+            NoteList(feed.orEmpty(), stats, actions, header = {
+                // Follow the topic: its notes join Latest, and other apps see it in your follow list.
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (isFollowed) "Notes with #$tag are in your Latest." else "Follow to see notes with #$tag in your Latest.",
+                        color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.weight(1f)
+                    )
+                    PillButton(if (isFollowed) "Following" else "Follow", filled = !isFollowed) {
+                        if (account == null) navigate(LoginKey) else vm.followHashtag(tag, !isFollowed)
+                    }
+                }
+                HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+                when (val f = feed) {
+                    null -> Spinner(Modifier.padding(top = 40.dp))
+                    else -> if (f.isEmpty()) EmptyNote("No notes with #$tag yet.")
+                }
+            })
         }
     }
 }
