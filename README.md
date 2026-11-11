@@ -1,218 +1,255 @@
-# Block 🪙🕒
+# Block
 
-*Bitcoin at a glance — a clock face for the blockchain on your home screen.*
+*Bitcoin at a glance, and the people who talk about it.*
 
-[![Android Build](https://img.shields.io/badge/Platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/)
-[![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
-[![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Android CI](https://github.com/phirapath21/btcwidget/actions/workflows/android.yml/badge.svg)](https://github.com/phirapath21/btcwidget/actions/workflows/android.yml)
+![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B-3DDC84?logo=android&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)
+![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)
 
-A premium, feature-rich Android app and Home Screen widget suite inspired by desk-top hardware Bitcoin block clocks. Keep track of Bitcoin spot price, mempool transaction fees, halving counts, Satoshi purchasing power, block height, and MicroStrategy (MSTR) stock statistics directly from your home screen. Designed for high visual fidelity, seamless data synchronization, and elegant custom styling.
+Block is an Android app with two halves:
+
+- **Bitcoin widgets and dashboard.** Home-screen widgets inspired by desk blockclocks: price, sats per dollar or baht, block height, fees, halving countdown, hashrate, your stack's value and more, with price alerts.
+- **A Nostr social client.** A timeline, replies, reposts, likes and zaps, private messages, lists, communities and search, laid out like X, with a Bitcoin-orange accent.
+
+No account or server of ours is involved: market data comes from public APIs, social data from Nostr relays, and your keys stay on your phone or in your signer app.
 
 ---
 
-## 💬 Nostr social
+## Contents
 
-Block is also a Nostr client with a familiar timeline layout.
+- [Bitcoin widgets](#bitcoin-widgets)
+- [Dashboard and alerts](#dashboard-and-alerts)
+- [Nostr social](#nostr-social)
+- [Privacy and security](#privacy-and-security)
+- [Building](#building)
+- [Testing and CI](#testing-and-ci)
+- [Project structure](#project-structure)
+- [Documentation](#documentation)
+- [License](#license)
 
-- **Layout:** bottom bar (icons) Home · Search · Bitcoin · Notifications · Messages; a side bar (swipe right from the left, or tap your avatar) holds Profile, Widgets, Price alerts and Settings.
-- **Private messages (NIP-17):**
-  - End-to-end encrypted with NIP-44, implemented in plain Kotlin (ChaCha20, HKDF, HMAC) and checked against the official vectors.
-  - Messages are gift-wrapped (kind 1059) and delivered to each recipient's inbox relays (kind 10050). You get a copy too.
-  - You can start a chat from ✉ in Messages or on a profile. Group chats work by participant set.
-  - With Amber, messages are sealed and opened through the signer (nip44_encrypt/decrypt).
-  - Only encrypted wraps are cached on disk.
-- **Accounts:** connect a **signer app** (NIP-55, e.g. Amber; recommended, the key never enters Block), paste an **nsec** (encrypted with an Android Keystore key, excluded from backup, deleted on logout), or **create a new account** (the nsec is shown once to save). Screens showing a key block screenshots.
-- **Timeline:** notes and reposts from people you follow, pull to refresh, infinite scroll; logged out, a public #bitcoin feed.
-- **Notes:** reply (NIP-10 threads), repost (kind 6), quote (NIP-18 `q` tag), like (kind 7), zap (NIP-57, pays through your Lightning wallet app), share link, delete your own (NIP-09).
-- **Profiles:** banner, avatar, bio, NIP-05, Lightning address, follow/unfollow (kind 3, keeps your other follows), edit your own (kind 0).
-- **Notifications:** replies, mentions, reposts, likes and zaps.
-- **Timeline basics:**
+---
+
+## Bitcoin widgets
+
+Four resizable home-screen widgets (2×1 by default):
+
+| Widget | What it shows |
+|---|---|
+| **Bitcoin metrics** | One metric at a time; tap to cycle through the ones you switched on. |
+| **Price chart** | BTC price, 24h change and a 24H / 7D sparkline; tap to switch range. |
+| **Halving countdown** | A block-filled progress bar with percent done, blocks or days left. |
+| **Quotes** | Cypherpunk and Bitcoin quotes (Satoshi Nakamoto, Hal Finney, Eric Hughes…); tap for the next. |
+
+**Metrics** (pick and order them in the app's Widgets page):
+
+| Market | Network | Supply & Lightning | Strategy (MSTR) | You |
+|---|---|---|---|---|
+| BTC price (USD or THB) | Block height | Circulating supply | MSTR share price | Your stack's value |
+| Sats per dollar / baht | Mempool fees (fast / mid / low) | Lightning capacity | MSTR BTC holdings | |
+| Moscow time (clean) | Hashrate (3-day) | | MSTR / BTC ratio | |
+| | Difficulty adjustment | | | |
+| | Halving countdown | | | |
+
+**Look:** a dark grained panel with tall condensed type, a stacked label beside the value and a monospace caption, painted as one image so it stays sharp at any size. Three themes, for the widgets only (the app itself keeps one dark look):
+
+- **Classic:** white on a dark e-ink-style panel.
+- **Retro:** green phosphor terminal type with glow, scanlines and faint falling hex; stale data in amber.
+- **Orange pill:** glossy Bitcoin-orange panels with near-black type.
+
+**Refresh:** every 15, 30 or 60 minutes with WorkManager (only when online, Doze-friendly, survives reboots). If a source fails, its value keeps the last good number and a red dot marks it stale; other sources carry on.
+
+## Dashboard and alerts
+
+The **Bitcoin** tab has a hero panel (Stack, Block, Price, Halving, Sats or Fees) and a BTC price chart (24H / 7D; drag to read any hour). Pull down to refresh.
+
+- **Share:** sends the hero panel as an image plus a one-line post (`Bitcoin: $74,455 (+1.2% in 24h) · block 925,000 #bitcoin`) through Android's share sheet. Your stack is never offered for sharing.
+- **Your stack:** enter what you hold, in BTC or sats. It's stored only on the phone and shown in USD or THB with its 24h change.
+- **Price alerts:** BTC above or below a price, and fees at or below a sat/vB level. Network events too: the day before a halving, and before each difficulty adjustment with the estimated change. Each alert fires once per crossing and is never triggered by stale data.
+- **Data sources:** BTC price from Coinbase or Kraken; THB converted or from Bitkub.
+
+## Nostr social
+
+**Layout:**
+- **Bottom bar:** Home · Search · Bitcoin · Notifications · Messages.
+- **Side bar** (swipe from the left or tap your avatar): Profile · Lists · Bookmarks · Communities · Widgets · Price alerts · Settings.
+
+**Getting started:**
+- **New here:** a welcome page offers three ways in: create an account, log in with a signer app, or paste an nsec.
+- **Creating an account:** setup walks you through a name and picture, topics, people to follow, and saving your key.
+- **Signer apps:** Amber (NIP-55) or a remote bunker (NIP-46), so the key never enters Block.
+- **Several accounts:** switch from the side bar.
+
+**Reading:**
+- **Home feeds**, Primal-style, which you can add, remove and reorder:
+  - Latest, or Latest with replies, from people you follow
+  - Global, or a single relay
+  - A #hashtag
+  - A list of people
+  - DVM "For you" feeds (NIP-90)
+- **Moving through the feed:**
   - New notes wait behind a "↑ N new posts" pill instead of shifting what you're reading.
-  - Profiles have *Posts*, *Replies* and *Media* tabs.
-  - Images open full screen, laid out like X:
-    - top: back, and ⋮ with *Save image* (to Pictures/Block) and *Open in browser*;
-    - bottom: the author with Follow, the note's text, Reply · Repost · Like · Bookmark · Share, and a "Post your reply" bar;
-    - pinch or double-tap to zoom.
-  - The post screen has X's pinned "Post your reply" bar: type in place, add a photo, or ⤢ for the full composer.
-  - Bookmarks are a public NIP-51 list, from ⋯ › Bookmark, listed in the side bar.
-  - Typing `@` suggests people and links them as `nostr:npub`.
-  - Content warnings (NIP-36) hide notes behind "Show", and ⚠ in compose marks your own.
-- **Unread and alerts:**
-  - Badges on Notifications and Messages, and bold unread conversations.
-  - Phone notifications for replies, mentions, zaps and DMs while the app is closed, from the same background refresh as the price alerts (every 15/30/60 min, not instant). You can turn them off in Settings › Nostr.
-  - Tapping a notification opens the right tab.
-- **Follow lists:**
-  - Tap "Following" or "Followers" on a profile to see the list, with follow buttons.
-  - Followers come from the indexers and are capped at 500.
-- **Safety:** mute accounts (NIP-51 mute list) and report notes (NIP-56); in-app Community rules (`docs/community-rules.md`).
-- **Search:** people, posts and #hashtags via NIP-50 search relays; an npub, note id, nevent or name@domain (NIP-05) opens directly.
-- **Photos:** attach up to 4 images per post with the system photo picker. They're re-encoded on the phone (EXIF and GPS removed), uploaded to Blossom (your kind-10063 servers or blossom.primal.net), and posted with NIP-92 `imeta` tags.
-- **Relays:** relay.damus.io, nos.lol and relay.primal.net by default, plus your NIP-65 relays when you have them, or your own list in Settings. Profiles and lists also come from indexer relays (purplepag.es, user.kindpag.es, indexer.coracle.social).
-- **Outbox model:**
-  - Home and profiles also read each person's notes from the relays they write to (their NIP-65 lists, from indexers and cached).
-  - At most 12 extra relays, 2 per person, sharing relays where possible. Notes posted elsewhere aren't missed.
-- **Speed:**
-  - A query returns once the first relay finishes, plus a short grace period, instead of waiting for the slowest relay. Relays that are down aren't waited for.
-  - Names, avatars and counts fill in after the notes appear.
-  - The last timeline, profiles and your lists are cached on disk, so the app opens instantly.
+  - Feeds keep their scroll position when you switch tabs or come back.
+  - Long posts are cut short with *Read more*.
+- **Threads:** nested replies. On the post page, a floating *Post your reply* bar sits above the keyboard.
+- **Media:**
+  - Images, GIFs and videos are shown inline.
+  - Swipe between photos full screen, pinch to zoom.
+  - The video player has autoplay settings (always, Wi-Fi only, never), quality choice, data saver, and full-screen landscape.
+- **Links:**
+  - Link previews in notes.
+  - Links open in Block's own browser, with the post underneath, like X; a setting sends them to your phone's browser instead.
+- **More to read:** long-form articles (NIP-23), polls (NIP-88), on-device translation (ML Kit), content warnings (NIP-36), and custom emoji (NIP-30).
 
-Code: `nostr/core` is plain Kotlin (events, NIP-19, Schnorr via ACINQ's secp256k1, relay protocol, zaps) with unit tests; `nostr/` holds the signers, key storage, the OkHttp relay pool and the repository; `ui/social` holds the screens.
+**Writing:**
+- Notes with up to 4 photos or a video, uploaded to Blossom servers with EXIF/GPS stripped from photos.
+- `@` mentions and hashtag autocomplete.
+- Drafts and scheduled posts.
+- Quotes, reposts and emoji reactions.
+- Content warnings on your own notes.
 
+**People and lists:**
+- **Profiles:** Posts, Replies, Media and Articles tabs, verified NIP-05 ✓, badges (NIP-58), and a profile QR code you can show or scan.
+- **Following:** follow lists and followers, plus who-to-follow suggestions.
+- **Lists of people** (NIP-51), like X's Lists:
+  - make them from the side bar, or add someone from their profile with ☰+;
+  - read one as a feed, or pin it to Home.
 
-Planned work: see [`docs/TODO.md`](docs/TODO.md).
----
+**Talking:**
+- **Private messages (NIP-17):**
+  - NIP-44 encryption implemented in plain Kotlin and checked against the official test vectors.
+  - Gift-wrapped and sent to each recipient's inbox relays.
+  - Photos, replies and reactions inside chats.
+  - Group chats.
+  - Message requests from people you don't follow.
+  - Older NIP-04 messages are shown, marked as an old format.
+- **Communities and chats:** communities (NIP-72), public chats (NIP-28) and relay-based groups (NIP-29).
+- **Zaps (NIP-57):** pay through your Lightning wallet app, or in one tap with Nostr Wallet Connect (NIP-47). The notes screen shows who liked, reposted and zapped.
 
-## ✨ Premium Features
+**Notifications:**
+- Likes, reposts and zaps of the same note are grouped ("Alice and 5 others liked your note").
+- Unread badges.
+- Phone notifications while the app is closed. These are checked on each background refresh, so they're not instant.
 
-### 1. Resizable & Interactive Widgets
-- **Resizable Layouts**: Widgets default to a 2x1 grid size but can be resized freely (horizontally and vertically) on your launcher.
-- **Three Unique Widget Types**:
-  - 🪙 **Bitcoin Metrics Widget** — Cycles through 13 active Bitcoin/MSTR price and network metrics.
-  - 📈 **Price Chart Widget** — BTC price, change and a 24H / 7D sparkline; tap to switch range.
-  - 💬 **Quotes Widget** — Rotates classic, inspiring Cypherpunk and Bitcoin quotes (Satoshi Nakamoto, Hal Finney, Eric Hughes).
-  - ⏳ **Halving Countdown Progress Bar** — Renders a block-filled ASCII progress bar (`[████████░░░░░░░]`) showing percent progress, blocks remaining, or estimated days.
-- **Tap to Cycle**: Tap the widgets to cycle through modes or quotes on the fly.
-- **Custom Refresh Intervals**: Configure background updates (15m, 30m, 60m) inside settings to optimize battery life. Powered by WorkManager: Doze-friendly, runs only when online, and survives reboots.
-- **Stale Data Warning Badge**: Displays a warning icon `(!)` if the BTC price or block height could not be refreshed. Other sources fail independently and keep their last known value.
+**Safety:**
+- Mute accounts, words, hashtags and threads (NIP-51).
+- Report notes (NIP-56).
+- An optional web-of-trust filter that hides strangers' replies.
+- In-app [community rules](docs/community-rules.md).
 
-### 2. The 13 Information Modes (Bitcoin Metrics Widget)
-1. **BTC Price** — Spot price of Bitcoin (formatted as `X.xx mil` in Thai Baht or with symbol in USD).
-2. **Sats per Currency** — SATS per 1 USD/THB (Moscow Time style).
-3. **Block Height** — Current Bitcoin block height.
-4. **Moscow Time (Clean)** — Clean, distraction-free SATS-per-currency layout.
-5. **MSTR Holdings** — MicroStrategy's total Bitcoin holdings.
-6. **MSTR / BTC Ratio** — Share price to BTC ratio.
-7. **MSTR Stock Price** — MicroStrategy share price.
-8. **BTC Circulation** — Total circulating Bitcoin supply in millions (e.g. `19.850 MIL`).
-9. **Halving Countdown** — Blocks remaining until the next Bitcoin halving.
-10. **Mempool Fees** — Recommended transaction fees (Fastest/Mid/Low sat/vB).
-11. **Network Hash Rate** — Estimated network hashrate (3d) in EH/s.
-12. **Difficulty Adjustment** — Difficulty change percentage and retarget epoch progress.
-13. **Lightning Capacity** — Public Lightning Network capacity in BTC.
+**Relays:**
+- **Defaults:** relay.damus.io, nos.lol and relay.primal.net, plus your NIP-65 relays, or your own list.
+- **Outbox model:** each person's notes are also read from the relays they write to.
+- **Relay status page:** shows which relays are connected, slow or failing, with Retry.
 
-### 3. App Layout
-Four tabs along the bottom:
-- **Dashboard** — a hero panel (STACK / BLOCK / PRICE / HALVING / SATS / FEES) and a BTC price chart (24H / 7D, drag to read any hour). Pull down to refresh.
-- **Share** — under the hero panel: sends the panel as an image (in the current theme) plus a one-line post, such as `Bitcoin: $74,455 (+1.2% in 24h) · block 925,000 #bitcoin`, to any app through the share sheet. Pick a Nostr client (Amethyst, Primal, …) to post it as a note others can quote or repost. The app holds no Nostr keys and sends nothing itself; your stack is never shareable.
-- **Widgets** — how to add widgets, then every metric as a panel in four collapsible sections (**Market**, **Network**, **Supply & Lightning**, **Strategy (MSTR)**, plus **Your stack**). Each panel has an **On widget** switch; hold and drag a panel to reorder it within its section — that order is the order widget taps cycle through.
-- **Settings** — your stack, display currency, refresh interval, **data sources** (BTC price from Coinbase or Kraken; THB converted or from Bitkub) and about.
+**Speed:**
+- Events are kept in a local SQLite database, so the app opens instantly.
+- Queries return once the first relay answers instead of waiting for the slowest.
+- Names, avatars and counts fill in after the notes appear.
 
-### 3a. Your Stack
-- Enter how much bitcoin you hold (in BTC or sats) under **Settings > Your stack**; it is stored only on the device.
-- A **STACK** panel and widget mode show what it is worth in USD or THB, with the amount and 24h change as the caption. It can also be the dashboard's hero.
+## Privacy and security
 
-### 3b. Price Alerts
-- **BTC rises above / falls below** a price (USD or THB) and **fees at or below** a sat/vB level, set in Settings.
-- **Network events:** a day before the next halving and before each difficulty adjustment (with the estimated change).
-- Notifies once per crossing, then re-arms when the condition turns false again; stale data never triggers an alert.
-- Checked with each background refresh (15/30/60 min), even with no widget on the home screen. Android 13+ asks for notification permission when you switch an alert on.
+- **Private keys and wallet links** (nsec, Nostr Wallet Connect) are encrypted with an Android Keystore key, excluded from backup and never logged. Screens that show a key block screenshots.
+- **No analytics and no ads.** There is no Block server.
+- **Everything you post on Nostr is public,** except private messages. That includes lists, bookmarks, mute lists, reactions and poll votes.
+- **The full picture**, including every outside service the app talks to and why: [`docs/privacy-policy.md`](docs/privacy-policy.md).
 
-### 4. Design
-The widgets and the app share one look: a **dark grained panel** with **tall condensed type**.
-- A **stacked label** beside the value (e.g. `BTC` over `USD` with a rule between), the **value in large type**, and an optional **unit** set high on the right (e.g. `MIL`, `EH/S`).
-- A **monospace caption** underneath (e.g. `Market price of bitcoin`); a red dot marks stale data.
-- The panel fills the widget and is painted as one image, so it stays crisp at every size; the app uses the same painter.
-- **Retro theme** (Settings → Display → Theme): green phosphor terminal type with a soft glow, scanlines and faint falling hex behind the value; stale data is marked in amber. It applies to the app and every widget.
-- **Orange pill theme**: glossy bitcoin-orange panels with near-black type, set in a warm dark app; stale data is marked with a white dot.
-- Display face: [Oswald](https://github.com/googlefonts/OswaldFont) Light, bundled under the SIL Open Font License (see `licenses/Oswald-OFL.txt`).
-- Retro theme face: [VT323](https://fonts.google.com/specimen/VT323), subset to Latin, bundled under the SIL Open Font License (see `licenses/VT323-OFL.txt`).
+## Building
 
----
+**You need:**
+- Android Studio (recent stable), or JDK 17+ and the Android SDK (compile SDK 36).
+- A phone or emulator on Android 7.0 (API 24) or newer.
 
-## 🛠️ Tech Stack & Architecture
+```bash
+git clone https://github.com/phirapath21/btcwidget.git
+```
+```bash
+cd btcwidget
+```
+```bash
+./gradlew installDebug
+```
 
-- **Core UI**: [Jetpack Compose](https://developer.android.com/jetpack/compose) & Material Design 3.
-- **Background scheduling**: [WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager) periodic work with a network constraint and exponential backoff retries.
-- **Widget Engine**: Standard Android `AppWidgetProvider` paired with custom remote views tinting.
-- **Concurrency & Network**: Kotlin Coroutines; all API sources are fetched in parallel and merged per-field with the cache.
-- **Storage**: `SharedPreferences` for caching widget modes, selected themes, and API data.
-- **API Integrations**:
-  - **Coinbase** (BTC price, USD/THB rate, 24h stats, price history) or **Kraken** (BTC price)
-  - **Bitkub** (optional BTC/THB market price and 24h change)
-  - **Yahoo Finance v8 API** (MSTR Price)
-  - **Mempool.space API** (Block Height, Fees, Adjustment, Hashrate, Lightning Capacity)
-  - **Blockchain.info API** (Circulating Supply Fallback)
+On Windows use `gradlew.bat` instead of `./gradlew`. Or open the folder in Android Studio and press Run; Gradle downloads every library on the first sync.
 
----
+**Adding a widget:** long-press the home screen, tap **Widgets**, find **Block**, and drag one out.
 
-## 📦 Release Build
-
-Step-by-step guide: [`docs/RELEASE.md`](docs/RELEASE.md). Store listing text, graphics and policy-form answers: [`docs/play-store/`](docs/play-store/). Privacy policy: [`docs/privacy-policy.md`](docs/privacy-policy.md).
-
+**Release builds:**
 - **Application ID:** `io.github.phirapath21.btcwidget` (the Kotlin package stays `com.example.btcwidget`).
-- **Signing:** create a keystore, then add a git-ignored `keystore.properties` at the project root:
+- **Signing:** add a git-ignored `keystore.properties` at the project root. Never commit it or the keystore.
   ```properties
   storeFile=release.jks
   storePassword=...
   keyAlias=...
   keyPassword=...
   ```
-  Without it, `./gradlew assembleRelease` produces an unsigned APK.
-- **Shrinking:** release builds run R8 with resource shrinking; app rules live in `app/proguard-rules.pro`.
+  Without this file, `./gradlew assembleRelease` makes an unsigned APK.
+- **Shrinking:** release builds use R8 with resource shrinking; the rules are in `app/proguard-rules.pro`.
+- **Step by step:** see [`docs/RELEASE.md`](docs/RELEASE.md).
 
-## 🚀 Getting Started
+## Testing and CI
 
-### Prerequisites
-- **Android Studio** (Koala or newer recommended)
-- **JDK 17** (or standard Java SDK configuration)
-- An Android device or emulator running **Android 8.0 (Oreo) / API Level 26** or higher.
-
-### Installation & Build
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/phirapath21/btcwidget.git
-   cd btcwidget
-   ```
-
-2. **Build the debug APK**:
-   ```bash
-   ./gradlew assembleDebug
-   ```
-
-3. **Install on device**:
-   Connect your device via USB (with Developer Mode and USB debugging active) and run:
-   ```bash
-   ./gradlew installDebug
-   ```
-
-4. **Add the Widget**:
-   - Go to your home screen.
-   - Long press on an empty space, tap **Widgets**.
-   - Scroll down to find **Block**.
-   - Drag any of the resizable widgets (Bitcoin metrics, Halving countdown or Bitcoin quotes) onto your home screen!
-
----
-
-## 📂 Project Structure
-
+```bash
+./gradlew testDebugUnitTest
 ```
-btcwidget/
-├── app/
-│   ├── src/
-│   │   ├── main/
-│   │   │   ├── java/com/example/btcwidget/
-│   │   │   │   ├── BtcWidgetProvider.kt      # Main AppWidgetProvider (2x1) & intent routing
-│   │   │   │   ├── BtcQuoteWidgetProvider.kt # Quotes Widget AppWidgetProvider
-│   │   │   │   ├── BtcHalvingWidgetProvider.kt# Halving Progress Bar Widget AppWidgetProvider
-│   │   │   │   ├── WidgetUpdater.kt          # Centralized widget updates controller
-│   │   │   │   ├── MainActivity.kt          # App entry point
-│   │   │   │   ├── PriceData.kt             # Data classes & Network repository
-│   │   │   │   ├── ui/main/
-│   │   │   │   │   ├── MainScreen.kt        # Jetpack Compose dashboard UI
-│   │   │   │   │   └── MainScreenViewModel.kt# Live data updates and caching
-│   │   │   └── res/
-│   │   │       ├── layout/
-│   │   │       │   ├── btc_widget_blockclock.xml # Metrics & halving widget layout (one painted image)
-│   │   │       │   ├── btc_widget_quote.xml      # Quotes Widget layout (XML layout)
-│   │   │       │   └── btc_widget_halving.xml    # Halving Widget layout (XML layout)
-│   │   │       └── drawable/                # Theme background resources
-│   │   └── build.gradle.kts
-└── settings.gradle.kts
+```bash
+./gradlew connectedDebugAndroidTest
 ```
 
----
+- **Unit tests** cover:
+  - the Nostr core: events, NIP-19, Schnorr signatures, NIP-44 and NIP-17, zaps, lists, communities, the local database;
+  - price parsing and merging, the widget painters and chart math, alerts and share text.
+- **UI tests** run on a device or emulator.
+- **GitHub Actions** ([`.github/workflows/android.yml`](.github/workflows/android.yml)) runs on every pull request and push to `main`:
+  - unit tests, lint (reported only), a debug build and a release build with R8;
+  - then the UI tests on an emulator.
+  - The debug APK can be downloaded from each run's **Artifacts**.
 
-## 📜 License
+## Project structure
 
-This project is licensed under the MIT License. Feel free to use, modify, and build upon it!
+```
+app/src/main/java/com/example/btcwidget/
+├── *WidgetProvider.kt, WidgetUpdater.kt   home-screen widgets
+├── Blockclock*.kt, ChartPainter.kt        the painted widget panels
+├── PriceData.kt, PriceSources.kt          market and network data, merged per field
+├── PriceRefreshWorker.kt                  background refresh, alerts, Nostr notifications
+├── alerts/                                price and network alerts
+├── Navigation.kt, NavigationKeys.kt       screens (Navigation 3)
+├── ui/main/                               Bitcoin dashboard, widgets page, settings
+├── ui/social/                             Nostr screens and the social view model
+└── nostr/
+    ├── core/                              plain Kotlin: events, NIPs, crypto, relay protocol
+    ├── RelayPool.kt                       OkHttp WebSocket relay connections
+    ├── NostrRepository.kt                 account, cache and every Nostr action
+    ├── EventStore.kt                      local SQLite event database
+    └── Signers.kt, BunkerSigner.kt         nsec (Keystore), Amber and bunker signers
+```
+
+`nostr/core` has no Android dependencies, so it's unit-tested on the JVM.
+
+**Main libraries:**
+- **UI and navigation:** Jetpack Compose (Material 3) and Navigation 3.
+- **Background and network:** WorkManager, OkHttp and Kotlin coroutines.
+- **Signatures:** ACINQ secp256k1.
+- **Media:** Coil 3 for images and GIFs; Media3 ExoPlayer for video, including HLS.
+- **On-device features:** ML Kit for translation; ZXing and the Google code scanner for QR codes.
+
+**Data sources:**
+- **Market:** Coinbase, Kraken, Bitkub, Yahoo Finance (MSTR).
+- **Network:** mempool.space, with blockchain.info as a fallback for supply.
+
+## Documentation
+
+| | |
+|---|---|
+| [`docs/TODO.md`](docs/TODO.md) | What's done and what's planned |
+| [`docs/privacy-policy.md`](docs/privacy-policy.md) | Privacy policy |
+| [`docs/community-rules.md`](docs/community-rules.md) | Community rules |
+| [`docs/RELEASE.md`](docs/RELEASE.md) | Building and publishing a release |
+| [`docs/play-store/`](docs/play-store/) | Store listing, graphics and policy-form answers |
+
+## License
+
+This project is licensed under the MIT License.
+
+Fonts: [Oswald](https://github.com/googlefonts/OswaldFont) and [VT323](https://fonts.google.com/specimen/VT323), both under the SIL Open Font License (see [`licenses/`](licenses/)).
