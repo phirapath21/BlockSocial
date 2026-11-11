@@ -80,6 +80,8 @@ fun NostrSettingsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack:
                 valid = { it.startsWith("wss://") }
             ) { urls, done -> if (urls.isNotEmpty()) vm.setDmInbox(urls, done) }
 
+            VideoSection(vm)
+
             ScheduledSection(vm)
 
             SafetySection(vm)
@@ -128,6 +130,18 @@ internal fun AccountRow(profile: com.example.btcwidget.nostr.core.Profile?, pubk
             Text(note, color = EInk.Caption, fontSize = 12.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { actions() }
+    }
+}
+
+/** When timeline videos start by themselves (muted). */
+@Composable
+private fun VideoSection(vm: SocialViewModel) {
+    val mode by vm.videoAutoplay.collectAsState()
+    Section("Video autoplay", "Videos in the timeline can start by themselves, muted. Autoplay uses data and battery.")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        VideoAutoplay.entries.forEach { m ->
+            EInkChip(text = (if (m == mode) "✓ " else "") + m.label.uppercase(), selected = m == mode, onClick = { vm.setVideoAutoplay(m) })
+        }
     }
 }
 

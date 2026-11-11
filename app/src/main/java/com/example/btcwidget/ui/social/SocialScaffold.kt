@@ -53,6 +53,8 @@ fun SocialScaffold(
     var reportTarget by remember { mutableStateOf<Event?>(null) }
     var deleteTarget by remember { mutableStateOf<Event?>(null) }
     var viewImage by remember { mutableStateOf<Pair<String, Event>?>(null) }
+    var viewVideo by remember { mutableStateOf<Pair<String, Event>?>(null) }
+    val autoplay by vm.videoAutoplay.collectAsState()
     val bookmarks by vm.bookmarks.collectAsState()
     val pins by vm.pinned.collectAsState()
     val following by vm.following.collectAsState()
@@ -86,6 +88,9 @@ fun SocialScaffold(
         pin = { n -> signedIn { vm.togglePin(n) } },
         isPinned = { it in pins },
         openImage = { url, note -> viewImage = url to note },
+        openVideo = { url, note -> viewVideo = url to note },
+        autoplayVideos = autoplay.allowedNow(context),
+        openVideoUrl = viewVideo?.first,
         follow = { pk, on -> signedIn { vm.follow(pk, on) } },
         isFollowing = { it in following },
         openEngagement = { n, tab -> navigate(com.example.btcwidget.EngagementKey(n.id, tab)) },
@@ -115,6 +120,22 @@ fun SocialScaffold(
                     vm, note, dark = true,
                     onLogin = { viewImage = null; navigate(com.example.btcwidget.LoginKey) },
                     onExpand = { viewImage = null; navigate(com.example.btcwidget.ComposeKey(replyTo = note.id)) },
+                    onActiveChange = onActive
+                )
+            }
+        )
+    }
+
+    viewVideo?.let { (url, note) ->
+        ImageViewer(
+            url, note, stats[note.id] ?: com.example.btcwidget.nostr.NoteStats(), actions,
+            onDismiss = { viewVideo = null },
+            video = true,
+            replyBar = { onActive ->
+                ReplyBar(
+                    vm, note, dark = true,
+                    onLogin = { viewVideo = null; navigate(com.example.btcwidget.LoginKey) },
+                    onExpand = { viewVideo = null; navigate(com.example.btcwidget.ComposeKey(replyTo = note.id)) },
                     onActiveChange = onActive
                 )
             }

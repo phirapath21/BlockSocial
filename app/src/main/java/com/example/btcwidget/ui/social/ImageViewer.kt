@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,7 +67,7 @@ private val OnDark = Color(0xFFEDEFF1)
 private val OnDarkDim = Color(0xFF9AA0A6)
 
 /**
- * Full-screen image, laid out like X: back and ⋮ (Save image, Open in browser) on top;
+ * Full-screen image or ([video]) video, laid out like X: back and ⋮ (Save image, Open in browser) on top;
  * the author, the note's text and Reply · Repost · Like · Bookmark · Share at the bottom.
  * Pinch or double-tap to zoom, drag to pan.
  */
@@ -77,6 +78,8 @@ fun ImageViewer(
     stats: NoteStats,
     actions: NoteActions,
     onDismiss: () -> Unit,
+    /** Show [url] as a video with X-style controls instead of an image. Tap shows or hides everything around it. */
+    video: Boolean = false,
     /** The reply card under the actions, told when it opens; null hides it. */
     replyBar: (@Composable (onActiveChange: (Boolean) -> Unit) -> Unit)? = null
 ) {
@@ -104,7 +107,10 @@ fun ImageViewer(
     // The note's words without the image links themselves.
     val caption = remember(note.id) {
         val images = Imeta.imageUrls(note)
-        Content.parse(note.content).filterNot { it is Content.Segment.Image || (it is Content.Segment.Link && it.url in images) }
+        val videos = Imeta.videoUrls(note)
+        Content.parse(note.content).filterNot {
+            it is Content.Segment.Image || it is Content.Segment.Video || (it is Content.Segment.Link && (it.url in images || it.url in videos))
+        }
             .joinToString("") { seg ->
                 when (seg) {
                     is Content.Segment.Text -> seg.text
@@ -124,8 +130,18 @@ fun ImageViewer(
             @Suppress("DEPRECATION")
             dialogWindow?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
+        // Video: its own player, carrying on from the timeline, with sound on.
+        var chrome by remember { mutableStateOf(true) }
+        val player = if (video) {
+            val p = remember(url) { newPlayer(context, url) {} .apply { volume = 1f; playWhenReady = true } }
+            DisposableEffect(p) { onDispose { VideoPositions[url] = p.currentPosition; p.release() } }
+            p
+        } else null
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            AsyncImage(
+            if (player != null) VideoSurface(
+                player,
+                Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { chrome = !chrome }) }
+            ) else AsyncImage(
                 model = url,
                 contentDescription = "Image",
                 contentScale = ContentScale.Fit,
@@ -151,7 +167,7 @@ fun ImageViewer(
             )
 
             // Top: back and more.
-            Row(
+            if (chrome) Row(
                 Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -160,7 +176,7 @@ fun ImageViewer(
                 Box {
                     RoundIcon(Glyphs.More, "More options") { menu = true }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("Save image") }, onClick = {
+                        if (!video) DropdownMenuItem(text = { Text("Save image") }, onClick = {
                             menu = false
                             if (ImageSaver.needsPermission) storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else save()
                         })
@@ -172,8 +188,8 @@ fun ImageViewer(
                 }
             }
 
-            // Bottom: author, text, actions.
-            Column(
+            // Bottom: author, text, actions (and the video controls).
+            if (chrome) Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
@@ -232,6 +248,7 @@ fun ImageViewer(
                     Spacer(Modifier.height(12.dp))
                     replyBar { replying = it }
                 }
+                if (player != null && !replying) VideoControls(player, url, Modifier.padding(top = 8.dp))
             }
         }
     }
