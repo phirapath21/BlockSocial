@@ -49,6 +49,14 @@ import com.example.btcwidget.ui.main.EInk
 
 private val LiveRed = Color(0xFFE5534B)
 
+@Composable
+private fun RoundControl(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clip(CircleShape).background(Color(0x99000000)).clickable(onClickLabel = label, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(22.dp)) }
+}
+
 /** Streams live now (most watched first) and coming up, for the Communities page's LIVE tab. */
 @Composable
 internal fun LiveList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
@@ -85,7 +93,7 @@ private fun statusLine(live: LiveStreams.Live): String = when (live.status) {
 }
 
 @Composable
-private fun LiveBadge(modifier: Modifier = Modifier) {
+internal fun LiveBadge(modifier: Modifier = Modifier) {
     Text(
         "LIVE", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold,
         modifier = modifier.clip(RoundedCornerShape(4.dp)).background(LiveRed).padding(horizontal = 5.dp, vertical = 1.dp)
@@ -113,25 +121,45 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
     )
 }
 
-/** The stream itself (16:9, sound on), with its title, host and status underneath. */
+/**
+ * The stream itself (16:9, sound on), with its title, host and status underneath. The player
+ * belongs to PipVideo, so leaving this screen keeps the stream going in the mini player, and
+ * leaving the app keeps it going in Picture-in-Picture, without rebuffering.
+ */
 @Composable
 private fun LivePlayer(live: LiveStreams.Live, host: Profile?, onHost: () -> Unit) {
     val context = LocalContext.current
-    var muted by remember { mutableStateOf(false) }
+    // This stream's screen is open: no mini player for it meanwhile.
+    DisposableEffect(live.address) {
+        PipVideo.liveScreenOpen = live.address
+        onDispose { if (PipVideo.liveScreenOpen == live.address) PipVideo.liveScreenOpen = null }
+    }
     Column(Modifier.fillMaxWidth().background(EInk.Background)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black), contentAlignment = Alignment.Center) {
             val url = live.streaming
             if (live.isLive && url != null) {
-                val player = remember(url) { newPlayer(context, url, fullScreen = true, live = true) {}.apply { playWhenReady = true } }
-                DisposableEffect(player) { onDispose { player.release() } }
-                player.volume = if (muted) 0f else 1f
-                VideoSurface(player, Modifier.fillMaxSize())
+                val info = PipVideo.Live(live.address, live.title, host?.bestName ?: Profile.shortNpub(live.host))
+                val player = remember(url) {
+                    PipVideo.acquireLive(context, url, info) { ctx, u -> newPlayer(ctx, u, fullScreen = true, live = true) {}.apply { playWhenReady = true } }
+                }
+                var playing by remember(player) { mutableStateOf(player.isPlaying || player.playWhenReady) }
+                DisposableEffect(player) {
+                    val l = object : androidx.media3.common.Player.Listener {
+                        override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying || player.playWhenReady }
+                        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { playing = playWhenReady }
+                    }
+                    player.addListener(l)
+                    onDispose { player.removeListener(l) }
+                }
+                if (!PipVideo.inPip) VideoSurface(player, Modifier.fillMaxSize().clickable(onClickLabel = if (playing) "Pause" else "Play") { PipVideo.togglePlay() })
                 LiveBadge(Modifier.align(Alignment.TopStart).padding(10.dp))
-                Box(
-                    Modifier.align(Alignment.BottomEnd).padding(8.dp).size(40.dp).clip(CircleShape).background(Color(0x99000000))
-                        .clickable(onClickLabel = if (muted) "Sound on" else "Mute") { muted = !muted },
-                    contentAlignment = Alignment.Center
-                ) { Icon(if (muted) Glyphs.SoundOff else Glyphs.SoundOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp)) }
+                if (!playing) Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
+                    Icon(Glyphs.Play, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                }
+                Row(Modifier.align(Alignment.BottomEnd).padding(8.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                    PipVideo.requestPip?.let { pip -> RoundControl(Glyphs.Pip, "Picture-in-picture", pip) }
+                    RoundControl(if (PipVideo.muted) Glyphs.SoundOff else Glyphs.SoundOn, if (PipVideo.muted) "Sound on" else "Mute") { PipVideo.mute(!PipVideo.muted) }
+                }
             } else {
                 live.image?.let { AsyncImage(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                 Text(

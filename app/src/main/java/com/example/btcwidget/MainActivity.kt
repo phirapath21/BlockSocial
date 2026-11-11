@@ -10,6 +10,7 @@ import com.example.btcwidget.nostr.SignerBridge
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
@@ -25,6 +26,10 @@ object OpenTabRequest {
   val tab = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 }
 
+private const val PIP_CMD = "cmd"
+private const val PIP_TOGGLE = "toggle"
+private const val PIP_MUTE = "mute"
+
 class MainActivity : ComponentActivity() {
   /** Results from Nostr signer apps (NIP-55), handed to the waiting signer. */
   private val signerLauncher =
@@ -36,6 +41,16 @@ class MainActivity : ComponentActivity() {
     SignerBridge.launch = { signerLauncher.launch(it) }
     intent?.getStringExtra(com.example.btcwidget.nostr.NostrBackground.EXTRA_OPEN_TAB)?.let { OpenTabRequest.tab.value = it }
     EInk.theme = AppPrefs.theme(this)
+    // PiP: the stream's own PiP button, and the PiP window's play/pause and mute buttons.
+    if (hasPip()) {
+      com.example.btcwidget.ui.social.PipVideo.requestPip = {
+        if (android.os.Build.VERSION.SDK_INT >= 26) runCatching { pipParams()?.let { enterPictureInPictureMode(it) } }
+      }
+      androidx.core.content.ContextCompat.registerReceiver(
+        this, pipReceiver, android.content.IntentFilter(pipAction), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+      )
+      pipReceiverOn = true
+    }
 
     // The e-ink UI is always dark, so keep light system bar icons regardless of system theme.
     enableEdgeToEdge(
@@ -71,18 +86,54 @@ class MainActivity : ComponentActivity() {
       updatePipParams()
       val listener = object : androidx.media3.common.Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) = updatePipParams()
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = updatePipParams()
         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) = updatePipParams()
       }
       player?.addListener(listener)
       onDispose { player?.removeListener(listener); updatePipParams() }
     }
+    // The mute button in the PiP window shows the current state.
+    val muted = com.example.btcwidget.ui.social.PipVideo.muted
+    val live = com.example.btcwidget.ui.social.PipVideo.live
+    androidx.compose.runtime.LaunchedEffect(muted, live) { updatePipParams() }
     if (com.example.btcwidget.ui.social.PipVideo.inPip && player != null) {
       androidx.compose.foundation.layout.Box(
         Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)
       ) {
         com.example.btcwidget.ui.social.VideoSurface(player, Modifier.fillMaxSize())
+        if (live != null) com.example.btcwidget.ui.social.LiveBadge(
+          Modifier.align(androidx.compose.ui.Alignment.TopStart)
+            .padding(androidx.compose.ui.unit.Dp(6f))
+        )
       }
     }
+  }
+
+  private fun hasPip() = android.os.Build.VERSION.SDK_INT >= 26 &&
+    packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+  private val pipAction get() = "$packageName.PIP_CONTROL"
+  private var pipReceiverOn = false
+
+  /** The PiP window's buttons (only this app can send these: the receiver isn't exported). */
+  private val pipReceiver = object : android.content.BroadcastReceiver() {
+    override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+      val pip = com.example.btcwidget.ui.social.PipVideo
+      when (intent.getStringExtra(PIP_CMD)) {
+        PIP_TOGGLE -> pip.togglePlay()
+        PIP_MUTE -> pip.mute(!pip.muted)
+      }
+      updatePipParams()
+    }
+  }
+
+  @androidx.annotation.RequiresApi(26)
+  private fun pipButton(cmd: String, code: Int, icon: Int, title: String): android.app.RemoteAction {
+    val intent = android.content.Intent(pipAction).setPackage(packageName).putExtra(PIP_CMD, cmd)
+    val pending = android.app.PendingIntent.getBroadcast(
+      this, code, intent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+    )
+    return android.app.RemoteAction(android.graphics.drawable.Icon.createWithResource(this, icon), title, title, pending)
   }
 
   private fun pipParams(): android.app.PictureInPictureParams? {
@@ -97,14 +148,24 @@ class MainActivity : ComponentActivity() {
           else -> r
         }
       } else android.util.Rational(16, 9)
-    val b = android.app.PictureInPictureParams.Builder().setAspectRatio(ratio)
+    val pip = com.example.btcwidget.ui.social.PipVideo
+    val playing = pip.player?.let { it.isPlaying || it.playWhenReady } == true
+    val b = android.app.PictureInPictureParams.Builder().setAspectRatio(ratio).setActions(
+      listOf(
+        if (playing) pipButton(PIP_TOGGLE, 1, android.R.drawable.ic_media_pause, "Pause")
+        else pipButton(PIP_TOGGLE, 1, android.R.drawable.ic_media_play, "Play"),
+        if (pip.muted) pipButton(PIP_MUTE, 2, android.R.drawable.ic_lock_silent_mode, "Sound on")
+        else pipButton(PIP_MUTE, 2, android.R.drawable.ic_lock_silent_mode_off, "Mute"),
+      )
+    )
+    if (android.os.Build.VERSION.SDK_INT >= 33 && pip.live != null) b.setTitle(pip.live?.title).setSubtitle(pip.live?.host)
     // Android 12+: shrink to PiP by itself when the user leaves while the video plays.
     if (android.os.Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(com.example.btcwidget.ui.social.PipVideo.wantsPip).setSeamlessResizeEnabled(true)
     return b.build()
   }
 
   private fun updatePipParams() {
-    if (android.os.Build.VERSION.SDK_INT >= 26 && packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+    if (hasPip()) {
       runCatching { pipParams()?.let { setPictureInPictureParams(it) } }
     }
   }
@@ -137,6 +198,9 @@ class MainActivity : ComponentActivity() {
 
   override fun onDestroy() {
     SignerBridge.launch = null
+    com.example.btcwidget.ui.social.PipVideo.requestPip = null
+    if (pipReceiverOn) runCatching { unregisterReceiver(pipReceiver) }
+    pipReceiverOn = false
     super.onDestroy()
   }
 }
