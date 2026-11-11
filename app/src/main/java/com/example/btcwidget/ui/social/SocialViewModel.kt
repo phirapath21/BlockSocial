@@ -88,9 +88,33 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         store.setHomeFeeds(getApplication(), list.map { it.id })
     }
 
-    fun addFeed(feed: com.example.btcwidget.nostr.core.HomeFeed) {
+    fun addFeed(feed: com.example.btcwidget.nostr.core.HomeFeed, select: Boolean = true) {
         if (feed !in _homeFeeds.value) saveFeeds(_homeFeeds.value + feed)
-        selectFeed(feed)
+        if (select) selectFeed(feed)
+    }
+
+    /**
+     * People who post about [tags] lately (for onboarding): authors of recent notes with
+     * those hashtags, most active first. Real accounts from relays; nothing hand-picked.
+     */
+    suspend fun topicPeople(tags: List<String>): List<Profile> = runCatching {
+        val me = repo.pubkey
+        val notes = kotlinx.coroutines.coroutineScope {
+            tags.take(5).map { t -> async { runCatching { repo.hashtagFeed(t) }.getOrDefault(emptyList()) } }.map { it.await() }.flatten()
+        }
+        val ranked = notes.map { it.note.pubkey }.filter { it != me && it !in repo.muted.value }
+            .groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(30).map { it.key }
+        repo.loadProfiles(ranked)
+        ranked.mapNotNull { repo.profiles.value[it] }.take(20)
+    }.getOrDefault(emptyList())
+
+    fun saveProfile(name: String, about: String, picture: String?, onDone: () -> Unit) {
+        val me = repo.pubkey ?: return
+        act("Couldn't save your profile") {
+            val current = repo.profiles.value[me] ?: Profile(me)
+            repo.updateProfile(current.copy(name = name.trim().ifEmpty { current.name }, about = about.trim().ifEmpty { current.about }, picture = picture ?: current.picture))
+            onDone()
+        }
     }
 
     fun removeFeed(feed: com.example.btcwidget.nostr.core.HomeFeed) {

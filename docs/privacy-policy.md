@@ -71,6 +71,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **QR codes:** your profile's QR code is drawn on the phone. Scanning a code uses Google's code scanner in Google Play services: the camera screen runs there, Block gets only the scanned text and needs no camera permission, and the scanner may be downloaded by Play services the first time. Pictures from the camera are processed on the phone.
 
+**New accounts:** the setup after creating an account publishes only what you choose: your name, about and picture (public profile), the people you follow, and your message inbox list. The topics you pick are stored on the phone as Home feeds; finding people for them asks the search relays for recent notes with those hashtags.
+
 **Long-form articles:** to open an article, the app asks your relays, the author's relays and any relay named in the link.
 
 **Verified addresses (NIP-05):** to show a ✓ next to a name@domain address, the app asks that domain whether the address belongs to the account.
