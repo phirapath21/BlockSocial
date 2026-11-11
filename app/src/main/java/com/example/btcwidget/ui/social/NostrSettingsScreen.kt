@@ -78,6 +78,7 @@ fun NostrSettingsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack:
                 valid = { it.startsWith("wss://") }
             ) { urls, done -> if (urls.isNotEmpty()) vm.setDmInbox(urls, done) }
 
+            PrivacySection(vm)
             LinksSection(vm)
 
             VideoSection(vm)
@@ -141,6 +142,21 @@ private fun LinksSection(vm: SocialViewModel) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         EInkChip(text = (if (inApp) "✓ " else "") + "IN-APP BROWSER", selected = inApp, onClick = { vm.setLinksInApp(true) })
         EInkChip(text = (if (!inApp) "✓ " else "") + "PHONE'S BROWSER", selected = !inApp, onClick = { vm.setLinksInApp(false) })
+    }
+}
+
+/** Whether new bookmarks and mutes are private (NIP-51 encrypted entries) or public. */
+@Composable
+private fun PrivacySection(vm: SocialViewModel) {
+    val private by vm.privateLists.collectAsState()
+    Section(
+        "New bookmarks and mutes",
+        "Private ones are encrypted so only you can read them (relays and other people see only that the list exists). " +
+            "Public ones anyone can see. Either way they sync to your other Nostr apps."
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        EInkChip(text = (if (private) "✓ " else "") + "PRIVATE", selected = private, onClick = { vm.setPrivateLists(true) })
+        EInkChip(text = (if (!private) "✓ " else "") + "PUBLIC", selected = !private, onClick = { vm.setPrivateLists(false) })
     }
 }
 

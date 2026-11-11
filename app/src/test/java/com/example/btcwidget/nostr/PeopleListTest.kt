@@ -54,3 +54,69 @@ class PeopleListTest {
         assertEquals(feed, HomeFeed.parse(feed.id))
     }
 }
+
+class MediaPostsTest {
+    @org.junit.Test
+    fun mediaFeedsAndImetaUrls() {
+        val pk = "a".repeat(64)
+        val pic = com.example.btcwidget.nostr.core.Event("id", pk, 1, com.example.btcwidget.nostr.core.Kind.PICTURE, listOf(
+            listOf("imeta", "url https://x/a.jpg", "m image/jpeg", "blurhash LEHV6nWB2yk8pyo0adR*.7kCMdnj"),
+            listOf("imeta", "url https://x/b.jpg", "m image/jpeg"),
+            listOf("imeta", "m image/jpeg") // no url
+        ), "caption", "")
+        org.junit.Assert.assertEquals(listOf("https://x/a.jpg", "https://x/b.jpg"), com.example.btcwidget.nostr.core.Imeta.urls(pic))
+        org.junit.Assert.assertEquals("LEHV6nWB2yk8pyo0adR*.7kCMdnj", com.example.btcwidget.nostr.core.Imeta.blurhash(pic, "https://x/a.jpg"))
+        org.junit.Assert.assertNull(com.example.btcwidget.nostr.core.Imeta.blurhash(pic, "https://x/b.jpg"))
+        listOf("pictures", "pictures:all", "videos", "videos:all").forEach { id ->
+            org.junit.Assert.assertEquals(id, com.example.btcwidget.nostr.core.HomeFeed.parse(id)!!.id)
+        }
+    }
+}
+
+class HashtagFollowTest {
+    @org.junit.Test
+    fun followingATopicKeepsEverythingElse() {
+        val me = "a".repeat(64); val bob = "b".repeat(64)
+        val current = com.example.btcwidget.nostr.core.Event("id", me, 1, com.example.btcwidget.nostr.core.Kind.CONTACTS,
+            listOf(listOf("p", bob), listOf("t", "Nostr")), "{\"wss://r\":{}}", "")
+        val on = com.example.btcwidget.nostr.core.Events.contactsHashtag(me, current, "#Bitcoin", true)
+        org.junit.Assert.assertEquals(listOf(listOf("p", bob), listOf("t", "Nostr"), listOf("t", "bitcoin")), on.tags)
+        org.junit.Assert.assertEquals(current.content, on.content) // relay map in content kept
+        val off = com.example.btcwidget.nostr.core.Events.contactsHashtag(me, on.signed("s"), "nostr", false)
+        org.junit.Assert.assertEquals(listOf(listOf("p", bob), listOf("t", "bitcoin")), off.tags)
+    }
+}
+
+class FollowPackTest {
+    @org.junit.Test
+    fun packsParseAndFollowAllKeepsTheList() {
+        val me = "a".repeat(64); val bob = "b".repeat(64); val carol = "c".repeat(64); val dave = "d".repeat(64)
+        val e = com.example.btcwidget.nostr.core.Event("p", dave, 5, com.example.btcwidget.nostr.core.FollowPack.KIND,
+            listOf(listOf("d", "btc"), listOf("title", "Bitcoin devs"), listOf("p", bob), listOf("p", carol), listOf("p", "bad")), "", "")
+        val pack = com.example.btcwidget.nostr.core.FollowPack.parse(e)!!
+        org.junit.Assert.assertEquals(listOf(bob, carol), pack.members)
+        org.junit.Assert.assertEquals("39089:$dave:btc", pack.address)
+        val current = com.example.btcwidget.nostr.core.Event("c", me, 1, com.example.btcwidget.nostr.core.Kind.CONTACTS, listOf(listOf("p", bob), listOf("t", "nostr")), "relays", "")
+        val next = com.example.btcwidget.nostr.core.Events.contactsAdding(me, current, pack.members + me)
+        org.junit.Assert.assertEquals(listOf(listOf("p", bob), listOf("t", "nostr"), listOf("p", carol)), next.tags) // no duplicates, not yourself
+        org.junit.Assert.assertEquals("relays", next.content)
+    }
+}
+
+class HighlightTest {
+    @org.junit.Test
+    fun highlightPointsAtTheArticleAndItsAuthor() {
+        val me = "a".repeat(64); val writer = "b".repeat(64)
+        val articleEvent = com.example.btcwidget.nostr.core.Event("art", writer, 1, com.example.btcwidget.nostr.core.Kind.ARTICLE, listOf(listOf("d", "why-btc")), "body", "")
+        val article = com.example.btcwidget.nostr.core.Article(articleEvent, "why-btc", "Why", null, null, 1)
+        val h = com.example.btcwidget.nostr.core.Highlights.of(me, "  Sound money.  ", article, "So true", "wss://r", 9)
+        org.junit.Assert.assertEquals(com.example.btcwidget.nostr.core.Kind.HIGHLIGHT, h.kind)
+        org.junit.Assert.assertEquals("Sound money.", h.content)
+        val parsed = com.example.btcwidget.nostr.core.Highlights.parse(h.signed("s"))!!
+        org.junit.Assert.assertEquals("30023:$writer:why-btc", parsed.articleAddress)
+        org.junit.Assert.assertEquals("So true", parsed.comment)
+        org.junit.Assert.assertTrue(listOf("p", writer, "wss://r", "author") in h.tags)
+        val spans = listOf(com.example.btcwidget.nostr.core.Markdown.Span.Plain("Hello "), com.example.btcwidget.nostr.core.Markdown.Span.Bold("world"))
+        org.junit.Assert.assertEquals("Hello world", com.example.btcwidget.nostr.core.Highlights.textOf(spans))
+    }
+}

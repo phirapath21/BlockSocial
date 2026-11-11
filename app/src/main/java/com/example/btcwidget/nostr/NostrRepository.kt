@@ -156,6 +156,10 @@ class NostrRepository private constructor(private val context: Context) {
     /** The user's pinned note ids (NIP-51 kind 10001), first shown first. */
     val pinned: StateFlow<List<String>> = _pinned.asStateFlow()
 
+    private val _followedTags = MutableStateFlow<Set<String>>(emptySet())
+    /** Hashtags the user follows (lowercase), from the "t" tags of their contact list. */
+    val followedTags: StateFlow<Set<String>> = _followedTags.asStateFlow()
+
     private val _lists = MutableStateFlow<List<com.example.btcwidget.nostr.core.PeopleList>?>(null)
     /** The user's lists of people (NIP-51 kind 30000); null until loaded. */
     val lists: StateFlow<List<com.example.btcwidget.nostr.core.PeopleList>?> = _lists.asStateFlow()
@@ -184,6 +188,22 @@ class NostrRepository private constructor(private val context: Context) {
 
     /** Completes once the disk cache (profiles, the account's lists) is loaded. */
     val cacheReady: Job
+
+    // Declared before init: the cached account is applied from a coroutine started there.
+    private val searchPool by lazy { RelayPool().also { it.setRelays(_searchRelays.value.ifEmpty { SEARCH_RELAYS }) } }
+
+    // ---- Relay lists: NIP-65 (read/write), search (10007) and blocked (10006) ----
+
+    @Volatile private var searchListEvent: Event? = null
+    @Volatile private var blockedListEvent: Event? = null
+    private val _relayEntries = MutableStateFlow<List<com.example.btcwidget.nostr.core.RelayLists.Entry>>(emptyList())
+    /** The user's published NIP-65 relays, with read/write markers. */
+    val relayEntries: StateFlow<List<com.example.btcwidget.nostr.core.RelayLists.Entry>> = _relayEntries.asStateFlow()
+    private val _searchRelays = MutableStateFlow<List<String>>(emptyList())
+    /** The user's search relays (empty: Block's defaults). */
+    val searchRelays: StateFlow<List<String>> = _searchRelays.asStateFlow()
+    private val _blockedRelays = MutableStateFlow<List<String>>(emptyList())
+    val blockedRelays: StateFlow<List<String>> = _blockedRelays.asStateFlow()
 
     init {
         pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)
@@ -317,6 +337,15 @@ class NostrRepository private constructor(private val context: Context) {
         bookmarkEvent = null
         pinEvent = null
         _lists.value = null
+        privateMutes = null
+        privateBookmarks = null
+        _followedTags.value = emptySet()
+        searchListEvent = null
+        blockedListEvent = null
+        _relayEntries.value = emptyList()
+        _searchRelays.value = emptyList()
+        _blockedRelays.value = emptyList()
+        RelayPool.block(emptySet())
         _pinned.value = emptyList()
         emojiListEvent = null
         _emojis.value = emptyMap()
@@ -337,7 +366,7 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun loadAccount() {
         val me = pubkey ?: return
         val events = queryEverywhere(
-            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.PINNED, Kind.RELAY_LIST, MEDIA_SERVER_LIST, Kind.EMOJI_LIST))),
+            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.PINNED, Kind.RELAY_LIST, MEDIA_SERVER_LIST, Kind.EMOJI_LIST, com.example.btcwidget.nostr.core.RelayLists.SEARCH, com.example.btcwidget.nostr.core.RelayLists.BLOCKED))),
             timeoutMs = 6_000
         )
         applyAccountEvents(events, fromRelays = true)
@@ -348,14 +377,19 @@ class NostrRepository private constructor(private val context: Context) {
     private fun applyAccountEvents(events: List<Event>, fromRelays: Boolean) {
         fun latest(kind: Int) = events.filter { it.kind == kind }.maxByOrNull { it.createdAt }
         latest(Kind.METADATA)?.let { remember(it) }
-        latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = withPendingFollows(it.tagValues("p").toSet()) } }
+        latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = withPendingFollows(it.tagValues("p").toSet()); _followedTags.value = followedTagsOf(it) } }
         latest(Kind.PINNED)?.let { if (it.createdAt >= (pinEvent?.createdAt ?: 0)) { pinEvent = it; _pinned.value = it.tagValues("e") } }
         latest(Kind.EMOJI_LIST)?.let { if (it.createdAt >= (emojiListEvent?.createdAt ?: 0)) { emojiListEvent = it; _emojis.value = com.example.btcwidget.nostr.core.CustomEmoji.of(it) } }
-        latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { bookmarkEvent = it; _bookmarks.value = it.tagValues("e").reversed() } }
-        latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { muteEvent = it; _muted.value = it.tagValues("p").toSet(); _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(it) } }
+        latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { if (it.content != bookmarkEvent?.content) privateBookmarks = null; bookmarkEvent = it; applyBookmarks() } }
+        latest(Kind.MUTE_LIST)?.let { if (it.createdAt >= (muteEvent?.createdAt ?: 0)) { if (it.content != muteEvent?.content) privateMutes = null; muteEvent = it; applyMutes() } }
+        // Their private parts are encrypted: open them without prompting a signer app.
+        scope.launch { runCatching { openPrivateLists(interactive = false) } }
         latest(MEDIA_SERVER_LIST)?.let { mediaServerList = it; mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(it) }
+        latest(com.example.btcwidget.nostr.core.RelayLists.SEARCH)?.let { if (it.createdAt >= (searchListEvent?.createdAt ?: 0)) { searchListEvent = it; applySearchRelays() } }
+        latest(com.example.btcwidget.nostr.core.RelayLists.BLOCKED)?.let { if (it.createdAt >= (blockedListEvent?.createdAt ?: 0)) { blockedListEvent = it; applyBlockedRelays() } }
         latest(Kind.RELAY_LIST)?.let { list ->
             relayList = list
+            _relayEntries.value = com.example.btcwidget.nostr.core.RelayLists.entries(list)
             if (NostrAccountStore.relays(context) == null) {
                 // NIP-65: add the user's relays to the defaults (a slow personal relay alone would slow everything).
                 val urls = list.tags.filter { it.size >= 2 && it[0] == "r" }.mapNotNull { normalizeRelayUrl(it[1]) }
@@ -367,7 +401,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     private fun saveAccount() {
         val me = pubkey ?: return
-        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList, emojiListEvent)
+        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList, emojiListEvent, searchListEvent, blockedListEvent)
         scope.launch(Dispatchers.IO) { cache.saveEvents(ACCOUNT_CACHE, events) }
         events.forEach { store(it) }
     }
@@ -397,12 +431,19 @@ class NostrRepository private constructor(private val context: Context) {
         // Following nobody yet: show your own notes plus #bitcoin, so the timeline isn't empty.
         if (_following.value.isEmpty()) {
             return timeline(
-                Filter(authors = listOf(me), kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit),
+                Filter(authors = listOf(me), kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit),
                 Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("t" to listOf("bitcoin")), until = until, limit = limit)
             )
         }
         val authors = (_following.value + me).toList()
-        return authoredTimeline(authors) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }
+        val tags = _followedTags.value.toList()
+        if (tags.isEmpty()) return authoredTimeline(authors) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit) }
+        // Followed hashtags join the timeline, as in Amethyst.
+        return coroutineScope {
+            val people = async { authoredTimeline(authors) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit) } }
+            val topics = async { runCatching { timeline(Filter(kinds = Kind.POSTS, tags = mapOf("t" to tags), until = until, limit = limit / 2)) }.getOrDefault(emptyList()) }
+            (people.await() + topics.await().filter { !hidden(it.note) }).distinctBy { it.key }.sortedByDescending { it.sortTime }
+        }
     }
 
     /** One page of [feed] for Home; [until] pages back (DVM feeds come as one page). */
@@ -412,17 +453,27 @@ class NostrRepository private constructor(private val context: Context) {
         }
         is com.example.btcwidget.nostr.core.HomeFeed.Global -> globalFeed(feed.relay, until)
         is com.example.btcwidget.nostr.core.HomeFeed.Hashtag -> hashtagFeed(feed.tag, until)
+        is com.example.btcwidget.nostr.core.HomeFeed.Media -> mediaFeed(feed, until)
         is com.example.btcwidget.nostr.core.HomeFeed.People -> peopleList(feed.owner, feed.d)?.members.orEmpty().let { members ->
             if (members.isEmpty()) emptyList()
-            else authoredTimeline(members) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = 40) }
+            else authoredTimeline(members) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = 40) }
         }
         is com.example.btcwidget.nostr.core.HomeFeed.Dvm ->
             if (until != null) emptyList() else dvmFeed(com.example.btcwidget.nostr.core.Dvm.Service(feed.pubkey, feed.dvmId, feed.name, null, null, false))
     }
 
+    /** Picture posts (kind 20) or video posts (21, 22): by the people you follow, or by everyone. */
+    suspend fun mediaFeed(feed: com.example.btcwidget.nostr.core.HomeFeed.Media, until: Long? = null): List<FeedItem> {
+        val kinds = if (feed.videos) listOf(Kind.VIDEO, Kind.SHORT_VIDEO) else listOf(Kind.PICTURE)
+        if (feed.everyone) return timeline(Filter(kinds = kinds, until = until, limit = 40))
+        val me = pubkey ?: return emptyList()
+        val authors = (_following.value + me).toList()
+        return authoredTimeline(authors) { Filter(authors = it, kinds = kinds, until = until, limit = 40) }
+    }
+
     /** A profile's notes and reposts. */
     suspend fun profileFeed(pubkey: String, until: Long? = null, limit: Int = 30): List<FeedItem> =
-        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }
+        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit) }
 
     // ---- Outbox model (NIP-65): read people from the relays they write to ----
 
@@ -546,7 +597,7 @@ class NostrRepository private constructor(private val context: Context) {
     private suspend fun buildTimeline(events: List<Event>): List<FeedItem> {
         // Reposts carry the note as JSON; fetch the few that don't in one request.
         val embedded = events.filter { it.kind == Kind.REPOST }.associateWith { r ->
-            runCatching { Event.fromJson(r.content) }.getOrNull()?.takeIf { it.kind == Kind.TEXT_NOTE && it.verify() }
+            runCatching { Event.fromJson(r.content) }.getOrNull()?.takeIf { it.kind in Kind.POSTS && it.verify() }
         }
         val missing = embedded.filterValues { it == null }.keys.mapNotNull { it.tagValues("e").firstOrNull() }
             .filter { !notes.containsKey(it) }.distinct()
@@ -556,7 +607,7 @@ class NostrRepository private constructor(private val context: Context) {
         events.filter { it.kind == Kind.REPOST }.forEach { store(it) }
         val items = events.mapNotNull { e ->
             when (e.kind) {
-                Kind.TEXT_NOTE, Kind.POLL -> FeedItem(e)
+                in Kind.POSTS -> FeedItem(e)
                 Kind.REPOST -> (embedded[e] ?: e.tagValues("e").firstOrNull()?.let { notes[it] })
                     ?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
                 else -> null
@@ -660,7 +711,61 @@ class NostrRepository private constructor(private val context: Context) {
     // ---- Search ----
 
     /** Relays that support NIP-50 search; opened on first search. */
-    private val searchPool by lazy { RelayPool().also { it.setRelays(SEARCH_RELAYS) } }
+    private fun applySearchRelays() {
+        _searchRelays.value = com.example.btcwidget.nostr.core.RelayLists.relays(searchListEvent)
+        searchPool.setRelays(_searchRelays.value.ifEmpty { SEARCH_RELAYS })
+    }
+
+    private fun applyBlockedRelays() {
+        _blockedRelays.value = com.example.btcwidget.nostr.core.RelayLists.relays(blockedListEvent)
+        RelayPool.block(_blockedRelays.value.toSet())
+    }
+
+    /** Publishes the user's NIP-65 list; with no relays of their own set in Settings, Block uses it too. */
+    suspend fun saveRelayList(entries: List<com.example.btcwidget.nostr.core.RelayLists.Entry>) {
+        val me = requireMe()
+        if (!accountFresh) loadAccount()
+        val event = publish(com.example.btcwidget.nostr.core.RelayLists.relayList(me, entries))
+        relayList = event
+        _relayEntries.value = com.example.btcwidget.nostr.core.RelayLists.entries(event)
+        if (NostrAccountStore.relays(context) == null) {
+            val urls = _relayEntries.value.map { it.url }
+            pool.setRelays((urls.take(5) + RelayPool.DEFAULT_RELAYS).distinct().take(8))
+        }
+        saveAccount()
+    }
+
+    suspend fun saveSearchRelays(urls: List<String>) {
+        val me = requireMe()
+        if (!accountFresh) loadAccount()
+        searchListEvent = publish(com.example.btcwidget.nostr.core.RelayLists.relaySet(me, com.example.btcwidget.nostr.core.RelayLists.SEARCH, urls, searchListEvent))
+        applySearchRelays()
+        saveAccount()
+    }
+
+    suspend fun saveBlockedRelays(urls: List<String>) {
+        val me = requireMe()
+        if (!accountFresh) loadAccount()
+        blockedListEvent = publish(com.example.btcwidget.nostr.core.RelayLists.relaySet(me, com.example.btcwidget.nostr.core.RelayLists.BLOCKED, urls, blockedListEvent))
+        applyBlockedRelays()
+        saveAccount()
+    }
+
+    private val relayInfos = ConcurrentHashMap<String, com.example.btcwidget.nostr.core.RelayInfo>()
+
+    /** What [relay] says about itself (NIP-11), or null if it doesn't answer. Remembered for the session. */
+    suspend fun relayInfo(relay: String): com.example.btcwidget.nostr.core.RelayInfo? {
+        relayInfos[relay]?.let { return it }
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val request = okhttp3.Request.Builder().url(com.example.btcwidget.nostr.core.RelayInfo.httpUrl(relay))
+                    .header("Accept", "application/nostr+json").build()
+                RelayPool.defaultClient.newCall(request).execute().use { r ->
+                    if (!r.isSuccessful) null else r.body.string().take(200_000).let { com.example.btcwidget.nostr.core.RelayInfo.parse(it) }
+                }
+            }.getOrNull()
+        }?.also { relayInfos[relay] = it }
+    }
 
     /** What a search box entry points straight at, if anything. */
     sealed interface Direct {
@@ -1159,6 +1264,7 @@ class NostrRepository private constructor(private val context: Context) {
                 val want = pendingFollows[target] ?: follow
                 val event = publish(Events.contacts(me, contactsEvent, target, want), fast = true)
                 contactsEvent = event
+                _followedTags.value = followedTagsOf(event)
                 if (pendingFollows[target] == want) pendingFollows.remove(target)
                 _following.value = withPendingFollows(event.tagValues("p").toSet())
                 saveAccount()
@@ -1170,24 +1276,163 @@ class NostrRepository private constructor(private val context: Context) {
         }
     }
 
-    /** Mutes (or unmutes) [target] with a public NIP-51 mute list. */
+    /** Follows everyone in [targets] with one contact list update (a follow pack's "Follow all"). */
+    suspend fun followAll(targets: Collection<String>) {
+        val me = requireMe()
+        val add = targets.filter { it != me && it !in _following.value }.distinct()
+        if (add.isEmpty()) return
+        val before = _following.value
+        _following.value = before + add
+        try {
+            contactsLock.withLock {
+                if (!accountFresh) loadAccount()
+                if (contactsEvent == null && before.isNotEmpty()) error("Couldn't load your follow list; try again")
+                val event = publish(com.example.btcwidget.nostr.core.Events.contactsAdding(me, contactsEvent, add), fast = true)
+                contactsEvent = event
+                _following.value = withPendingFollows(event.tagValues("p").toSet())
+                saveAccount()
+            }
+        } catch (e: Throwable) {
+            _following.value = withPendingFollows(contactsEvent?.tagValues("p")?.toSet() ?: before)
+            throw e
+        }
+    }
+
+    /** Follow packs (kind 39089) from our relays and the indexers. */
+    suspend fun followPacks(): List<com.example.btcwidget.nostr.core.FollowPack> =
+        com.example.btcwidget.nostr.core.FollowPack.latest(
+            queryEverywhere(listOf(Filter(kinds = listOf(com.example.btcwidget.nostr.core.FollowPack.KIND), limit = 80)), timeoutMs = 6_000)
+        ).filter { it.owner !in _muted.value }.also { packs -> loadProfilesLater(packs.map { it.owner } + packs.flatMap { it.members.take(4) }) }
+
+    suspend fun followPack(address: String): com.example.btcwidget.nostr.core.FollowPack? {
+        val p = address.split(':', limit = 3).takeIf { it.size == 3 } ?: return null
+        val events = queryEverywhere(listOf(Filter(kinds = listOf(com.example.btcwidget.nostr.core.FollowPack.KIND), authors = listOf(p[1]), tags = mapOf("d" to listOf(p[2])))), timeoutMs = 6_000)
+        return com.example.btcwidget.nostr.core.FollowPack.latest(events).firstOrNull()?.also { loadProfiles(it.members + it.owner) }
+    }
+
+    private fun followedTagsOf(contacts: Event): Set<String> =
+        contacts.tagValues("t").map { it.trim().removePrefix("#").lowercase() }.filter { it.isNotEmpty() }.toSet()
+
+    /**
+     * Follows or unfollows a hashtag, kept in the contact list ("t" tags) so other apps see it
+     * too. Shown at once; published like a follow, one change at a time; undone on failure.
+     */
+    suspend fun setHashtagFollowed(tag: String, follow: Boolean) {
+        val me = requireMe()
+        val t = tag.trim().removePrefix("#").lowercase().takeIf { it.isNotEmpty() } ?: return
+        val before = _followedTags.value
+        _followedTags.value = if (follow) before + t else before - t
+        try {
+            contactsLock.withLock {
+                if (!accountFresh) loadAccount()
+                if (contactsEvent == null && _following.value.isNotEmpty()) error("Couldn't load your follow list; try again")
+                val event = publish(com.example.btcwidget.nostr.core.Events.contactsHashtag(me, contactsEvent, t, follow), fast = true)
+                contactsEvent = event
+                _followedTags.value = followedTagsOf(event)
+                saveAccount()
+            }
+        } catch (e: Throwable) {
+            _followedTags.value = contactsEvent?.let { followedTagsOf(it) } ?: before
+            throw e
+        }
+    }
+
+    // ---- Private list entries (NIP-51: tags encrypted to yourself in the list's content) ----
+
+    /** Decrypted private tags of the mute and bookmark lists; null while they couldn't be read. */
+    @Volatile private var privateMutes: List<List<String>>? = null
+    @Volatile private var privateBookmarks: List<List<String>>? = null
+
+    /** New mutes and bookmarks go in the private part (the default), or the public tags. */
+    private val privateByDefault get() = com.example.btcwidget.AppPrefs.privateLists(context)
+
+    private fun applyMutes() {
+        val list = muteEvent
+        val priv = privateMutes.orEmpty()
+        _muted.value = (list?.tagValues("p").orEmpty() + priv.filter { it.size >= 2 && it[0] == "p" }.map { it[1] }).toSet()
+        _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(list, priv)
+    }
+
+    private fun applyBookmarks() {
+        // Newest first: public then private entries, each in the order added.
+        val all = bookmarkEvent?.tagValues("e").orEmpty() + privateBookmarks.orEmpty().filter { it.size >= 2 && it[0] == "e" }.map { it[1] }
+        _bookmarks.value = all.distinct().reversed()
+    }
+
+    /** The private tags of [list]: empty if it has none, null if they can't be decrypted (yet). */
+    private suspend fun readPrivate(list: Event?, interactive: Boolean): List<List<String>>? {
+        val content = list?.content?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val me = pubkey ?: return null
+        val s = signer ?: return null
+        val plain = runCatching {
+            if (com.example.btcwidget.nostr.core.PrivateTags.isNip04(content)) s.nip04Decrypt(content, me, interactive)
+            else s.nip44Decrypt(content, me, interactive)
+        }.getOrNull() ?: return null
+        return com.example.btcwidget.nostr.core.PrivateTags.parse(plain)
+    }
+
+    /** Opens the private parts of the mute and bookmark lists, then applies them. */
+    private suspend fun openPrivateLists(interactive: Boolean) {
+        if (privateMutes == null) readPrivate(muteEvent, interactive)?.let { privateMutes = it; applyMutes() }
+        if (privateBookmarks == null) readPrivate(bookmarkEvent, interactive)?.let { privateBookmarks = it; applyBookmarks() }
+    }
+
+    /**
+     * New tags and content for a list after removing entries matching [matches] from both its
+     * public and private parts, and adding [entry] to one of them. The private part is only
+     * re-encrypted when it changes, and never written over when it couldn't be read.
+     */
+    private suspend fun editList(
+        list: Event?,
+        knownPrivate: List<List<String>>?,
+        matches: (List<String>) -> Boolean,
+        entry: List<String>?,
+        private: Boolean
+    ): Triple<List<List<String>>, String, List<List<String>>?> {
+        val me = requireMe()
+        val publicTags = list?.tags.orEmpty().filterNot { it.size >= 2 && matches(it) }
+        var priv = knownPrivate
+        val needsPrivate = (entry != null && private) || (entry == null && priv == null && list?.content?.isNotBlank() == true)
+        if (priv == null && needsPrivate) {
+            priv = readPrivate(list, interactive = true)
+            if (priv == null && entry != null) throw IllegalStateException("Couldn't open your private list (the signer didn't decrypt it)")
+        }
+        if (priv == null) {
+            // Unreadable private part left exactly as it was.
+            return Triple(if (entry != null) publicTags + listOf(entry) else publicTags, list?.content.orEmpty(), null)
+        }
+        val keptPrivate = priv.filterNot { it.size >= 2 && matches(it) }
+        val newPrivate = if (entry != null && private) keptPrivate + listOf(entry) else keptPrivate
+        val newPublic = if (entry != null && !private) publicTags + listOf(entry) else publicTags
+        val content = when {
+            newPrivate == priv && !list?.content.isNullOrBlank() -> list!!.content
+            newPrivate.isEmpty() -> ""
+            else -> requireSigner().nip44Encrypt(com.example.btcwidget.nostr.core.PrivateTags.serialize(newPrivate), me)
+        }
+        return Triple(newPublic, content, newPrivate)
+    }
+
+    /** Mutes (or unmutes) [target]: privately by default (NIP-51 encrypted entry). */
     suspend fun setMuted(target: String, mute: Boolean) = setMuteEntry("p", target, mute)
 
     /**
      * Adds or removes one entry ("p" account, "word", "t" hashtag or "e" thread) on the mute
      * list, keeping everything else on it (including other apps' private entries).
      */
-    suspend fun setMuteEntry(type: String, value: String, mute: Boolean) {
+    suspend fun setMuteEntry(type: String, value: String, mute: Boolean, private: Boolean = privateByDefault) {
         val me = requireMe()
         if (!accountFresh) loadAccount()
         val v = if (type == "word" || type == "t") value.trim().lowercase().removePrefix("#") else value
         if (v.isEmpty()) return
-        val others = muteEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == type && it[1].equals(v, ignoreCase = true) }
-        val tags = if (mute) others + listOf(listOf(type, v)) else others
-        val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, muteEvent?.content.orEmpty()))
+        val (tags, content, priv) = editList(
+            muteEvent, privateMutes,
+            matches = { it[0] == type && it[1].equals(v, ignoreCase = true) },
+            entry = if (mute) listOf(type, v) else null, private = private
+        )
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, content))
         muteEvent = event
-        _muted.value = event.tagValues("p").toSet()
-        _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(event)
+        privateMutes = priv
+        applyMutes()
         saveAccount()
     }
 
@@ -1195,10 +1440,11 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun unmuteAllThreads() {
         val me = requireMe()
         if (!accountFresh) loadAccount()
-        val tags = muteEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "e" }
-        val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, muteEvent?.content.orEmpty()))
+        val (tags, content, priv) = editList(muteEvent, privateMutes, matches = { it[0] == "e" }, entry = null, private = false)
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.MUTE_LIST, tags, content))
         muteEvent = event
-        _mutes.value = com.example.btcwidget.nostr.core.MuteRules.of(event)
+        privateMutes = priv
+        applyMutes()
         saveAccount()
     }
 
@@ -1346,11 +1592,15 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun setBookmarked(note: Event, on: Boolean) {
         val me = requireMe()
         if (!accountFresh) loadAccount()
-        val others = bookmarkEvent?.tags.orEmpty().filterNot { it.size >= 2 && it[0] == "e" && it[1] == note.id }
-        val tags = if (on) others + listOf(listOf("e", note.id, relayHint())) else others
-        val event = publish(UnsignedEvent(me, Events.now(), Kind.BOOKMARKS, tags, bookmarkEvent?.content.orEmpty()))
+        val (tags, content, priv) = editList(
+            bookmarkEvent, privateBookmarks,
+            matches = { it[0] == "e" && it[1] == note.id },
+            entry = if (on) listOf("e", note.id, relayHint()) else null, private = privateByDefault
+        )
+        val event = publish(UnsignedEvent(me, Events.now(), Kind.BOOKMARKS, tags, content))
         bookmarkEvent = event
-        _bookmarks.value = event.tagValues("e").reversed()
+        privateBookmarks = priv
+        applyBookmarks()
         saveAccount()
     }
 
@@ -1375,6 +1625,20 @@ class NostrRepository private constructor(private val context: Context) {
         val id = ids.firstOrNull() ?: return null
         return note(id)?.takeIf { it.pubkey == pubkey }
     }
+
+    // ---- Highlights (NIP-84) ----
+
+    /** Highlights of [article] by anyone, newest first (muted people's left out). */
+    suspend fun highlightsOf(article: com.example.btcwidget.nostr.core.Article): List<com.example.btcwidget.nostr.core.Highlights.Highlight> {
+        val address = "${Kind.ARTICLE}:${article.pubkey}:${article.identifier}"
+        val events = queryEverywhere(listOf(Filter(kinds = listOf(Kind.HIGHLIGHT), tags = mapOf("a" to listOf(address)), limit = 100)), timeoutMs = 5_000)
+        return events.filter { !hidden(it) }.sortedByDescending { it.createdAt }
+            .mapNotNull { com.example.btcwidget.nostr.core.Highlights.parse(it) }
+            .also { list -> loadProfilesLater(list.map { it.event.pubkey }) }
+    }
+
+    suspend fun highlight(article: com.example.btcwidget.nostr.core.Article, text: String, comment: String?): Event =
+        publish(com.example.btcwidget.nostr.core.Highlights.of(requireMe(), text, article, comment, relayHint()))
 
     // ---- Lists of people (NIP-51 kind 30000) ----
 
@@ -1456,13 +1720,13 @@ class NostrRepository private constructor(private val context: Context) {
      * "new posts" pill). Call the returned function to stop.
      */
     fun liveFeed(authors: List<String>, since: Long, onItem: (FeedItem) -> Unit): () -> Unit =
-        pool.subscribe(listOf(Filter(authors = authors, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), since = since + 1)), { e, _ ->
+        pool.subscribe(listOf(Filter(authors = authors, kinds = Kind.POSTS + Kind.REPOST, since = since + 1)), { e, _ ->
             if (hidden(e)) return@subscribe
             val item = when (e.kind) {
-                Kind.TEXT_NOTE -> FeedItem(e)
-                else -> runCatching { Event.fromJson(e.content) }.getOrNull()
-                    ?.takeIf { it.kind == Kind.TEXT_NOTE && it.verify() }
+                Kind.REPOST -> runCatching { Event.fromJson(e.content) }.getOrNull()
+                    ?.takeIf { it.kind in Kind.POSTS && it.verify() }
                     ?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
+                else -> FeedItem(e)
             } ?: return@subscribe
             remember(item.note)
             onItem(item)

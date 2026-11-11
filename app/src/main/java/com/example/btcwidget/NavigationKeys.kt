@@ -70,3 +70,9 @@ import kotlinx.serialization.Serializable
 
 /** How each relay connection is doing. */
 @Serializable data object RelaysKey : NavKey
+
+/** A live stream (NIP-53), by its address "30311:<pubkey>:<d>". */
+@Serializable data class LiveKey(val address: String) : NavKey
+
+/** A follow pack (kind 39089), by its address "39089:<pubkey>:<d>". */
+@Serializable data class PackKey(val address: String) : NavKey

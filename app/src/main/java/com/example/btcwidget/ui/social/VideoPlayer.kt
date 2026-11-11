@@ -71,16 +71,17 @@ internal object VideoPositions {
  * of video, held in the app's memory, which with a few videos (a paused one in the feed and the
  * same one full screen) filled the whole heap and crashed. Short social videos need far less.
  */
-internal fun newPlayer(context: Context, url: String, fullScreen: Boolean = false, onRatio: (Float) -> Unit): ExoPlayer =
+internal fun newPlayer(context: Context, url: String, fullScreen: Boolean = false, live: Boolean = false, onRatio: (Float) -> Unit): ExoPlayer =
     ExoPlayer.Builder(context).setLoadControl(smallBuffer(fullScreen)).build().apply {
         // Data saver: the lowest quality whenever the video offers a choice.
         if (VideoQuality.fromName(com.example.btcwidget.AppPrefs.videoQuality(context)) == VideoQuality.DATA_SAVER) {
             trackSelectionParameters = trackSelectionParameters.buildUpon().setForceLowestBitrate(true).build()
         }
         setMediaItem(MediaItem.fromUri(url))
-        repeatMode = Player.REPEAT_MODE_ONE
+        // A live stream plays from the live edge; a video loops and carries on where it was.
+        if (!live) repeatMode = Player.REPEAT_MODE_ONE
         prepare()
-        seekTo(VideoPositions[url])
+        if (!live) seekTo(VideoPositions[url])
         addListener(object : Player.Listener {
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 if (videoSize.width > 0 && videoSize.height > 0) onRatio(videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height)

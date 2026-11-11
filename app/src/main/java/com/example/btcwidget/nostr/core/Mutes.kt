@@ -26,8 +26,9 @@ data class MuteRules(
     }
 
     companion object {
-        fun of(list: Event?): MuteRules {
-            val tags = list?.tags.orEmpty()
+        /** The rules from [list]'s public tags plus its decrypted [private] ones (NIP-51). */
+        fun of(list: Event?, private: List<List<String>> = emptyList()): MuteRules {
+            val tags = list?.tags.orEmpty() + private
             fun values(name: String) = tags.filter { it.size >= 2 && it[0] == name }.map { it[1].trim() }.filter { it.isNotEmpty() }
             return MuteRules(
                 pubkeys = values("p").toSet(),
@@ -71,4 +72,24 @@ class TrustNetwork(me: String, follows: Collection<String>, followsOfFollows: Co
     fun contains(pubkey: String): Boolean = keys.contains(prefix(pubkey))
 
     private fun prefix(pubkey: String): Long = pubkey.take(16).toULongOrNull(16)?.toLong() ?: pubkey.hashCode().toLong()
+}
+
+/**
+ * The private part of a NIP-51 list: a JSON array of tags, encrypted to yourself (NIP-44; old
+ * lists used NIP-04, recognisable by "?iv="), kept in the list event's content.
+ */
+object PrivateTags {
+    fun isNip04(content: String) = "?iv=" in content
+
+    /** The tags in decrypted [json]; empty for anything that isn't an array of string arrays. */
+    fun parse(json: String): List<List<String>> = runCatching {
+        val arr = org.json.JSONArray(json)
+        (0 until arr.length()).mapNotNull { i ->
+            val t = arr.optJSONArray(i) ?: return@mapNotNull null
+            (0 until t.length()).map { t.optString(it) }.takeIf { it.isNotEmpty() }
+        }
+    }.getOrDefault(emptyList())
+
+    fun serialize(tags: List<List<String>>): String =
+        org.json.JSONArray().apply { tags.forEach { t -> put(org.json.JSONArray().apply { t.forEach { put(it) } }) } }.toString()
 }

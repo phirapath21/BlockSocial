@@ -49,6 +49,10 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Your lists:** if you change your media servers or message inbox relays in the app, the new list is published as a public event (kind 10063 or 10050).
 
+**Relay lists:** in Settings › Nostr › Relays you can publish your relay list (NIP-65, which relays you read from and write to), your search relays (kind 10007) and blocked relays (kind 10006); these are public. Block never connects to a blocked relay. Tapping a relay asks it, over HTTPS, to describe itself (NIP-11), which shows it your IP address like any visit.
+
+**Private lists:** new bookmarks and mutes are private by default (Settings › Nostr › More › New bookmarks and mutes): they're encrypted on your phone with your key (NIP-44) and stored in your bookmark or mute list, so relays and other people can see that the list exists and roughly how long it is, but not what's in it. Your other Nostr apps that support private lists can read them. Public ones (your choice, or made before this option) anyone can see. With a signer app, it encrypts and decrypts them for Block.
+
 **Lists of people:** lists you make (Lists in the side bar, or ☰+ on a profile) are published to your relays as public NIP-51 lists (kind 30000): anyone can see their names and who is in them. People aren't notified when you add them. Deleting a list publishes an empty version and a deletion request; relays that already copied it may keep the old version. Viewing someone's lists asks your relays and indexers for them.
 
 **Photos you post:** when you attach a photo, the app first re-encodes it on your phone, which removes EXIF metadata such as GPS location, camera model and time. It then uploads the photo to a Blossom media server: by default blossom.primal.net, or the servers in your own media server list (kind 10063). The upload is signed with your key. The photo becomes public at its address, and the server's own policy applies. Only photos you pick are read; the app asks for no storage or photo permission (it uses Android's photo picker).
@@ -69,6 +73,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Communities, public chats and groups:** communities (NIP-72) and public chat channels (NIP-28) are read from your relays and the community's own relays; posts and chat messages you send there are public, and joining a community publishes your public list of joined communities (kind 10004). Groups (NIP-29) live on one relay chosen by the group: when you open a group, the app connects to that relay, and if the relay asks (NIP-42), it proves who you are by signing a login challenge, so that relay learns your public key. This happens only for groups you open. The groups you open are remembered on your phone only.
 
+**Live streams:** the LIVE tab (Communities) lists streams (NIP-53) from your relays and indexers. Watching one loads the video from the streamer's video server, which sees your IP address; its live chat comes from your relays and the stream's own relays, and messages you send there are public.
+
 **Feeds from DVMs:** under Search › Feeds you can ask a Data Vending Machine (NIP-90) for a feed. The request goes through your relays to that service and is signed with a new throwaway key each time, so the service doesn't learn who asked, except for feeds marked "personalized", which use your account so they can tailor results.
 
 **QR codes:** your profile's QR code is drawn on the phone. Scanning a code uses Google's code scanner in Google Play services: the camera screen runs there, Block gets only the scanned text and needs no camera permission, and the scanner may be downloaded by Play services the first time. Pictures from the camera are processed on the phone. Like Google's other ML Kit services, the scanner may send Google basic information about how it runs (such as device type, app version and performance), never what it scanned; see Google's ML Kit terms and privacy information.
@@ -79,7 +85,7 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Verified addresses (NIP-05):** to show a ✓ next to a name@domain address, the app asks that domain whether the address belongs to the account.
 
-**Moderation:** you can mute accounts, words, hashtags and conversations (published as your public mute list) and report notes (published as a NIP-56 report to your relays). The Community rules (in the app, and at docs/community-rules.md) say what isn't allowed. If you turn on the web-of-trust filter, the app downloads the follow lists of the people you follow from your relays and indexers, keeps a compact summary in memory only, and uses it to hide replies, mentions and search results from accounts outside that network.
+**Moderation:** you can mute accounts, words, hashtags and conversations (saved in your NIP-51 mute list; see Private lists below) and report notes (published as a NIP-56 report to your relays). The Community rules (in the app, and at docs/community-rules.md) say what isn't allowed. If you turn on the web-of-trust filter, the app downloads the follow lists of the people you follow from your relays and indexers, keeps a compact summary in memory only, and uses it to hide replies, mentions and search results from accounts outside that network.
 
 ## Network requests
 

@@ -33,6 +33,7 @@ object AppPrefs {
     private const val VIDEO_QUALITY = "video_quality"
     private const val LANDING_DONE = "landing_done"
     private const val LINKS_IN_APP = "links_in_app"
+    private const val PRIVATE_LISTS = "private_lists"
     private fun modeEnabled(mode: Int) = "mode_enabled_$mode"
     private fun widgetMode(id: Int) = "mode_$id"
     private fun halvingMode(id: Int) = "halving_mode_$id"
@@ -56,6 +57,10 @@ object AppPrefs {
     /** Open web links in Block's own browser (true, the default) or the phone's browser. */
     fun linksInApp(context: Context): Boolean = prefs(context).getBoolean(LINKS_IN_APP, true)
     fun setLinksInApp(context: Context, inApp: Boolean) = edit(context) { putBoolean(LINKS_IN_APP, inApp) }
+
+    /** New bookmarks and mutes are private (encrypted, NIP-51; the default) or public. */
+    fun privateLists(context: Context): Boolean = prefs(context).getBoolean(PRIVATE_LISTS, true)
+    fun setPrivateLists(context: Context, private: Boolean) = edit(context) { putBoolean(PRIVATE_LISTS, private) }
 
     /** Whether the welcome page was passed (logged in, or chose to look around first). */
     fun landingDone(context: Context): Boolean = prefs(context).getBoolean(LANDING_DONE, false)

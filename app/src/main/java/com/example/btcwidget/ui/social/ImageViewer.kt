@@ -151,8 +151,9 @@ fun ImageViewer(
             onDispose { bars.show(types) }
         }
         val player = if (video) {
-            val p = remember(url) { newPlayer(context, url, fullScreen = true) {}.apply { volume = 1f; playWhenReady = true } }
-            DisposableEffect(p) { onDispose { VideoPositions[url] = p.currentPosition; p.release() } }
+            // Owned by PipVideo so it can keep playing in Picture-in-Picture after this hides.
+            val p = remember(url) { PipVideo.acquire(context, url) { ctx, u -> newPlayer(ctx, u, fullScreen = true) {}.apply { volume = 1f; playWhenReady = true } } }
+            DisposableEffect(p) { onDispose { if (!PipVideo.inPip) PipVideo.release { u, pos -> VideoPositions[u] = pos } } }
             p
         } else null
         Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -165,7 +166,7 @@ fun ImageViewer(
                 userScrollEnabled = !zoomed,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
-                ZoomableImage(pictures[page], onZoom = { if (page == pager.currentPage) zoomed = it })
+                ZoomableImage(pictures[page], com.example.btcwidget.nostr.core.Imeta.blurhash(note, pictures[page]), onZoom = { if (page == pager.currentPage) zoomed = it })
             }
             // "2 / 4" when the note has several pictures.
             if (!video && pictures.size > 1 && chrome) Text(
@@ -299,7 +300,7 @@ private fun PillAction(icon: ImageVector, count: Int?, label: String, modifier: 
 
 /** One picture: pinch or double-tap to zoom, drag to pan once zoomed. [onZoom] says when it's zoomed. */
 @Composable
-private fun ZoomableImage(url: String, onZoom: (Boolean) -> Unit) {
+private fun ZoomableImage(url: String, blurhash: String?, onZoom: (Boolean) -> Unit) {
     var scale by remember(url) { mutableFloatStateOf(1f) }
     var offset by remember(url) { mutableStateOf(Offset.Zero) }
     fun set(s: Float, o: Offset) {
@@ -309,8 +310,10 @@ private fun ZoomableImage(url: String, onZoom: (Boolean) -> Unit) {
     val transform = androidx.compose.foundation.gestures.rememberTransformableState { zoom, pan, _ ->
         set((scale * zoom).coerceIn(1f, 5f), offset + pan)
     }
+    val blur = rememberBlurhashPainter(blurhash)
     AsyncImage(
         model = url,
+        placeholder = blur,
         contentDescription = "Image",
         contentScale = ContentScale.Fit,
         modifier = Modifier

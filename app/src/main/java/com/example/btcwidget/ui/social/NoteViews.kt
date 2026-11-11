@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.background
@@ -280,17 +281,28 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         }
         return
     }
+    if (note.kind == com.example.btcwidget.nostr.core.Kind.HIGHLIGHT) { HighlightBody(note, actions, fontSize); return }
     val segments = remember(note.id) {
         // Links that imeta tags mark as images show as images even without a file extension.
         val images = com.example.btcwidget.nostr.core.Imeta.imageUrls(note)
         val videos = com.example.btcwidget.nostr.core.Imeta.videoUrls(note)
-        Content.parse(note.content.trim(), com.example.btcwidget.nostr.core.CustomEmoji.of(note)).map { seg ->
+        val parsed = Content.parse(note.content.trim(), com.example.btcwidget.nostr.core.CustomEmoji.of(note)).map { seg ->
             when {
                 seg is Content.Segment.Link && seg.url in images -> Content.Segment.Image(seg.url)
                 seg is Content.Segment.Link && seg.url in videos -> Content.Segment.Video(seg.url)
                 else -> seg
             }
         }
+        // Picture and video posts (NIP-68, NIP-71) keep their media in imeta tags, not the text.
+        val inText = parsed.mapNotNull { (it as? Content.Segment.Image)?.url ?: (it as? Content.Segment.Video)?.url }.toSet()
+        val fromTags = when (note.kind) {
+            com.example.btcwidget.nostr.core.Kind.PICTURE ->
+                com.example.btcwidget.nostr.core.Imeta.urls(note).filter { it !in inText }.map { Content.Segment.Image(it) }
+            com.example.btcwidget.nostr.core.Kind.VIDEO, com.example.btcwidget.nostr.core.Kind.SHORT_VIDEO ->
+                com.example.btcwidget.nostr.core.Imeta.urls(note).filter { it !in inText }.take(1).map { Content.Segment.Video(it) }
+            else -> emptyList()
+        }
+        parsed + fromTags
     }
     val uriHandler = LocalUriHandler.current
     val linkStyle = TextLinkStyles(SpanStyle(color = EInk.Value, fontWeight = FontWeight.Bold))
@@ -356,6 +368,18 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         }
         segments.filterIsInstance<Content.Segment.AddressRef>().filter { it.address.kind == com.example.btcwidget.nostr.core.Kind.ARTICLE }
             .distinctBy { it.address.identifier + it.address.pubkey }.take(2).forEach { ArticleCard(it.address, actions) }
+        // A linked live stream (NIP-53): a button to watch it.
+        segments.filterIsInstance<Content.Segment.AddressRef>().filter { it.address.kind == com.example.btcwidget.nostr.core.LiveStreams.KIND }
+            .take(1).forEach { ref ->
+                Row(
+                    Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
+                        .clickable(onClickLabel = "Watch the stream") { actions.openArticle(ref.address) }.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("● LIVE", color = androidx.compose.ui.graphics.Color(0xFFE5534B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("  Live stream · tap to watch", color = EInk.Value, fontSize = 14.sp)
+                }
+            }
     }
 }
 
@@ -395,6 +419,9 @@ internal fun noteImageUrls(note: Event): List<String> {
             seg is Content.Segment.Link && seg.url in images -> seg.url
             else -> null
         }
+    }.let { inText ->
+        // Picture posts (NIP-68) list their photos in imeta tags.
+        if (note.kind == com.example.btcwidget.nostr.core.Kind.PICTURE) inText + com.example.btcwidget.nostr.core.Imeta.urls(note) else inText
     }.distinct()
 }
 
@@ -409,6 +436,33 @@ private fun ReadMore(note: Event, actions: NoteActions) {
         "Read more…", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(top = 4.dp).clickable(onClickLabel = "Read the whole post") { actions.openNote(note) }.padding(vertical = 2.dp)
     )
+}
+
+/** A highlight (NIP-84): the reader's comment, the passage with an orange bar, and where it's from. */
+@Composable
+private fun HighlightBody(note: Event, actions: NoteActions, fontSize: Int) {
+    val h = remember(note.id) { com.example.btcwidget.nostr.core.Highlights.parse(note) } ?: return
+    h.comment?.let { Text(it, color = EInk.Value, fontSize = fontSize.sp, lineHeight = (fontSize * 1.35).sp, modifier = Modifier.padding(top = 2.dp)) }
+    Row(Modifier.padding(top = 6.dp).height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
+        Box(Modifier.width(3.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(androidx.compose.ui.graphics.Color(0xFFF7931A)))
+        Text(
+            h.text, color = EInk.Value, fontSize = fontSize.sp, lineHeight = (fontSize * 1.35).sp,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, maxLines = 12, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 10.dp)
+        )
+    }
+    // Where it's from: the article (opens it), else the web page.
+    val address = remember(note.id) {
+        h.articleAddress?.split(':', limit = 3)?.takeIf { it.size == 3 && it[0] == com.example.btcwidget.nostr.core.Kind.ARTICLE.toString() }
+            ?.let { com.example.btcwidget.nostr.core.Nip19.Address(it[0].toInt(), it[1], it[2], emptyList()) }
+    }
+    when {
+        address != null -> ArticleCard(address, actions)
+        h.url != null -> Text(
+            "From " + h.url.substringAfter("://").substringBefore('/'), color = EInk.Caption, fontSize = 13.sp,
+            modifier = Modifier.padding(top = 6.dp).clickable { actions.openLink(h.url, note) }
+        )
+    }
 }
 
 /** A note's words as plain text: mentions as names, links kept, media and quotes left out. */
@@ -432,10 +486,13 @@ internal fun plainText(note: Event, actions: NoteActions): String =
 private fun NoteImage(note: Event, url: String, actions: NoteActions) {
     var ratio by remember(note.id, url) { mutableStateOf(com.example.btcwidget.nostr.core.Imeta.aspectRatio(note, url)) }
     val shape = RoundedCornerShape(14.dp)
+    // A soft blur of the picture, at its size, until it has loaded (when the note gives one).
+    val blur = rememberBlurhashPainter(remember(note.id, url) { com.example.btcwidget.nostr.core.Imeta.blurhash(note, url) })
     AsyncImage(
         model = url,
         contentDescription = "Image",
         contentScale = ContentScale.Crop,
+        placeholder = blur,
         onSuccess = { state ->
             val size = state.painter.intrinsicSize
             if (size.width > 0f && size.height > 0f) ratio = size.width / size.height

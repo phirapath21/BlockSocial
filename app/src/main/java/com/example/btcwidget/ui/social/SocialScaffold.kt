@@ -114,7 +114,11 @@ fun SocialScaffold(
         pollTally = { vm.pollTally(it) },
         vote = { poll, ids, done -> if (account == null) { navigate(LoginKey); done(false) } else vm.vote(poll, ids, done) },
         resolveArticle = { vm.article(it) },
-        openArticle = { a -> navigate(com.example.btcwidget.ArticleKey(Nip19.naddr(a.kind, a.pubkey, a.identifier, a.relays))) },
+        openArticle = { a ->
+            // Addresses of live streams open the stream; anything else as an article.
+            if (a.kind == com.example.btcwidget.nostr.core.LiveStreams.KIND) navigate(com.example.btcwidget.LiveKey("${a.kind}:${a.pubkey}:${a.identifier}"))
+            else navigate(com.example.btcwidget.ArticleKey(Nip19.naddr(a.kind, a.pubkey, a.identifier, a.relays)))
+        },
         linkPreview = { vm.linkPreview(it) },
         me = account?.pubkey
     )
@@ -138,7 +142,10 @@ fun SocialScaffold(
         )
     }
 
-    viewVideo?.let { (url, note) ->
+    // The PiP window was closed: the full-screen video is over.
+    LaunchedEffect(PipVideo.closedInPip) { if (PipVideo.closedInPip) { viewVideo = null; PipVideo.closedInPip = false } }
+    // In Picture-in-Picture the activity draws the video itself (see MainActivity); the viewer hides.
+    if (!PipVideo.inPip) viewVideo?.let { (url, note) ->
         ImageViewer(
             url, note, stats[note.id] ?: com.example.btcwidget.nostr.NoteStats(), actions,
             onDismiss = { viewVideo = null },

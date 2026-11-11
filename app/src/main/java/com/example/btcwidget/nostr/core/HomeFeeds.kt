@@ -33,6 +33,13 @@ sealed interface HomeFeed {
         override val id get() = "dvm:$pubkey:$dvmId:$name"
     }
 
+    /** Picture posts (NIP-68) or video posts (NIP-71), by the people you follow or by [everyone]. */
+    data class Media(val videos: Boolean, val everyone: Boolean) : HomeFeed {
+        override val title get() = (if (videos) "Videos" else "Pictures") + if (everyone) ": everyone" else ""
+        override val subtitle get() = (if (videos) "Video posts" else "Picture posts") + if (everyone) " from everyone on your relays" else " by your follows"
+        override val id get() = (if (videos) "videos" else "pictures") + if (everyone) ":all" else ""
+    }
+
     /** Notes by the people in a list (NIP-51 kind 30000), yours or someone else's. */
     data class People(val owner: String, val d: String, val name: String) : HomeFeed {
         override val title get() = "List: $name"
@@ -43,10 +50,17 @@ sealed interface HomeFeed {
     companion object {
         val DEFAULTS: List<HomeFeed> = listOf(Following(false), Following(true), Global(null))
 
+        /** Ready-made feeds offered under "Add a feed". */
+        val SUGGESTED: List<HomeFeed> = listOf(Media(false, false), Media(true, false), Media(false, true), Media(true, true))
+
         fun parse(id: String): HomeFeed? = when {
             id == "following" -> Following(false)
             id == "following+replies" -> Following(true)
             id == "global" -> Global(null)
+            id == "pictures" -> Media(videos = false, everyone = false)
+            id == "pictures:all" -> Media(videos = false, everyone = true)
+            id == "videos" -> Media(videos = true, everyone = false)
+            id == "videos:all" -> Media(videos = true, everyone = true)
             id.startsWith("global:") -> normalizeRelayUrl(id.removePrefix("global:"))?.let { Global(it) }
             id.startsWith("tag:") -> cleanTag(id.removePrefix("tag:"))?.let { Hashtag(it) }
             id.startsWith("dvm:") -> id.removePrefix("dvm:").split(':', limit = 3).takeIf { it.size == 3 && Hex.isKey(it[0]) && it[1].isNotEmpty() }

@@ -64,13 +64,14 @@ fun SpacesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     var tab by rememberSaveable { mutableStateOf(0) }
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("COMMUNITIES", "CHANNELS", "GROUPS").forEachIndexed { i, t -> EInkChip(text = t, selected = tab == i, onClick = { tab = i }) }
+            listOf("COMMUNITIES", "CHANNELS", "GROUPS", "● LIVE").forEachIndexed { i, t -> EInkChip(text = t, selected = tab == i, onClick = { tab = i }) }
         }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
         when (tab) {
             0 -> CommunityList(vm, navigate)
             1 -> ChannelList(vm, navigate)
-            else -> GroupList(vm, navigate)
+            2 -> GroupList(vm, navigate)
+            else -> LiveList(vm, navigate)
         }
     }
 }
@@ -266,7 +267,7 @@ fun GroupScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit
 
 /** Shared chat layout for channels and groups: messages with names, and a composer. */
 @Composable
-private fun SpaceChat(
+internal fun SpaceChat(
     vm: SocialViewModel,
     navigate: (NavKey) -> Unit,
     onBack: () -> Unit,
@@ -274,6 +275,8 @@ private fun SpaceChat(
     note: String,
     messages: List<Event>?,
     action: Pair<String, () -> Unit>? = null,
+    /** Shown above the messages and kept in view (a live stream's video). */
+    pinned: (@Composable () -> Unit)? = null,
     onSend: (String, (String?) -> Unit) -> Unit
 ) {
     val account by vm.account.collectAsState()
@@ -287,6 +290,7 @@ private fun SpaceChat(
         SocialTopBar(title, onBack)
         SocialScaffold(vm, navigate) { _ ->
             Column(Modifier.fillMaxSize()) {
+                pinned?.invoke()
                 LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp)) {
                     item(key = "head") {
                         Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {

@@ -355,6 +355,13 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         act("Couldn't send", finally = { onResult(ok) }) { repo.spaces.sendToChannel(channel, text); ok = true }
     }
 
+    suspend fun liveStreams() = runCatching { repo.spaces.liveStreams() }.getOrDefault(emptyList())
+    suspend fun liveStream(address: String) = runCatching { repo.spaces.liveStream(address) }.getOrNull()
+    fun sendLiveChat(live: com.example.btcwidget.nostr.core.LiveStreams.Live, text: String, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't send", finally = { onResult(ok) }) { repo.spaces.sendLiveChat(live, text); ok = true }
+    }
+
     suspend fun group(address: com.example.btcwidget.nostr.core.RelayGroups.Address) = runCatching { repo.spaces.group(address) }.getOrNull()
 
     /** [onResult] gets null when sent, or the relay's reason. */
@@ -386,6 +393,14 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     private val _linksInApp = MutableStateFlow(com.example.btcwidget.AppPrefs.linksInApp(application))
     /** Web links open in Block's browser (true) or the phone's. */
     val linksInApp: StateFlow<Boolean> = _linksInApp.asStateFlow()
+
+    private val _privateLists = MutableStateFlow(com.example.btcwidget.AppPrefs.privateLists(application))
+    /** New bookmarks and mutes are private (encrypted to you) or public. */
+    val privateLists: StateFlow<Boolean> = _privateLists.asStateFlow()
+    fun setPrivateLists(private: Boolean) {
+        com.example.btcwidget.AppPrefs.setPrivateLists(getApplication(), private)
+        _privateLists.value = private
+    }
 
     fun setLinksInApp(inApp: Boolean) {
         com.example.btcwidget.AppPrefs.setLinksInApp(getApplication(), inApp)
@@ -528,7 +543,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     // ---- Images ----
 
     /** An uploaded image waiting to be posted. */
-    data class Attachment(val url: String, val mime: String, val sha256: String, val width: Int, val height: Int) {
+    data class Attachment(val url: String, val mime: String, val sha256: String, val width: Int, val height: Int, val blurhash: String? = null) {
         val isVideo get() = mime.startsWith("video/")
     }
 
@@ -552,7 +567,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
                 com.example.btcwidget.nostr.ImagePrep.prepare(getApplication(), uri)
             }
             val blob = repo.uploadImage(prepared)
-            result = Attachment(blob.url, prepared.mime, blob.sha256, prepared.width, prepared.height)
+            result = Attachment(blob.url, prepared.mime, blob.sha256, prepared.width, prepared.height, prepared.blurhash)
         }
     }
 
@@ -650,7 +665,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         tracked(working, done, "Couldn't post", finally = { onResult(ok) }) {
             // Image URLs go in the text (so every client shows them) with imeta tags (NIP-92).
             val body = (listOf(text.trim()) + images.map { it.url }).filter { it.isNotEmpty() }.joinToString("\n")
-            val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height) } +
+            val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height, it.blurhash) } +
                 // NIP-36: other apps hide the note behind a warning until tapped.
                 listOfNotNull(contentWarning?.let { listOf("content-warning", it) })
             val event = when {
@@ -677,7 +692,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun schedule(text: String, images: List<Attachment>, contentWarning: String?, at: Long): Boolean {
         val me = repo.pubkey ?: return false
         val body = (listOf(text.trim()) + images.map { it.url }).filter { it.isNotEmpty() }.joinToString("\n")
-        val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height) } +
+        val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height, it.blurhash) } +
             listOfNotNull(contentWarning?.let { listOf("content-warning", it) })
         com.example.btcwidget.nostr.ScheduledPosts.schedule(getApplication(), me, at, body, tags)
         refreshScheduled()
@@ -748,6 +763,21 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     // ---- Lists of people (NIP-51) ----
 
+    suspend fun followPacks() = runCatching { repo.followPacks() }.getOrDefault(emptyList())
+    suspend fun followPack(address: String) = runCatching { repo.followPack(address) }.getOrNull()
+    fun followAll(pubkeys: Collection<String>) = act("Couldn't follow them") {
+        repo.followAll(pubkeys)
+        say("Following ${pubkeys.size} people")
+    }
+
+    suspend fun highlightsOf(article: com.example.btcwidget.nostr.core.Article) = runCatching { repo.highlightsOf(article) }.getOrDefault(emptyList())
+    fun highlight(article: com.example.btcwidget.nostr.core.Article, text: String, comment: String?, onDone: () -> Unit) =
+        tracked("Highlighting", "Highlighted", "Couldn't highlight", finally = onDone) { repo.highlight(article, text, comment) }
+
+    val followedTags get() = repo.followedTags
+    fun followHashtag(tag: String, follow: Boolean) =
+        act(if (follow) "Couldn't follow #$tag" else "Couldn't unfollow #$tag") { repo.setHashtagFollowed(tag, follow) }
+
     val lists get() = repo.lists
     fun loadLists() { viewModelScope.launch { repo.pubkey?.let { runCatching { repo.peopleLists(it) } } } }
     suspend fun listsBy(owner: String) = runCatching { repo.peopleLists(owner) }.getOrDefault(emptyList())
@@ -798,6 +828,19 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     /** Adds the list to Home's feed menu and switches to it. */
     fun showListOnHome(list: com.example.btcwidget.nostr.core.PeopleList) =
         addFeed(com.example.btcwidget.nostr.core.HomeFeed.People(list.owner, list.d, list.title))
+
+    // ---- Relay lists (NIP-65, search, blocked) and relay info (NIP-11) ----
+
+    val relayEntries get() = repo.relayEntries
+    val searchRelays get() = repo.searchRelays
+    val blockedRelays get() = repo.blockedRelays
+    suspend fun relayInfo(url: String) = repo.relayInfo(url)
+    fun saveRelayList(entries: List<com.example.btcwidget.nostr.core.RelayLists.Entry>) =
+        tracked("Saving your relays", "Relays saved", "Couldn't save your relays") { repo.saveRelayList(entries) }
+    fun saveSearchRelays(urls: List<String>) =
+        tracked("Saving search relays", "Search relays saved", "Couldn't save search relays") { repo.saveSearchRelays(urls) }
+    fun saveBlockedRelays(urls: List<String>) =
+        tracked("Saving blocked relays", "Blocked relays saved", "Couldn't save blocked relays") { repo.saveBlockedRelays(urls) }
 
     // ---- Relay status ----
 
