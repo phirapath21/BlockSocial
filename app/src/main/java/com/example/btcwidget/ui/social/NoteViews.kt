@@ -120,23 +120,17 @@ fun NoteCard(
     large: Boolean = false
 ) {
     val author = actions.profileOf(note.pubkey)
-    // Block's look: each note is a blockclock panel (the opened post fills the page instead).
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .then(
-                if (large) Modifier
-                else Modifier.padding(horizontal = 8.dp, vertical = 4.dp).clip(EInk.PanelShape).background(EInk.Body).border(0.5.dp, EInk.BodyStroke, EInk.PanelShape)
-            )
             .clickable { actions.openNote(note) }
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         if (repostedBy != null) {
             Text(
-                text = "BOOSTED BY " + (actions.profileOf(repostedBy)?.bestName ?: Profile.shortNpub(repostedBy)).uppercase(),
+                text = "⟲ ${actions.profileOf(repostedBy)?.bestName ?: Profile.shortNpub(repostedBy)} reposted",
                 color = EInk.Caption,
-                fontSize = 11.sp,
-                fontFamily = EInk.Mono,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .padding(start = 38.dp, bottom = 4.dp)
@@ -159,8 +153,7 @@ fun NoteCard(
             }
             ReplyingTo(note, actions, Modifier.padding(top = 10.dp))
             NoteBody(note, actions, fontSize = 17, offerTranslate = true, collapse = false)
-            Text(fullTimestamp(note.createdAt).uppercase(), color = EInk.Caption, fontSize = 12.sp, fontFamily = EInk.Mono, modifier = Modifier.padding(top = 12.dp))
-            HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 10.dp))
+            Text(fullTimestamp(note.createdAt), color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
             ActionRow(note, stats, actions)
             return@Column
         }
@@ -185,8 +178,7 @@ fun NoteCard(
             }
         }
     }
-    // Panels are separated by their gaps; only the opened post keeps a rule under it.
-    if (showDivider && large) HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+    if (showDivider) HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
 
 /** "Replying to @name" under the author, for replies. */
@@ -209,10 +201,9 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, larg
     var menu by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = (author?.bestName ?: Profile.shortNpub(note.pubkey)).uppercase(),
+            text = author?.bestName ?: Profile.shortNpub(note.pubkey),
             color = EInk.Value,
-            fontSize = 14.sp,
-            fontFamily = EInk.Mono,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -223,11 +214,11 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, larg
         } else {
             // The handle gives way when space is short; the time always shows, top right.
             Text(
-                text = "  " + handleText(author, note.pubkey),
-                color = EInk.Caption, fontSize = 12.sp, fontFamily = EInk.Mono, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                text = " " + handleText(author, note.pubkey),
+                color = EInk.Caption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            Text(relativeTime(note.createdAt).uppercase(), color = EInk.Caption, fontSize = 12.sp, fontFamily = EInk.Mono, maxLines = 1)
+            Text(" · " + relativeTime(note.createdAt), color = EInk.Caption, fontSize = 14.sp, maxLines = 1)
         }
         Box {
             Text(
@@ -428,7 +419,7 @@ private const val QUOTE_LINES = 5
 @Composable
 private fun ReadMore(note: Event, actions: NoteActions) {
     Text(
-        "READ MORE ›", color = EInk.Value, fontSize = 12.sp, fontFamily = EInk.Mono, fontWeight = FontWeight.Bold,
+        "Read more…", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(top = 4.dp).clickable(onClickLabel = "Read the whole post") { actions.openNote(note) }.padding(vertical = 2.dp)
     )
 }
@@ -537,73 +528,87 @@ private fun QuotedNote(id: String, actions: NoteActions) {
 @Composable
 private fun ActionRow(note: Event, stats: NoteStats, actions: NoteActions) {
     var repostMenu by remember { mutableStateOf(false) }
-    // Block's action row reads like a blockclock readout: REPLY 13  BOOST 10  LIKE 41  ZAP 21K  SAVE.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp),
+            .padding(top = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ActionButton("REPLY", stats.replies, "Reply", done = false) { actions.reply(note) }
+        ActionButton(Glyphs.Comment, stats.replies, "Reply", tint = null) { actions.reply(note) }
         Box {
-            ActionButton(if (stats.repostedByMe) "BOOSTED" else "BOOST", stats.reposts, if (stats.repostedByMe) "Reposted" else "Repost or quote", done = stats.repostedByMe) { repostMenu = true }
+            ActionButton(Glyphs.Repost, stats.reposts, if (stats.repostedByMe) "Reposted" else "Repost or quote", tint = ActionColors.Repost.takeIf { stats.repostedByMe }) { repostMenu = true }
             DropdownMenu(expanded = repostMenu, onDismissRequest = { repostMenu = false }) {
                 DropdownMenuItem(
-                    text = { Text(if (stats.repostedByMe) "BOOSTED" else "BOOST", fontFamily = EInk.Mono) },
+                    text = { Text(if (stats.repostedByMe) "Reposted" else "Repost") },
+                    leadingIcon = { Icon(Glyphs.Repost, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     onClick = { repostMenu = false; actions.repost(note) }, enabled = !stats.repostedByMe
                 )
                 DropdownMenuItem(
-                    text = { Text("QUOTE", fontFamily = EInk.Mono) },
+                    text = { Text("Quote") },
+                    leadingIcon = { Icon(Glyphs.Comment, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     onClick = { repostMenu = false; actions.quote(note) }
                 )
             }
         }
         Box {
             var picker by remember { mutableStateOf(false) }
-            // An emoji reaction shows as that emoji; a like (or custom emoji) as LIKED.
+            // An emoji reaction shows as that emoji; a like (or custom emoji) as the heart.
             val emoji = stats.myReaction?.takeIf { stats.likedByMe && it != "+" && com.example.btcwidget.nostr.core.CustomEmoji.code(it) == null }
             ActionButton(
-                emoji ?: if (stats.likedByMe) "LIKED" else "LIKE", stats.likes, if (stats.likedByMe) "Liked" else "Like",
-                done = stats.likedByMe,
+                if (stats.likedByMe) Glyphs.Liked else Glyphs.Like, stats.likes, if (stats.likedByMe) "Liked" else "Like",
+                tint = ActionColors.Like.takeIf { stats.likedByMe }, emoji = emoji,
                 onLongClick = { if (!stats.likedByMe) picker = true }
             ) { actions.like(note) }
             ReactionMenu(picker, note, actions, onDismiss = { picker = false })
         }
-        // Not marked: the zap total isn't split by who zapped.
-        ActionButton("ZAP", (stats.zapMsat / 1000).toInt(), "Zap", done = false) { actions.zap(note) }
+        val sats = (stats.zapMsat / 1000).toInt()
+        // Not coloured: the zap total isn't split by who zapped.
+        ActionButton(Glyphs.Zap, sats, "Zap", tint = null) { actions.zap(note) }
         val saved = actions.isBookmarked(note.id)
-        ActionButton(if (saved) "SAVED" else "SAVE", 0, if (saved) "Remove bookmark" else "Bookmark", done = saved) { actions.bookmark(note) }
+        ActionButton(if (saved) Glyphs.Bookmarked else Glyphs.Bookmark, 0, if (saved) "Remove bookmark" else "Bookmark", tint = EInk.Value.takeIf { saved }) { actions.bookmark(note) }
     }
 }
 
-/** A readout-style button: LABEL and count in monospace; [done] (what you did) in the accent. */
+/** Colours that mark what you did, as on X: liked, reposted. */
+private object ActionColors {
+    /** Block's accent, Bitcoin orange, for everything you did. */
+    val Like get() = androidx.compose.ui.graphics.Color(0xFFF7931A)
+    val Repost get() = androidx.compose.ui.graphics.Color(0xFFF7931A)
+}
+
+/** An icon with its count; [tint] colours it when it's something you did. */
 @Composable
 private fun ActionButton(
-    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     count: Int,
-    description: String,
-    done: Boolean,
+    label: String,
+    tint: androidx.compose.ui.graphics.Color?,
+    emoji: String? = null,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
-    val color = if (done) EInk.Accent else EInk.Caption
+    val color = tint ?: EInk.Caption
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .heightIn(min = 36.dp)
-            .clip(EInk.PanelShape)
+            .heightIn(min = 40.dp)
+            .clip(RoundedCornerShape(50))
             .combinedClickable(
-                onClickLabel = description, role = Role.Button, onClick = onClick,
+                onClickLabel = label, role = Role.Button, onClick = onClick,
                 onLongClickLabel = if (onLongClick != null) "React with an emoji" else null, onLongClick = onLongClick
             )
-            .padding(horizontal = 6.dp, vertical = 6.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
-        Text(label, color = color, fontSize = 11.sp, fontFamily = EInk.Mono, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+        if (emoji != null) Text(emoji, fontSize = 16.sp)
+        else Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(18.dp))
         if (count > 0) {
             Text(
-                compactCount(count), color = if (done) EInk.Accent else EInk.Value, fontSize = 12.sp, fontFamily = EInk.Mono,
-                fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 5.dp)
+                text = compactCount(count),
+                color = color,
+                fontSize = 13.sp,
+                fontWeight = if (tint != null) FontWeight.Bold else FontWeight.Normal,
+                modifier = Modifier.padding(start = 5.dp)
             )
         }
     }
@@ -640,8 +645,7 @@ private fun ReactionMenu(expanded: Boolean, note: Event, actions: NoteActions, o
 fun Avatar(profile: Profile?, pubkey: String, size: Int, onClick: (() -> Unit)? = null) {
     val base = Modifier
         .size(size.dp)
-        // Block's avatars are blocks: squares with soft corners, not circles.
-        .clip(RoundedCornerShape((size * 0.22f).dp))
+        .clip(CircleShape)
         .background(EInk.Track)
         .let { if (onClick != null) it.clickable(onClickLabel = "Open profile", onClick = onClick) else it }
     val picture = profile?.picture

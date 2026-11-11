@@ -215,8 +215,8 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 if (feedMenu) FeedMenu(vm, onClose = { feedMenu = false })
                 FloatingActionButton(
                     onClick = { navigate(ComposeKey()) },
-                    containerColor = EInk.Value,
-                    contentColor = EInk.Background,
+                    containerColor = androidx.compose.ui.graphics.Color(0xFFF7931A),
+                    contentColor = androidx.compose.ui.graphics.Color.Black,
                     shape = CircleShape,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
                 ) { Text("+", fontSize = 26.sp, fontWeight = FontWeight.Bold) }
@@ -353,8 +353,8 @@ private fun FeedHeader(feed: com.example.btcwidget.nostr.core.HomeFeed, open: Bo
     Column(
         Modifier.fillMaxWidth().clickable(onClickLabel = "Choose feed", onClick = onOpen).padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text(feed.title.uppercase() + if (open) "  ▴" else "  ▾", color = EInk.Value, fontSize = 18.sp, fontFamily = EInk.Mono, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(feed.subtitle, color = EInk.Caption, fontSize = 12.sp, fontFamily = EInk.Mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(feed.title + if (open) "  ⌃" else "  ⌄", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(feed.subtitle, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
