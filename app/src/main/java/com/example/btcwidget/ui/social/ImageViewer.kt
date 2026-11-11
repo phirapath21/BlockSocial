@@ -77,12 +77,13 @@ fun ImageViewer(
     stats: NoteStats,
     actions: NoteActions,
     onDismiss: () -> Unit,
-    /** The reply bar under the actions; null hides it. */
-    replyBar: (@Composable () -> Unit)? = null
+    /** The reply card under the actions, told when it opens; null hides it. */
+    replyBar: (@Composable (onActiveChange: (Boolean) -> Unit) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
+    var replying by remember { mutableStateOf(false) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var menu by remember { mutableStateOf(false) }
@@ -202,8 +203,9 @@ fun ImageViewer(
                             .clickable(onClickLabel = "Open post") { onDismiss(); actions.openNote(note) }
                     )
                 }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                // While replying, as on X: the photo, author and text stay; the buttons make way.
+                if (!replying) Spacer(Modifier.height(12.dp))
+                if (!replying) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     PillAction(Glyphs.Comment, stats.replies, "Reply", Modifier.weight(1f)) { onDismiss(); actions.reply(note) }
                     Box(Modifier.weight(1f)) {
                         PillAction(Glyphs.Repost, stats.reposts, "Repost or quote", Modifier.fillMaxWidth(), active = stats.repostedByMe) { repostMenu = true }
@@ -222,7 +224,7 @@ fun ImageViewer(
                 }
                 if (replyBar != null) {
                     Spacer(Modifier.height(12.dp))
-                    replyBar()
+                    replyBar { replying = it }
                 }
             }
         }
