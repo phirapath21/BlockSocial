@@ -67,6 +67,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Picture-in-Picture video
 - [x] Picture and video posts (NIP-68, NIP-71) and feeds
 - [x] Live streams (NIP-53) with chat
+- [x] Live streams in Picture-in-Picture (play/pause, mute) and an in-app mini player
 - [x] Follow hashtags (contact list "t" tags)
 - [x] Follow packs (kind 39089)
 - [x] Highlights (NIP-84)

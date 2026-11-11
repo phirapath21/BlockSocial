@@ -230,7 +230,7 @@ private fun MemberRow(pubkey: String, profile: Profile?, isFollowing: Boolean, o
     Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Avatar(profile, pubkey, size = 44)
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
-            Text(profile?.bestName ?: Profile.shortNpub(pubkey), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            DisplayName(profile, pubkey, EInk.Value, 15.sp)
             Text(handleText(profile, pubkey) + if (isFollowing) " · Following" else "", color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (onRemove != null) Text(

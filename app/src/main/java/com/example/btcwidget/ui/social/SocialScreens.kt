@@ -762,7 +762,7 @@ private fun ProfileHeader(
         }
         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Spacer(Modifier.height(10.dp))
-            Text(profile?.bestName ?: Profile.shortNpub(pubkey), color = EInk.Value, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            DisplayName(profile, pubkey, EInk.Value, 21.sp)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     handleText(profile, pubkey),

@@ -100,6 +100,12 @@ fun MainNavigation() {
         entry<SearchKey> { com.example.btcwidget.ui.social.SearchScreen(social, navigate, back) }
       },
   )
+  // A live stream left playing: a small window over every screen (tap to go back to it).
+  com.example.btcwidget.ui.social.LiveMiniPlayer(onOpen = { address ->
+    // Back to the stream's screen if it's in the back stack, else open it.
+    val i = backStack.indexOfLast { it is LiveKey && it.address == address }
+    if (i >= 0) { while (backStack.size > i + 1) backStack.removeLastOrNull() } else navigate(LiveKey(address))
+  })
   // While a repost, reply or post is being sent: what it's waiting for, over every screen.
   com.example.btcwidget.ui.social.PublishStatusBar(social, androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter))
   }
