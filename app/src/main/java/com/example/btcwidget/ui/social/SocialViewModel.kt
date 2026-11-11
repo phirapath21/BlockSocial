@@ -829,6 +829,19 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun showListOnHome(list: com.example.btcwidget.nostr.core.PeopleList) =
         addFeed(com.example.btcwidget.nostr.core.HomeFeed.People(list.owner, list.d, list.title))
 
+    // ---- Relay lists (NIP-65, search, blocked) and relay info (NIP-11) ----
+
+    val relayEntries get() = repo.relayEntries
+    val searchRelays get() = repo.searchRelays
+    val blockedRelays get() = repo.blockedRelays
+    suspend fun relayInfo(url: String) = repo.relayInfo(url)
+    fun saveRelayList(entries: List<com.example.btcwidget.nostr.core.RelayLists.Entry>) =
+        tracked("Saving your relays", "Relays saved", "Couldn't save your relays") { repo.saveRelayList(entries) }
+    fun saveSearchRelays(urls: List<String>) =
+        tracked("Saving search relays", "Search relays saved", "Couldn't save search relays") { repo.saveSearchRelays(urls) }
+    fun saveBlockedRelays(urls: List<String>) =
+        tracked("Saving blocked relays", "Blocked relays saved", "Couldn't save blocked relays") { repo.saveBlockedRelays(urls) }
+
     // ---- Relay status ----
 
     fun relayStatus() = repo.pool.status()

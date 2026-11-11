@@ -49,6 +49,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Your lists:** if you change your media servers or message inbox relays in the app, the new list is published as a public event (kind 10063 or 10050).
 
+**Relay lists:** in Settings › Nostr › Relays you can publish your relay list (NIP-65, which relays you read from and write to), your search relays (kind 10007) and blocked relays (kind 10006); these are public. Block never connects to a blocked relay. Tapping a relay asks it, over HTTPS, to describe itself (NIP-11), which shows it your IP address like any visit.
+
 **Private lists:** new bookmarks and mutes are private by default (Settings › Nostr › More › New bookmarks and mutes): they're encrypted on your phone with your key (NIP-44) and stored in your bookmark or mute list, so relays and other people can see that the list exists and roughly how long it is, but not what's in it. Your other Nostr apps that support private lists can read them. Public ones (your choice, or made before this option) anyone can see. With a signer app, it encrypts and decrypts them for Block.
 
 **Lists of people:** lists you make (Lists in the side bar, or ☰+ on a profile) are published to your relays as public NIP-51 lists (kind 30000): anyone can see their names and who is in them. People aren't notified when you add them. Deleting a list publishes an empty version and a deletion request; relays that already copied it may keep the old version. Viewing someone's lists asks your relays and indexers for them.

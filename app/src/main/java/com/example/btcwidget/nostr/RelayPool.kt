@@ -103,9 +103,9 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
     /** Drops a failing relay's backoff and tries it again now. */
     fun retry(url: String) { relays[url]?.retryNow() }
 
-    /** Uses exactly [urls]: opens new ones, closes dropped ones. */
+    /** Uses exactly [urls]: opens new ones, closes dropped ones. Blocked relays are skipped. */
     fun setRelays(urls: Collection<String>) {
-        val wanted = urls.toSet()
+        val wanted = urls.toSet() - blocked
         primary.clear(); primary.addAll(wanted)
         relays.keys.filter { it !in wanted }.forEach { relays.remove(it)?.close() }
         wanted.forEach { url -> relays.getOrPut(url) { Relay(url).also { it.connect() } } }
@@ -137,7 +137,7 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
 
     /** Adds [urls] without dropping others; beyond [max] relays, the oldest unused ones close. */
     fun addRelays(urls: Collection<String>, max: Int = 24) {
-        urls.forEach { url -> relays.getOrPut(url) { Relay(url).also { it.connect() } } }
+        urls.filter { it !in blocked }.forEach { url -> relays.getOrPut(url) { Relay(url).also { it.connect() } } }
         val busy = subs.values.flatMap { it.only ?: emptySet() }.toSet() + urls
         relays.keys.filter { it !in busy }.take((relays.size - max).coerceAtLeast(0)).forEach { relays.remove(it)?.close() }
     }
@@ -403,6 +403,16 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
         fun enterBackground() {
             backgrounded = true
             synchronized(all) { all.toList() }.forEach { it.sleep() }
+        }
+
+        /** Relays the user blocked (NIP-51 kind 10006): never connected to, by any pool. */
+        @Volatile var blocked: Set<String> = emptySet()
+            private set
+
+        /** Sets the blocked relays and closes any open connection to them. */
+        fun block(urls: Set<String>) {
+            blocked = urls
+            synchronized(all) { all.toList() }.forEach { p -> p.relays.keys.filter { it in urls }.forEach { p.relays.remove(it)?.close() } }
         }
 
         /** The app is back: reconnect everything, live subscriptions included. */

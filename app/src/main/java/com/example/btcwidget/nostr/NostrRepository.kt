@@ -189,6 +189,22 @@ class NostrRepository private constructor(private val context: Context) {
     /** Completes once the disk cache (profiles, the account's lists) is loaded. */
     val cacheReady: Job
 
+    // Declared before init: the cached account is applied from a coroutine started there.
+    private val searchPool by lazy { RelayPool().also { it.setRelays(_searchRelays.value.ifEmpty { SEARCH_RELAYS }) } }
+
+    // ---- Relay lists: NIP-65 (read/write), search (10007) and blocked (10006) ----
+
+    @Volatile private var searchListEvent: Event? = null
+    @Volatile private var blockedListEvent: Event? = null
+    private val _relayEntries = MutableStateFlow<List<com.example.btcwidget.nostr.core.RelayLists.Entry>>(emptyList())
+    /** The user's published NIP-65 relays, with read/write markers. */
+    val relayEntries: StateFlow<List<com.example.btcwidget.nostr.core.RelayLists.Entry>> = _relayEntries.asStateFlow()
+    private val _searchRelays = MutableStateFlow<List<String>>(emptyList())
+    /** The user's search relays (empty: Block's defaults). */
+    val searchRelays: StateFlow<List<String>> = _searchRelays.asStateFlow()
+    private val _blockedRelays = MutableStateFlow<List<String>>(emptyList())
+    val blockedRelays: StateFlow<List<String>> = _blockedRelays.asStateFlow()
+
     init {
         pool.setRelays(NostrAccountStore.relays(context) ?: RelayPool.DEFAULT_RELAYS)
         // Show what we knew last time straight away; relays refresh it.
@@ -324,6 +340,12 @@ class NostrRepository private constructor(private val context: Context) {
         privateMutes = null
         privateBookmarks = null
         _followedTags.value = emptySet()
+        searchListEvent = null
+        blockedListEvent = null
+        _relayEntries.value = emptyList()
+        _searchRelays.value = emptyList()
+        _blockedRelays.value = emptyList()
+        RelayPool.block(emptySet())
         _pinned.value = emptyList()
         emojiListEvent = null
         _emojis.value = emptyMap()
@@ -344,7 +366,7 @@ class NostrRepository private constructor(private val context: Context) {
     suspend fun loadAccount() {
         val me = pubkey ?: return
         val events = queryEverywhere(
-            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.PINNED, Kind.RELAY_LIST, MEDIA_SERVER_LIST, Kind.EMOJI_LIST))),
+            listOf(Filter(authors = listOf(me), kinds = listOf(Kind.METADATA, Kind.CONTACTS, Kind.MUTE_LIST, Kind.BOOKMARKS, Kind.PINNED, Kind.RELAY_LIST, MEDIA_SERVER_LIST, Kind.EMOJI_LIST, com.example.btcwidget.nostr.core.RelayLists.SEARCH, com.example.btcwidget.nostr.core.RelayLists.BLOCKED))),
             timeoutMs = 6_000
         )
         applyAccountEvents(events, fromRelays = true)
@@ -363,8 +385,11 @@ class NostrRepository private constructor(private val context: Context) {
         // Their private parts are encrypted: open them without prompting a signer app.
         scope.launch { runCatching { openPrivateLists(interactive = false) } }
         latest(MEDIA_SERVER_LIST)?.let { mediaServerList = it; mediaServers = com.example.btcwidget.nostr.core.Blossom.serversFrom(it) }
+        latest(com.example.btcwidget.nostr.core.RelayLists.SEARCH)?.let { if (it.createdAt >= (searchListEvent?.createdAt ?: 0)) { searchListEvent = it; applySearchRelays() } }
+        latest(com.example.btcwidget.nostr.core.RelayLists.BLOCKED)?.let { if (it.createdAt >= (blockedListEvent?.createdAt ?: 0)) { blockedListEvent = it; applyBlockedRelays() } }
         latest(Kind.RELAY_LIST)?.let { list ->
             relayList = list
+            _relayEntries.value = com.example.btcwidget.nostr.core.RelayLists.entries(list)
             if (NostrAccountStore.relays(context) == null) {
                 // NIP-65: add the user's relays to the defaults (a slow personal relay alone would slow everything).
                 val urls = list.tags.filter { it.size >= 2 && it[0] == "r" }.mapNotNull { normalizeRelayUrl(it[1]) }
@@ -376,7 +401,7 @@ class NostrRepository private constructor(private val context: Context) {
 
     private fun saveAccount() {
         val me = pubkey ?: return
-        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList, emojiListEvent)
+        val events = listOfNotNull(profileEvents[me], contactsEvent, muteEvent, bookmarkEvent, pinEvent, relayList, mediaServerList, emojiListEvent, searchListEvent, blockedListEvent)
         scope.launch(Dispatchers.IO) { cache.saveEvents(ACCOUNT_CACHE, events) }
         events.forEach { store(it) }
     }
@@ -686,7 +711,61 @@ class NostrRepository private constructor(private val context: Context) {
     // ---- Search ----
 
     /** Relays that support NIP-50 search; opened on first search. */
-    private val searchPool by lazy { RelayPool().also { it.setRelays(SEARCH_RELAYS) } }
+    private fun applySearchRelays() {
+        _searchRelays.value = com.example.btcwidget.nostr.core.RelayLists.relays(searchListEvent)
+        searchPool.setRelays(_searchRelays.value.ifEmpty { SEARCH_RELAYS })
+    }
+
+    private fun applyBlockedRelays() {
+        _blockedRelays.value = com.example.btcwidget.nostr.core.RelayLists.relays(blockedListEvent)
+        RelayPool.block(_blockedRelays.value.toSet())
+    }
+
+    /** Publishes the user's NIP-65 list; with no relays of their own set in Settings, Block uses it too. */
+    suspend fun saveRelayList(entries: List<com.example.btcwidget.nostr.core.RelayLists.Entry>) {
+        val me = requireMe()
+        if (!accountFresh) loadAccount()
+        val event = publish(com.example.btcwidget.nostr.core.RelayLists.relayList(me, entries))
+        relayList = event
+        _relayEntries.value = com.example.btcwidget.nostr.core.RelayLists.entries(event)
+        if (NostrAccountStore.relays(context) == null) {
+            val urls = _relayEntries.value.map { it.url }
+            pool.setRelays((urls.take(5) + RelayPool.DEFAULT_RELAYS).distinct().take(8))
+        }
+        saveAccount()
+    }
+
+    suspend fun saveSearchRelays(urls: List<String>) {
+        val me = requireMe()
+        if (!accountFresh) loadAccount()
+        searchListEvent = publish(com.example.btcwidget.nostr.core.RelayLists.relaySet(me, com.example.btcwidget.nostr.core.RelayLists.SEARCH, urls, searchListEvent))
+        applySearchRelays()
+        saveAccount()
+    }
+
+    suspend fun saveBlockedRelays(urls: List<String>) {
+        val me = requireMe()
+        if (!accountFresh) loadAccount()
+        blockedListEvent = publish(com.example.btcwidget.nostr.core.RelayLists.relaySet(me, com.example.btcwidget.nostr.core.RelayLists.BLOCKED, urls, blockedListEvent))
+        applyBlockedRelays()
+        saveAccount()
+    }
+
+    private val relayInfos = ConcurrentHashMap<String, com.example.btcwidget.nostr.core.RelayInfo>()
+
+    /** What [relay] says about itself (NIP-11), or null if it doesn't answer. Remembered for the session. */
+    suspend fun relayInfo(relay: String): com.example.btcwidget.nostr.core.RelayInfo? {
+        relayInfos[relay]?.let { return it }
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val request = okhttp3.Request.Builder().url(com.example.btcwidget.nostr.core.RelayInfo.httpUrl(relay))
+                    .header("Accept", "application/nostr+json").build()
+                RelayPool.defaultClient.newCall(request).execute().use { r ->
+                    if (!r.isSuccessful) null else r.body.string().take(200_000).let { com.example.btcwidget.nostr.core.RelayInfo.parse(it) }
+                }
+            }.getOrNull()
+        }?.also { relayInfos[relay] = it }
+    }
 
     /** What a search box entry points straight at, if anything. */
     sealed interface Direct {

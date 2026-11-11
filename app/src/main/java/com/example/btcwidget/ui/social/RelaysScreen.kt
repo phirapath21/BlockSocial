@@ -43,6 +43,32 @@ private val Red = Color(0xFFE5534B)
  */
 @Composable
 fun RelaysScreen(vm: SocialViewModel, onBack: () -> Unit) {
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
+    var info by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxSize().background(EInk.Background)) {
+        SocialTopBar("Relays", onBack)
+        androidx.compose.foundation.layout.Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("STATUS", "MY RELAYS", "SEARCH", "BLOCKED").forEachIndexed { i, t ->
+                com.example.btcwidget.ui.main.EInkChip(text = t, selected = tab == i, onClick = { tab = i })
+            }
+        }
+        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+        when (tab) {
+            0 -> RelayStatusTab(vm, onInfo = { info = it })
+            1 -> MyRelaysTab(vm, onInfo = { info = it })
+            2 -> RelaySetTab(vm, blocked = false, onInfo = { info = it })
+            else -> RelaySetTab(vm, blocked = true, onInfo = { info = it })
+        }
+    }
+    info?.let { RelayInfoSheet(vm, it, onDismiss = { info = null }) }
+}
+
+/** Live connection state of every relay, refreshed every second. */
+@Composable
+private fun RelayStatusTab(vm: SocialViewModel, onInfo: (String) -> Unit) {
     var status by remember { mutableStateOf(vm.relayStatus()) }
     var showOthers by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -50,8 +76,7 @@ fun RelaysScreen(vm: SocialViewModel, onBack: () -> Unit) {
     }
     val mine = status.filter { it.primary }
     val others = status.filter { !it.primary }
-    Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar("Relays", onBack)
+    Column(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize()) {
             item(key = "summary") {
                 val up = mine.count { it.state == RelayStatus.State.CONNECTED }
@@ -66,11 +91,11 @@ fun RelaysScreen(vm: SocialViewModel, onBack: () -> Unit) {
                         },
                         color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp)
                     )
-                    Text("Change relays in Settings › Nostr › Relays.", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+                    Text("Tap a relay to see what it says about itself.", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
                 }
                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
             }
-            items(mine, key = { "m" + it.url }) { RelayRow(it) { vm.retryRelay(it.url) } }
+            items(mine, key = { "m" + it.url }) { RelayRow(it, onInfo = { onInfo(it.url) }) { vm.retryRelay(it.url) } }
             if (others.isNotEmpty()) item(key = "others") {
                 Row(
                     Modifier.fillMaxWidth().clickable { showOthers = !showOthers }.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -84,13 +109,13 @@ fun RelaysScreen(vm: SocialViewModel, onBack: () -> Unit) {
                 }
                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
             }
-            if (showOthers) items(others, key = { "o" + it.url }) { RelayRow(it) { vm.retryRelay(it.url) } }
+            if (showOthers) items(others, key = { "o" + it.url }) { RelayRow(it, onInfo = { onInfo(it.url) }) { vm.retryRelay(it.url) } }
         }
     }
 }
 
 @Composable
-private fun RelayRow(s: RelayStatus, onRetry: () -> Unit) {
+private fun RelayRow(s: RelayStatus, onInfo: () -> Unit, onRetry: () -> Unit) {
     val (color, label) = when (s.state) {
         RelayStatus.State.CONNECTED -> Green to "Connected" + (s.connectMs?.let { " · ${it} ms" } ?: "")
         RelayStatus.State.CONNECTING -> Orange to "Connecting…"
@@ -99,7 +124,7 @@ private fun RelayRow(s: RelayStatus, onRetry: () -> Unit) {
     }
     val canRetry = s.state == RelayStatus.State.RETRYING || (s.state == RelayStatus.State.FAILED && s.failures > 0)
     Row(
-        Modifier.fillMaxWidth().clickable(enabled = canRetry, onClickLabel = "Retry now", onClick = onRetry).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clickable(onClickLabel = "About this relay", onClick = onInfo).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(color))
