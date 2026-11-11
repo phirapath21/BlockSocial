@@ -115,6 +115,7 @@ fun SocialScaffold(
         ImageViewer(
             url, note, stats[note.id] ?: com.example.btcwidget.nostr.NoteStats(), actions,
             onDismiss = { viewImage = null },
+            urls = noteImageUrls(note),
             replyBar = { onActive ->
                 ReplyBar(
                     vm, note, dark = true,
