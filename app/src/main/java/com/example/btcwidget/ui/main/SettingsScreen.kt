@@ -208,6 +208,8 @@ fun NostrSettingsPanel(
     onRelaysChange: (List<String>?) -> Unit,
     onOpenRules: () -> Unit = {},
     onOpenNostrSettings: () -> Unit = {},
+    onOpenRelays: () -> Unit = {},
+    relaySummary: String? = null,
     pushEnabled: Boolean = true,
     onPushChange: (Boolean) -> Unit = {},
     walletConnected: Boolean = false,
@@ -264,8 +266,11 @@ fun NostrSettingsPanel(
         SettingRow("Community rules", note = "What isn't allowed; mute and report") {
             EInkChip(text = "OPEN", selected = false, onClick = onOpenRules)
         }
-        SettingRow("Relays", note = "${relays.size} connected") {
-            EInkChip(text = if (editing) "CLOSE" else "EDIT", selected = editing, onClick = { editing = !editing })
+        SettingRow("Relays", note = relaySummary ?: "${relays.size} relays") {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                EInkChip(text = "STATUS", selected = false, onClick = onOpenRelays)
+                EInkChip(text = if (editing) "CLOSE" else "EDIT", selected = editing, onClick = { editing = !editing })
+            }
         }
         if (editing) {
             OutlinedTextField(

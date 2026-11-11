@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
@@ -177,6 +178,7 @@ fun MainScreen(
         messagesContent = { com.example.btcwidget.ui.social.MessagesScreen(social, onItemClick) },
         bookmarksContent = { com.example.btcwidget.ui.social.BookmarksScreen(social, onItemClick) },
         communitiesContent = { com.example.btcwidget.ui.social.SpacesScreen(social, onItemClick) },
+        listsContent = { com.example.btcwidget.ui.social.ListsScreen(social, onItemClick) },
         drawerHeader = { com.example.btcwidget.ui.social.DrawerAccountHeader(social, onLogin = { onItemClick(com.example.btcwidget.LoginKey) }, navigate = onItemClick) },
         menuButtonIcon = { com.example.btcwidget.ui.social.MenuAvatar(social) },
         badges = mapOf(MainTab.NOTIFICATIONS to unreadNotifications, MainTab.MESSAGES to unreadChats.size),
@@ -193,6 +195,8 @@ fun MainScreen(
             NostrSettingsPanel(
                 account = account,
                 relays = social.repo.pool.urls.toList(),
+                onOpenRelays = { onItemClick(com.example.btcwidget.RelaysKey) },
+                relaySummary = social.relayStatus().filter { it.primary }.let { s -> "${s.count { it.state == com.example.btcwidget.nostr.RelayStatus.State.CONNECTED }} of ${s.size} connected" },
                 onLogin = { onItemClick(com.example.btcwidget.LoginKey) },
                 onLogout = { social.logout() },
                 onOpenNostrSettings = { onItemClick(com.example.btcwidget.NostrSettingsKey) },
@@ -254,6 +258,7 @@ fun MainScreenContent(
     messagesContent: @Composable () -> Unit = {},
     bookmarksContent: @Composable () -> Unit = {},
     communitiesContent: @Composable () -> Unit = {},
+    listsContent: @Composable () -> Unit = {},
     /** Top of the side bar: the account (avatar, name) or a log-in prompt. */
     drawerHeader: @Composable () -> Unit = {},
     /** Unread counts shown on bottom-bar tabs. */
@@ -314,6 +319,7 @@ fun MainScreenContent(
                 MainTab.MESSAGES -> messagesContent()
                 MainTab.BOOKMARKS -> bookmarksContent()
                 MainTab.COMMUNITIES -> communitiesContent()
+                MainTab.LISTS -> listsContent()
                 MainTab.NOTIFICATIONS -> notificationsContent()
                 MainTab.PROFILE -> profileContent()
                 MainTab.DASHBOARD -> {
@@ -512,6 +518,7 @@ enum class MainTab(val label: String, val icon: ImageVector, val title: String =
     PROFILE("Profile", Icons.Default.Person),
     BOOKMARKS("Bookmarks", Icons.Default.Star),
     COMMUNITIES("Communities", Icons.Default.Face),
+    LISTS("Lists", Icons.AutoMirrored.Filled.List),
     WIDGETS("Widgets", TabIcons.Widgets),
     ALERTS("Price alerts", Icons.Default.Warning),
     SETTINGS("Settings", Icons.Default.Settings)
@@ -520,7 +527,7 @@ enum class MainTab(val label: String, val icon: ImageVector, val title: String =
 // Getters, not stored values: a top-level val that touches MainTab would initialize the
 // enum while this file's other top-level vals are still null (that crashed the app once).
 private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SEARCH, MainTab.DASHBOARD, MainTab.NOTIFICATIONS, MainTab.MESSAGES)
-private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.BOOKMARKS, MainTab.COMMUNITIES, MainTab.WIDGETS, MainTab.ALERTS, MainTab.SETTINGS)
+private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.LISTS, MainTab.BOOKMARKS, MainTab.COMMUNITIES, MainTab.WIDGETS, MainTab.ALERTS, MainTab.SETTINGS)
 
 /** Pages with sideways drags of their own, where a swipe must not open the side bar. */
 private val DRAG_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS)

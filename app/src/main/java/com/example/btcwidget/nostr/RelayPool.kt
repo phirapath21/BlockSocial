@@ -28,6 +28,23 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Outcome of publishing one event to one relay. */
 data class PublishResult(val relay: String, val accepted: Boolean, val message: String)
 
+/** How one relay connection is doing, for the relay status screen. */
+data class RelayStatus(
+    val url: String,
+    val state: State,
+    /** One of the user's own relays (else opened to read someone's outbox relays). */
+    val primary: Boolean,
+    /** How long the last successful connection took to open. */
+    val connectMs: Long?,
+    /** Failed attempts in a row. */
+    val failures: Int,
+    val lastError: String?,
+    /** Events received since the app started. */
+    val events: Int
+) {
+    enum class State { CONNECTED, CONNECTING, RETRYING, FAILED }
+}
+
 /**
  * WebSocket connections to a set of relays. Subscriptions are sent to every connected
  * relay; incoming events are signature-checked and de-duplicated before delivery.
@@ -53,9 +70,18 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
     /** Relay URLs currently in use. */
     val urls: Set<String> get() = relays.keys
 
+    private val primary: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /** Every open relay's connection state; the user's own relays first. */
+    fun status(): List<RelayStatus> = relays.values.map { it.status() }.sortedWith(compareBy({ !it.primary }, { it.url }))
+
+    /** Drops a failing relay's backoff and tries it again now. */
+    fun retry(url: String) { relays[url]?.retryNow() }
+
     /** Uses exactly [urls]: opens new ones, closes dropped ones. */
     fun setRelays(urls: Collection<String>) {
         val wanted = urls.toSet()
+        primary.clear(); primary.addAll(wanted)
         relays.keys.filter { it !in wanted }.forEach { relays.remove(it)?.close() }
         wanted.forEach { url -> relays.getOrPut(url) { Relay(url).also { it.connect() } } }
     }
@@ -198,6 +224,13 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
         @Volatile private var socket: WebSocket? = null
         @Volatile private var open = false
         @Volatile private var closed = false
+        @Volatile private var badAddress = false
+        @Volatile private var startedAt = 0L
+        @Volatile private var connectMs: Long? = null
+        @Volatile private var lastError: String? = null
+        @Volatile private var retryJob: kotlinx.coroutines.Job? = null
+        private val received = AtomicInteger()
+        private val generation = AtomicInteger()
         private val queue = java.util.concurrent.ConcurrentLinkedQueue<String>()
         private var attempts = 0
 
@@ -210,12 +243,18 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
             val request = runCatching { Request.Builder().url(url).build() }.getOrElse {
                 Log.d(TAG, "$url: bad address")
                 closed = true
+                badAddress = true
+                lastError = "Not a relay address"
                 return
             }
+            startedAt = System.currentTimeMillis()
+            val gen = generation.incrementAndGet()
             socket = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     open = true
                     attempts = 0
+                    connectMs = System.currentTimeMillis() - startedAt
+                    lastError = null
                     // Resend live subscriptions, then anything queued while connecting.
                     subs.forEach { (id, sub) -> if (sub.only == null || url in sub.only) webSocket.send(ClientMessage.req(id, sub.filters)) }
                     while (true) webSocket.send(queue.poll() ?: break)
@@ -223,15 +262,18 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     // Never let one bad frame take the connection (or the app) down.
+                    received.incrementAndGet()
                     try { handle(url, text) } catch (e: Exception) { Log.d(TAG, "$url: ${e.message}") }
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    if (gen != generation.get()) return // an older connection, replaced by a retry
                     Log.d(TAG, "$url failed: ${t.message}")
+                    lastError = response?.let { "HTTP ${it.code}" } ?: t.message?.take(80) ?: t.javaClass.simpleName
                     dropped()
                 }
 
-                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = dropped()
+                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { if (gen == generation.get()) dropped() }
             })
         }
 
@@ -242,8 +284,31 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
             if (closed) return
             attempts++
             val wait = (1_000L shl attempts.coerceAtMost(6)).coerceAtMost(60_000)
-            scope.launch { delay(wait); runCatching { connect() } }
+            retryJob = scope.launch { delay(wait); runCatching { connect() } }
         }
+
+        fun retryNow() {
+            if (closed || open) return
+            retryJob?.cancel()
+            runCatching { socket?.cancel() }
+            connect()
+        }
+
+        fun status() = RelayStatus(
+            url = url,
+            state = when {
+                badAddress -> RelayStatus.State.FAILED
+                open -> RelayStatus.State.CONNECTED
+                attempts == 0 -> RelayStatus.State.CONNECTING
+                attempts >= 5 -> RelayStatus.State.FAILED
+                else -> RelayStatus.State.RETRYING
+            },
+            primary = url in primary,
+            connectMs = connectMs,
+            failures = attempts,
+            lastError = lastError,
+            events = received.get()
+        )
 
         fun send(message: String) {
             if (open && socket?.send(message) == true) return

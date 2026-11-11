@@ -58,6 +58,10 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Who to follow suggestions
 - [x] "For you" feeds via DVMs (NIP-90)
 - [x] Local event database (SQLite) instead of today's small cache
+- [x] Lists of people (NIP-51) you can read as a feed, like X's Lists
+- [x] Relay status: which relays are connected, failing or slow, with retry
+- [x] Grouped notifications ("Alice and 5 others liked your note")
+- [x] Feeds keep their scroll position when switching tabs or coming back
 - [ ] Instant notifications (needs a push server; today it checks every 15–60 min)
 - [x] Scheduled posts (sent by the phone at that time)
 - [x] Home feed menu like Primal: Latest, with replies, Global, one relay, #hashtag and DVM feeds; add, remove, reorder

@@ -57,6 +57,14 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     private var accountLoaded = false
 
+    // Scroll positions of the main lists. Kept here, not in the screen, so switching tabs,
+    // opening a note and coming back, or the Activity being recreated leaves you where you were.
+    private val listStates = HashMap<String, androidx.compose.foundation.lazy.LazyListState>()
+    fun listState(key: String): androidx.compose.foundation.lazy.LazyListState =
+        listStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
+    /** A different account's lists start from the top. */
+    private fun forgetScroll() = listStates.clear()
+
     // ---- Home feeds (Primal-style menu) ----
 
     private val _homeFeeds = MutableStateFlow(loadFeeds())
@@ -76,6 +84,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun selectFeed(feed: com.example.btcwidget.nostr.core.HomeFeed) {
         if (feed == _homeFeed.value) return
         _homeFeed.value = feed
+        listStates.remove("home:" + feed.id) // a freshly loaded feed starts at the top
         store.setHomeFeed(getApplication(), feed.id)
         stopLive?.invoke(); stopLive = null
         _newPosts.value = emptyList()
@@ -462,6 +471,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     val savedAccounts get() = repo.savedAccounts
 
     fun switchAccount(pubkey: String) {
+        forgetScroll()
         try {
             stopLive?.invoke(); stopLive = null
             _newPosts.value = emptyList()
@@ -486,6 +496,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun removeSavedAccount(pubkey: String) = repo.removeSavedAccount(pubkey)
 
     fun logout(keepAccount: Boolean = false) {
+        forgetScroll()
         if (!keepAccount) repo.logout()
         reloadReadState()
         stopLive?.invoke(); stopLive = null
@@ -726,6 +737,64 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     val pinned get() = repo.pinned
+
+    // ---- Lists of people (NIP-51) ----
+
+    val lists get() = repo.lists
+    fun loadLists() { viewModelScope.launch { repo.pubkey?.let { runCatching { repo.peopleLists(it) } } } }
+    suspend fun listsBy(owner: String) = runCatching { repo.peopleLists(owner) }.getOrDefault(emptyList())
+    suspend fun peopleList(owner: String, d: String) = runCatching { repo.peopleList(owner, d) }.getOrNull()
+    suspend fun listFeed(list: com.example.btcwidget.nostr.core.PeopleList) =
+        runCatching { repo.feed(com.example.btcwidget.nostr.core.HomeFeed.People(list.owner, list.d, list.title)) }.getOrDefault(emptyList())
+
+    /** Makes a new list, optionally with someone in it already; [onDone] gets it once saved. */
+    fun createList(title: String, firstMember: String? = null, onDone: (com.example.btcwidget.nostr.core.PeopleList) -> Unit = {}) {
+        val me = repo.pubkey ?: return
+        val name = title.trim().ifBlank { return }
+        act("Couldn't create the list") {
+            var list = com.example.btcwidget.nostr.core.PeopleList.create(me, name)
+            if (firstMember != null) list = list.with(firstMember)
+            val saved = repo.updateList(list)
+            say("List created")
+            onDone(saved)
+        }
+    }
+
+    fun setInList(list: com.example.btcwidget.nostr.core.PeopleList, pubkey: String, inList: Boolean) {
+        act("Couldn't update the list") {
+            repo.updateList(list) { if (inList) it.with(pubkey) else it.without(pubkey) }
+            say(if (inList) "Added to ${list.title}" else "Removed from ${list.title}")
+        }
+    }
+
+    fun renameList(list: com.example.btcwidget.nostr.core.PeopleList, title: String, description: String?) {
+        val name = title.trim().ifBlank { return }
+        act("Couldn't rename the list") { repo.updateList(list) { it.copy(title = name.take(80), description = description?.trim()?.ifBlank { null }) } }
+        // Its Home feed carries the name too.
+        val renamed = { f: com.example.btcwidget.nostr.core.HomeFeed ->
+            if (f is com.example.btcwidget.nostr.core.HomeFeed.People && f.owner == list.owner && f.d == list.d) f.copy(name = name.take(80)) else f
+        }
+        if (_homeFeeds.value.any { renamed(it) != it }) {
+            saveFeeds(_homeFeeds.value.map(renamed))
+            _homeFeed.value = renamed(_homeFeed.value)
+            store.setHomeFeed(getApplication(), _homeFeed.value.id)
+        }
+    }
+
+    fun deleteList(list: com.example.btcwidget.nostr.core.PeopleList) {
+        // Out of the Home feed menu too.
+        _homeFeeds.value.filter { it is com.example.btcwidget.nostr.core.HomeFeed.People && it.owner == list.owner && it.d == list.d }.forEach { removeFeed(it) }
+        act("Couldn't delete the list") { repo.deleteList(list); say("List deleted") }
+    }
+
+    /** Adds the list to Home's feed menu and switches to it. */
+    fun showListOnHome(list: com.example.btcwidget.nostr.core.PeopleList) =
+        addFeed(com.example.btcwidget.nostr.core.HomeFeed.People(list.owner, list.d, list.title))
+
+    // ---- Relay status ----
+
+    fun relayStatus() = repo.pool.status()
+    fun retryRelay(url: String) = repo.pool.retry(url)
 
     // ---- Polls (NIP-88) ----
 

@@ -49,6 +49,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Your lists:** if you change your media servers or message inbox relays in the app, the new list is published as a public event (kind 10063 or 10050).
 
+**Lists of people:** lists you make (Lists in the side bar, or ☰+ on a profile) are published to your relays as public NIP-51 lists (kind 30000): anyone can see their names and who is in them. People aren't notified when you add them. Deleting a list publishes an empty version and a deletion request; relays that already copied it may keep the old version. Viewing someone's lists asks your relays and indexers for them.
+
 **Photos you post:** when you attach a photo, the app first re-encodes it on your phone, which removes EXIF metadata such as GPS location, camera model and time. It then uploads the photo to a Blossom media server: by default blossom.primal.net, or the servers in your own media server list (kind 10063). The upload is signed with your key. The photo becomes public at its address, and the server's own policy applies. Only photos you pick are read; the app asks for no storage or photo permission (it uses Android's photo picker).
 
 **Videos you post:** videos (up to 100 MB) are uploaded the same way but **as they are, without re-encoding**, so metadata saved in the file, which can include where it was recorded, is not removed; the composer warns you. While uploading, a temporary copy is kept in the app's cache and deleted afterwards.
