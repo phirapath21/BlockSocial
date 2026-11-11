@@ -13,6 +13,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
@@ -123,13 +124,28 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
     }
 
     /** Sends [event] to every relay and waits for their OK (or [timeoutMs]). */
-    suspend fun publish(event: Event, timeoutMs: Long = 8_000, only: Set<String>? = null): List<PublishResult> {
+    suspend fun publish(event: Event, timeoutMs: Long = 8_000, only: Set<String>? = null, untilFirstAccepted: Boolean = false): List<PublishResult> {
         val targets = relays.values.filter { only == null || it.url in only }
         val waiters = targets.associateWith { r ->
             CompletableDeferred<PublishResult>().also { okWaiters[r.url + " " + event.id] = it }
         }
         val msg = ClientMessage.event(event)
         targets.forEach { it.send(msg) }
+        if (untilFirstAccepted && waiters.isNotEmpty()) {
+            // Return as soon as one relay has it; the others keep receiving it in the background.
+            val first = CompletableDeferred<PublishResult>()
+            waiters.values.forEach { d -> d.invokeOnCompletion { if (d.getCompleted().accepted) first.complete(d.getCompleted()) } }
+            val accepted = withTimeoutOrNull(timeoutMs) {
+                kotlinx.coroutines.selects.select<PublishResult?> {
+                    first.onAwait { it }
+                    scope.async { waiters.values.forEach { it.await() }; null }.onAwait { it }
+                }
+            }
+            if (accepted != null) {
+                scope.launch { delay(timeoutMs); targets.forEach { okWaiters.remove(it.url + " " + event.id) } }
+                return listOf(accepted)
+            }
+        }
         val results = waiters.map { (relay, deferred) ->
             withTimeoutOrNull(timeoutMs) { deferred.await() } ?: PublishResult(relay.url, false, "timed out")
         }
