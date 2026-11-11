@@ -294,7 +294,7 @@ private fun PillAction(icon: ImageVector, count: Int?, label: String, modifier: 
             .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp)
     ) {
-        Icon(icon, contentDescription = label, tint = if (active && label == "Liked") Color(0xFFF91880) else OnDark, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = label, tint = if (active && (label == "Liked" || label == "Repost or quote")) Color(0xFFF7931A) else OnDark, modifier = Modifier.size(22.dp))
         if (count != null && count > 0) {
             Spacer(Modifier.width(6.dp))
             Text(compactCount(count), color = OnDark, fontSize = 15.sp)

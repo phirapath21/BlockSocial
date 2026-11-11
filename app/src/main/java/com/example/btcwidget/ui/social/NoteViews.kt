@@ -572,8 +572,9 @@ private fun ActionRow(note: Event, stats: NoteStats, actions: NoteActions) {
 
 /** Colours that mark what you did, as on X: liked, reposted. */
 private object ActionColors {
-    val Like get() = androidx.compose.ui.graphics.Color(0xFFF91880)
-    val Repost get() = androidx.compose.ui.graphics.Color(0xFF00BA7C)
+    /** Block's accent, Bitcoin orange, for everything you did. */
+    val Like get() = androidx.compose.ui.graphics.Color(0xFFF7931A)
+    val Repost get() = androidx.compose.ui.graphics.Color(0xFFF7931A)
 }
 
 /** An icon with its count; [tint] colours it when it's something you did. */

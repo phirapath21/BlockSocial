@@ -152,12 +152,13 @@ fun ReplyBar(
                 Box(Modifier.weight(1f))
                 Text(
                     if (sending) "Replying…" else "Reply",
-                    color = if (canSend) (if (dark) Color.Black else EInk.Background) else hint,
+                    color = if (canSend) Color.Black else hint,
                     fontSize = 15.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .padding(end = 4.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(if (canSend) ink else hint.copy(alpha = 0.25f))
+                        // Block's accent where X uses its blue.
+                        .background(if (canSend) Color(0xFFF7931A) else hint.copy(alpha = 0.25f))
                         .clickable(enabled = canSend, onClickLabel = "Send reply") {
                             sending = true
                             vm.send(text.trim(), target, null, images) { ok ->

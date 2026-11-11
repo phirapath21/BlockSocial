@@ -215,8 +215,8 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 if (feedMenu) FeedMenu(vm, onClose = { feedMenu = false })
                 FloatingActionButton(
                     onClick = { navigate(ComposeKey()) },
-                    containerColor = EInk.Value,
-                    contentColor = EInk.Background,
+                    containerColor = androidx.compose.ui.graphics.Color(0xFFF7931A),
+                    contentColor = androidx.compose.ui.graphics.Color.Black,
                     shape = CircleShape,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
                 ) { Text("+", fontSize = 26.sp, fontWeight = FontWeight.Bold) }
