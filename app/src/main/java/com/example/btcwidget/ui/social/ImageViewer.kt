@@ -151,8 +151,9 @@ fun ImageViewer(
             onDispose { bars.show(types) }
         }
         val player = if (video) {
-            val p = remember(url) { newPlayer(context, url, fullScreen = true) {}.apply { volume = 1f; playWhenReady = true } }
-            DisposableEffect(p) { onDispose { VideoPositions[url] = p.currentPosition; p.release() } }
+            // Owned by PipVideo so it can keep playing in Picture-in-Picture after this hides.
+            val p = remember(url) { PipVideo.acquire(context, url) { ctx, u -> newPlayer(ctx, u, fullScreen = true) {}.apply { volume = 1f; playWhenReady = true } } }
+            DisposableEffect(p) { onDispose { if (!PipVideo.inPip) PipVideo.release { u, pos -> VideoPositions[u] = pos } } }
             p
         } else null
         Box(Modifier.fillMaxSize().background(Color.Black)) {
