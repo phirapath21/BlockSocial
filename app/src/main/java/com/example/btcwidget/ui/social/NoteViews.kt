@@ -131,6 +131,26 @@ fun NoteCard(
                     .clickable { actions.openProfile(repostedBy) }
             )
         }
+        if (large) {
+            // The opened post, as Amethyst shows it: name and handle beside the picture, then
+            // the text, full date and buttons across the whole width.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(author, note.pubkey, size = 48, onClick = { actions.openProfile(note.pubkey) })
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    AuthorLine(note, author, actions, large = true)
+                    Text(
+                        handleText(author, note.pubkey), color = EInk.Caption, fontSize = 14.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            ReplyingTo(note, actions, Modifier.padding(top = 10.dp))
+            NoteBody(note, actions, fontSize = 17, offerTranslate = true)
+            Text(fullTimestamp(note.createdAt), color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+            ActionRow(note, stats, actions)
+            return@Column
+        }
         Row {
             Avatar(author, note.pubkey, size = 44, onClick = { actions.openProfile(note.pubkey) })
             Spacer(Modifier.width(10.dp))
@@ -147,16 +167,7 @@ fun NoteCard(
                         )
                     }
                 }
-                NoteBody(note, actions, fontSize = if (large) 17 else 15, offerTranslate = large)
-                // The opened post shows its full time, as X does under a post.
-                if (large) {
-                    Text(
-                        fullTimestamp(note.createdAt),
-                        color = EInk.Caption, fontSize = 14.sp,
-                        modifier = Modifier.padding(top = 10.dp)
-                    )
-                    EngagementCounts(note, stats, actions)
-                }
+                NoteBody(note, actions, fontSize = 15)
                 ActionRow(note, stats, actions)
             }
         }
@@ -164,8 +175,23 @@ fun NoteCard(
     if (showDivider) HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
 
+/** "Replying to @name" under the author, for replies. */
 @Composable
-private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
+private fun ReplyingTo(note: Event, actions: NoteActions, modifier: Modifier = Modifier) {
+    if (ThreadRef.of(note).parent == null) return
+    val parentAuthor = note.tagValues("p").firstOrNull() ?: return
+    Text(
+        text = "Replying to @" + (actions.profileOf(parentAuthor)?.bestName ?: Profile.shortNpub(parentAuthor)),
+        color = EInk.Caption, fontSize = 13.sp, modifier = modifier
+    )
+}
+
+/**
+ * Name, handle and the short time on the right ("· 1h"), then ⋯. In the opened post
+ * ([large]) the handle goes on its own line and the full date sits under the text instead.
+ */
+@Composable
+private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, large: Boolean = false) {
     var menu by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -177,15 +203,17 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
         )
-        val handle = handleText(author, note.pubkey)
-        Text(
-            text = listOfNotNull(handle, relativeTime(note.createdAt)).joinToString(" · ", prefix = " "),
-            color = EInk.Caption,
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
+        if (large) {
+            Spacer(Modifier.weight(1f))
+        } else {
+            // The handle gives way when space is short; the time always shows, top right.
+            Text(
+                text = " " + handleText(author, note.pubkey),
+                color = EInk.Caption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(" · " + relativeTime(note.createdAt), color = EInk.Caption, fontSize = 14.sp, maxLines = 1)
+        }
         Box {
             Text(
                 text = "⋯",
@@ -197,6 +225,7 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions) {
             )
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Share") }, onClick = { menu = false; actions.share(note) })
+                DropdownMenuItem(text = { Text("Reposts, likes and zaps") }, onClick = { menu = false; actions.openEngagement(note, 1) })
                 if (note.content.isNotBlank()) DropdownMenuItem(
                     text = { Text(if (actions.translation(note.id) is SocialViewModel.Translation.Done) "Show original" else "Translate") },
                     onClick = { menu = false; actions.translate(note, translatableText(note, actions)) }
@@ -597,31 +626,6 @@ fun Avatar(profile: Profile?, pubkey: String, size: Int, onClick: (() -> Unit)? 
     }
 }
 
-/** "11 Reposts  51 Likes  2.1K sats" under an opened post; each opens the list of people. */
-@Composable
-private fun EngagementCounts(note: Event, stats: NoteStats, actions: NoteActions) {
-    val parts = listOf(
-        Triple(stats.reposts, if (stats.reposts == 1) "Repost" else "Reposts", 0),
-        Triple(stats.likes, if (stats.likes == 1) "Like" else "Likes", 1),
-        Triple((stats.zapMsat / 1000).toInt(), "sats", 2)
-    ).filter { it.first > 0 }
-    if (parts.isEmpty()) return
-    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 10.dp))
-    Row(Modifier.padding(vertical = 8.dp)) {
-        parts.forEach { (count, label, tab) ->
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .clickable(onClickLabel = "See who: $label") { actions.openEngagement(note, tab) }
-                    .padding(end = 16.dp, top = 2.dp, bottom = 2.dp)
-            ) {
-                Text(compactCount(count), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Text(" $label", color = EInk.Caption, fontSize = 14.sp)
-            }
-        }
-    }
-    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
-}
 
 /** "Tue, Nov 10, 2026 - 2:10 PM" in the phone's time zone (English, 12-hour). */
 fun fullTimestamp(createdAt: Long, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): String =
