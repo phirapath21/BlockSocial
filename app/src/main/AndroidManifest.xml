@@ -23,7 +23,7 @@
     </queries>
 
     <application
-        android:name=".BlockfaceApp"
+        android:name=".BlockApp"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"

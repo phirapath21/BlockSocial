@@ -23,7 +23,7 @@ fun DrawerAccountHeader(vm: SocialViewModel, onLogin: () -> Unit) {
     val me = account?.pubkey
     if (me == null) {
         Column {
-            Text("Blockface", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Block", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text("Log in to post, follow and zap.", color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
             PillButton("Log in", onClick = onLogin)
         }

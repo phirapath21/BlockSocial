@@ -77,7 +77,7 @@ object SignerBridge {
 
     /** One request at a time: signer apps answer them in order anyway. */
     suspend fun request(intent: Intent): ActivityResult = mutex.withLock {
-        val launcher = launch ?: throw SignerUnavailable("Open Blockface to sign")
+        val launcher = launch ?: throw SignerUnavailable("Open Block to sign")
         val deferred = CompletableDeferred<ActivityResult>()
         pending = deferred
         withContext(Dispatchers.Main) {

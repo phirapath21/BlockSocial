@@ -755,7 +755,7 @@ class NostrRepository private constructor(private val context: Context) {
         previewLock.withLock { if (previews.containsKey(url)) return previews[url] }
         val preview = withContext(Dispatchers.IO) {
             runCatching {
-                val request = Request.Builder().url(url).header("Accept", "text/html").header("User-Agent", "Mozilla/5.0 (Linux; Android) Blockface").build()
+                val request = Request.Builder().url(url).header("Accept", "text/html").header("User-Agent", "Mozilla/5.0 (Linux; Android) Block").build()
                 RelayPool.defaultClient.newCall(request).execute().use { r ->
                     val type = r.header("Content-Type").orEmpty()
                     if (!r.isSuccessful || !type.contains("html", ignoreCase = true)) return@use null

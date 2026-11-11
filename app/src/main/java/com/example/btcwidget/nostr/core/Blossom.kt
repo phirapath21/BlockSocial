@@ -27,7 +27,7 @@ object Blossom {
                 listOf("size", size.toString()),
                 listOf("expiration", (now + validSeconds).toString())
             ),
-            "Upload image from Blockface"
+            "Upload image from Block"
         )
 
     /** The HTTP Authorization header value for a signed auth event. */

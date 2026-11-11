@@ -1,6 +1,6 @@
-# Blockface Community Rules
+# Block Community Rules
 
-Blockface is a window onto Nostr, an open network that no company runs. Blockface doesn't host posts, but these rules apply to everyone using the app. The same text is shown in the app (Settings › Nostr › Community rules, and at sign-up).
+Block is a window onto Nostr, an open network that no company runs. Block doesn't host posts, but these rules apply to everyone using the app. The same text is shown in the app (Settings › Nostr › Community rules, and at sign-up).
 
 ## Not allowed
 
@@ -13,7 +13,7 @@ Blockface is a window onto Nostr, an open network that no company runs. Blockfac
 
 ## Your tools
 
-- **Mute** hides an account everywhere in Blockface (⋯ on a post; Unmute on their profile).
+- **Mute** hides an account everywhere in Block (⋯ on a post; Unmute on their profile).
 - **Report** (⋯ › Report on a post) publishes a NIP-56 report to your relays so relays and other apps can act on it.
 - **Contact:** for anything urgent or illegal, open an issue at <https://github.com/phirapath21/btcwidget/issues>, or contact the relay that hosts the post.
 

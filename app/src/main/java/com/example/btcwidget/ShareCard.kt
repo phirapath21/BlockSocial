@@ -41,7 +41,7 @@ object ShareCard {
         context.startActivity(chooser)
     }
 
-    /** Paints the metric's panel, as on the dashboard, into cache/shared/blockface.png. */
+    /** Paints the metric's panel, as on the dashboard, into cache/shared/block.png. */
     private fun writeImage(context: Context, key: String, data: PriceData, currency: String, palette: Palette): File {
         val scene = BlockclockScene(
             display = BlockclockMetrics.forKey(key, data, currency),
@@ -53,7 +53,7 @@ object ShareCard {
         BlockclockPainter.paint(AndroidDrawSurface.create(Canvas(bitmap), context), WIDTH.toFloat(), HEIGHT.toFloat(), scene)
         val dir = File(context.cacheDir, "shared").apply { mkdirs() }
         // One file, overwritten each time, so shares never pile up in the cache.
-        val file = File(dir, "blockface.png")
+        val file = File(dir, "block.png")
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
         return file

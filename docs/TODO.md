@@ -1,6 +1,6 @@
-# Blockface To-Do
+# Block To-Do
 
-Features Blockface still lacks compared with X and Amethyst (as of 10 Nov 2026).
+Features Block still lacks compared with X and Amethyst (as of 10 Nov 2026).
 Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 
 **Rule:** nothing here is started without the owner's go-ahead.

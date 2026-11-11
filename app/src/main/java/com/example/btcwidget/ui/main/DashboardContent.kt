@@ -57,7 +57,7 @@ fun DashboardContent(
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item(key = "header") { HeaderSection(title = "BLOCKFACE", subtitle = "Bitcoin at a glance") }
+        item(key = "header") { HeaderSection(title = "BLOCK", subtitle = "Bitcoin at a glance") }
 
         if (!data.lastFetchSuccessful) {
             item(key = "offline") {

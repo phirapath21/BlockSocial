@@ -35,7 +35,7 @@ object CrashLog {
             runCatching {
                 val trace = StringWriter().also { error.printStackTrace(PrintWriter(it)) }.toString()
                 file.writeText(
-                    "Blockface $version · Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT}) · " +
+                    "Block $version · Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT}) · " +
                         "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\nThread: ${thread.name}\n\n" +
                         trace.take(20_000)
                 )

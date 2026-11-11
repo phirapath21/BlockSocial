@@ -29,7 +29,12 @@ object NostrAccountStore {
     private const val TYPE = "type"
     private const val PACKAGE = "signer_package"
     private const val SECRET = "secret"   // base64(iv | ciphertext)
-    private const val KEY_ALIAS = "blockface_nostr_key"
+    private const val KEY_ALIAS = "block_nostr_key"
+    /**
+     * The key's name before the app became Block. Keystore keys can't be renamed or exported,
+     * so phones that already have it keep using it: their saved nsec stays readable.
+     */
+    private const val LEGACY_KEY_ALIAS = "blockface_nostr_key"
     private const val RELAYS = "relays"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -134,7 +139,7 @@ object NostrAccountStore {
     fun clear(context: Context) {
         prefs(context).edit().clear().commit()
         if (savedAccounts(context).none { it.type != SignerType.AMBER }) {
-            runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KEY_ALIAS) }
+            runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.run { deleteEntry(KEY_ALIAS); deleteEntry(LEGACY_KEY_ALIAS) } }
         }
     }
 
@@ -205,7 +210,7 @@ object NostrAccountStore {
     fun removeSaved(context: Context, pubkey: String) {
         saved(context).edit().remove(pubkey).commit()
         if ((account(context)?.type ?: SignerType.AMBER) == SignerType.AMBER && savedAccounts(context).none { it.type != SignerType.AMBER }) {
-            runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KEY_ALIAS) }
+            runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.run { deleteEntry(KEY_ALIAS); deleteEntry(LEGACY_KEY_ALIAS) } }
         }
     }
 
@@ -284,6 +289,7 @@ object NostrAccountStore {
     private fun keystoreKey(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (ks.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        (ks.getKey(LEGACY_KEY_ALIAS, null) as? SecretKey)?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(
             KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)

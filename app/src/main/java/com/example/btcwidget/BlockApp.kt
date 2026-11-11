@@ -10,7 +10,7 @@ import coil3.gif.AnimatedImageDecoder
 import coil3.gif.GifDecoder
 
 /** Installs the crash log before anything else runs, and sets up image loading. */
-class BlockfaceApp : Application(), SingletonImageLoader.Factory {
+class BlockApp : Application(), SingletonImageLoader.Factory {
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
         CrashLog.install(this)

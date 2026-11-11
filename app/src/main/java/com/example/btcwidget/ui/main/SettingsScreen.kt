@@ -155,7 +155,7 @@ fun SettingsScreen(
                 }
             }
             Text(
-                text = "If a source is unreachable, Blockface falls back to Coinbase or the last known price.",
+                text = "If a source is unreachable, Block falls back to Coinbase or the last known price.",
                 color = EInk.Caption,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
@@ -166,7 +166,7 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         EInkPanel(title = "About") {
-            AboutLine("Blockface" + (appVersion?.let { " $it" } ?: ""))
+            AboutLine("Block" + (appVersion?.let { " $it" } ?: ""))
             AboutLine("Prices: ${dataSources.price.label}" + (if (dataSources.thb == ThbSource.BITKUB) ", Bitkub (THB)" else "") + " · Network: mempool.space")
             AboutLine("Supply: blockchain.info · MSTR: Yahoo Finance, CoinGecko")
             AboutLine("Type: Oswald, VT323 (SIL Open Font License)")

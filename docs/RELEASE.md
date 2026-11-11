@@ -1,4 +1,4 @@
-# Releasing Blockface to Google Play
+# Releasing Block to Google Play
 
 ## 1. Create the upload key (once)
 
@@ -7,6 +7,9 @@ Keep the keystore and passwords somewhere safe and **never commit them** (`.giti
 ```bash
 keytool -genkeypair -v -keystore release.jks -alias blockface -keyalg RSA -keysize 4096 -validity 10000
 ```
+
+The alias `blockface` is from before the app was renamed Block. Keep it: if you already made this keystore, its alias can't change, and every update must be signed with the same key.
+
 
 Create `keystore.properties` in the project root:
 
@@ -54,7 +57,7 @@ Upload `app/build/outputs/bundle/release/app-release.aab`.
 
 ## 5. Play Console checklist
 
-1. Create the app: name **Blockface: Bitcoin Widgets**, default language English, App, Free.
+1. Create the app: name **Block: Bitcoin Widgets**, default language English, App, Free.
 2. **Store listing:** text and graphics from `docs/play-store/listing.md` and `docs/play-store/graphics/`.
 3. **App content:** privacy policy URL, Data safety, ads, app access, content rating, target audience, financial features — answers in `docs/play-store/policy-forms.md`.
 4. **Testing:** start with **Internal testing**, install from the Play link and run the checklist above again. New personal developer accounts must run a **closed test with at least 12 testers for 14 days** before production access is granted.

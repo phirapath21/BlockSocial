@@ -21,8 +21,8 @@ import com.example.btcwidget.ui.main.EInk
 object CommunityRules {
     const val TITLE = "Community rules"
 
-    const val INTRO = "Blockface is a window onto Nostr, an open network that no company runs. " +
-        "Blockface doesn't host posts, but these rules apply to everyone using the app."
+    const val INTRO = "Block is a window onto Nostr, an open network that no company runs. " +
+        "Block doesn't host posts, but these rules apply to everyone using the app."
 
     val RULES = listOf(
         "Nothing illegal" to "No content that is illegal where you or your readers are, including child sexual abuse material, which is never tolerated.",
@@ -34,7 +34,7 @@ object CommunityRules {
     )
 
     val TOOLS = listOf(
-        "Mute" to "Hides an account everywhere in Blockface. Use ⋯ on a post, or Unmute on their profile to undo.",
+        "Mute" to "Hides an account everywhere in Block. Use ⋯ on a post, or Unmute on their profile to undo.",
         "Report" to "Use ⋯ › Report on a post. The report is published to your relays (NIP-56) so relays and other apps can act on it.",
         "Contact" to "For anything urgent or illegal, open an issue at github.com/phirapath21/btcwidget, or contact the relay that hosts the post."
     )
