@@ -132,6 +132,10 @@ dependencies {
   // Translating notes on the device (models download once from Google)
   implementation(libs.mlkit.translate)
   implementation(libs.mlkit.language.id)
+  // QR codes: drawing them (ZXing) and scanning them with Google's code scanner, which runs in
+  // Play services so the app needs no camera permission
+  implementation(libs.zxing.core)
+  implementation(libs.play.services.code.scanner)
 
   // Navigation
   implementation(libs.androidx.navigation3.ui)

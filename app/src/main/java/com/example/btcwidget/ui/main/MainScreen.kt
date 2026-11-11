@@ -177,7 +177,7 @@ fun MainScreen(
         messagesContent = { com.example.btcwidget.ui.social.MessagesScreen(social, onItemClick) },
         bookmarksContent = { com.example.btcwidget.ui.social.BookmarksScreen(social, onItemClick) },
         communitiesContent = { com.example.btcwidget.ui.social.SpacesScreen(social, onItemClick) },
-        drawerHeader = { com.example.btcwidget.ui.social.DrawerAccountHeader(social, onLogin = { onItemClick(com.example.btcwidget.LoginKey) }) },
+        drawerHeader = { com.example.btcwidget.ui.social.DrawerAccountHeader(social, onLogin = { onItemClick(com.example.btcwidget.LoginKey) }, navigate = onItemClick) },
         menuButtonIcon = { com.example.btcwidget.ui.social.MenuAvatar(social) },
         badges = mapOf(MainTab.NOTIFICATIONS to unreadNotifications, MainTab.MESSAGES to unreadChats.size),
         notificationsContent = { com.example.btcwidget.ui.social.NotificationsScreen(social, onItemClick) },

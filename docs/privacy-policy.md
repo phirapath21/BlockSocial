@@ -69,6 +69,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Feeds from DVMs:** under Search › Feeds you can ask a Data Vending Machine (NIP-90) for a feed. The request goes through your relays to that service and is signed with a new throwaway key each time, so the service doesn't learn who asked, except for feeds marked "personalized", which use your account so they can tailor results.
 
+**QR codes:** your profile's QR code is drawn on the phone. Scanning a code uses Google's code scanner in Google Play services: the camera screen runs there, Block gets only the scanned text and needs no camera permission, and the scanner may be downloaded by Play services the first time. Pictures from the camera are processed on the phone.
+
 **Long-form articles:** to open an article, the app asks your relays, the author's relays and any relay named in the link.
 
 **Verified addresses (NIP-05):** to show a ✓ next to a name@domain address, the app asks that domain whether the address belongs to the account.
