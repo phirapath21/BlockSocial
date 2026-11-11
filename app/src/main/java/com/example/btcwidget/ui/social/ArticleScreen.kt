@@ -1,5 +1,12 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.Box
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -64,7 +71,7 @@ fun ArticleScreen(vm: SocialViewModel, naddr: String, navigate: (NavKey) -> Unit
         SocialScaffold(vm, navigate) { actions ->
             when (val a = loaded) {
                 Unit -> Spinner(Modifier.padding(top = 40.dp))
-                is Article -> ArticleBody(a, stats[a.event.id] ?: NoteStats(), actions, navigate)
+                is Article -> ArticleBody(vm, a, stats[a.event.id] ?: NoteStats(), actions, navigate)
                 else -> EmptyNote("This article couldn't be found on your relays.")
             }
         }
@@ -72,10 +79,21 @@ fun ArticleScreen(vm: SocialViewModel, naddr: String, navigate: (NavKey) -> Unit
 }
 
 @Composable
-private fun ArticleBody(article: Article, stats: NoteStats, actions: NoteActions, navigate: (NavKey) -> Unit) {
+private fun ArticleBody(vm: SocialViewModel, article: Article, stats: NoteStats, actions: NoteActions, navigate: (NavKey) -> Unit) {
     val blocks = remember(article.event.id) { Markdown.parse(article.content) }
     val author = actions.profileOf(article.pubkey)
     val context = LocalContext.current
+    val account by vm.account.collectAsState()
+    val profiles by vm.profiles.collectAsState()
+    // Highlights (NIP-84) by anyone; reloaded after the user adds one.
+    var reload by remember { mutableStateOf(0) }
+    val highlights by produceState(emptyList<com.example.btcwidget.nostr.core.Highlights.Highlight>(), article.event.id, reload) { value = vm.highlightsOf(article) }
+    var menuFor by remember { mutableStateOf<String?>(null) }
+    var commentFor by remember { mutableStateOf<String?>(null) }
+    fun highlightNow(text: String, comment: String?) {
+        if (account == null) { navigate(com.example.btcwidget.LoginKey); return }
+        vm.highlight(article, text, comment) { reload++ }
+    }
     LazyColumn(Modifier.fillMaxSize()) {
         article.image?.let { url ->
             item(key = "cover") {
@@ -111,9 +129,96 @@ private fun ArticleBody(article: Article, stats: NoteStats, actions: NoteActions
             HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
         }
         items(blocks.size, key = { "b$it" }) { i ->
-            MarkdownBlock(blocks[i], actions, navigate)
+            val block = blocks[i]
+            val text = remember(block) { blockText(block) }
+            val marked = text != null && highlights.any { h -> text.contains(h.text) || (h.text.length > 20 && h.text.contains(text)) }
+            Box(
+                Modifier
+                    .then(if (marked) Modifier.padding(horizontal = 10.dp).background(HighlightTint, RoundedCornerShape(8.dp)) else Modifier)
+                    .then(if (text != null) Modifier.onLongPress { menuFor = text } else Modifier)
+            ) { MarkdownBlock(block, actions, navigate) }
         }
-        item(key = "end") { Spacer(Modifier.padding(bottom = 40.dp)) }
+        if (highlights.isNotEmpty()) item(key = "highlights") {
+            HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 16.dp))
+            Text("Highlights", color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+            highlights.take(30).forEach { h ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Avatar(profiles[h.event.pubkey], h.event.pubkey, size = 28, onClick = { actions.openProfile(h.event.pubkey) })
+                    Column(Modifier.padding(start = 10.dp)) {
+                        Text(profiles[h.event.pubkey]?.bestName ?: com.example.btcwidget.nostr.core.Profile.shortNpub(h.event.pubkey), color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Row(Modifier.padding(top = 4.dp)) {
+                            Spacer(Modifier.width(3.dp).heightIn(min = 18.dp).background(HighlightOrange))
+                            Text(h.text, color = EInk.Label, fontSize = 14.sp, fontStyle = FontStyle.Italic, maxLines = 4, modifier = Modifier.padding(start = 8.dp))
+                        }
+                        h.comment?.let { Text(it, color = EInk.Value, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp)) }
+                    }
+                }
+            }
+        }
+        item(key = "end") {
+            Text(
+                "Long-press a paragraph to highlight it.", color = EInk.Caption, fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+            )
+            Spacer(Modifier.padding(bottom = 40.dp))
+        }
+    }
+    menuFor?.let { text ->
+        ActionSheet(onDismiss = { menuFor = null }, actions = listOf(
+            SheetAction(Glyphs.Quote, "Highlight") { highlightNow(text, null) },
+            SheetAction(Glyphs.Comment, "Highlight with a comment") { commentFor = text },
+            SheetAction(Glyphs.Copy, "Copy text") {
+                (context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("text", text))
+            }
+        )) {
+            Text(
+                "“" + text.take(200) + (if (text.length > 200) "…" else "") + "”", color = EInk.Label, fontSize = 14.sp, fontStyle = FontStyle.Italic,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp)
+            )
+        }
+    }
+    commentFor?.let { text ->
+        var comment by remember { mutableStateOf("") }
+        BlockDialog(
+            onDismiss = { commentFor = null }, title = "Highlight with a comment",
+            text = "“" + text.take(160) + (if (text.length > 160) "…" else "") + "”",
+            confirmLabel = "Highlight", confirmEnabled = comment.isNotBlank(),
+            onConfirm = { commentFor = null; highlightNow(text, comment) }
+        ) {
+            androidx.compose.material3.OutlinedTextField(value = comment, onValueChange = { comment = it.take(500) }, placeholder = { Text("Your comment") }, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+private val HighlightOrange = androidx.compose.ui.graphics.Color(0xFFF7931A)
+private val HighlightTint = androidx.compose.ui.graphics.Color(0x26F7931A)
+
+/** A block's plain text, for highlighting (null for images, code and rules). */
+private fun blockText(block: Markdown.Block): String? = when (block) {
+    is Markdown.Block.Paragraph -> com.example.btcwidget.nostr.core.Highlights.textOf(block.spans)
+    is Markdown.Block.ListItem -> com.example.btcwidget.nostr.core.Highlights.textOf(block.spans)
+    is Markdown.Block.Quote -> com.example.btcwidget.nostr.core.Highlights.textOf(block.spans)
+    is Markdown.Block.Heading -> com.example.btcwidget.nostr.core.Highlights.textOf(block.spans)
+    else -> null
+}?.takeIf { it.isNotBlank() }
+
+/**
+ * Calls [onLongPress] when held, without taking normal taps (so links in the text still work):
+ * it never consumes a tap, only the rest of a gesture that became a long press.
+ */
+private fun Modifier.onLongPress(onLongPress: () -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation() }
+        if (up == null) {
+            onLongPress()
+            // Swallow the rest of this press so letting go doesn't also tap a link.
+            do {
+                val event = awaitPointerEvent()
+                event.changes.forEach { it.consume() }
+            } while (event.changes.any { it.pressed })
+        }
     }
 }
 

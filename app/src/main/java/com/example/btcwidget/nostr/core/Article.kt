@@ -147,3 +147,47 @@ object Markdown {
         return out
     }
 }
+
+/**
+ * Highlights (NIP-84, kind 9802): a passage someone marked in an article (or a note, or a web
+ * page), the text as the content, pointing back at the source and its author, optionally with
+ * the reader's own comment.
+ */
+object Highlights {
+    const val KIND = 9802
+
+    data class Highlight(val event: Event, val text: String, val comment: String?, val articleAddress: String?, val noteId: String?, val url: String?)
+
+    /** A highlight of [text] from [article], with an optional [comment] (a "quote highlight"). */
+    fun of(me: String, text: String, article: Article, comment: String? = null, relay: String = "", now: Long = Events.now()) = UnsignedEvent(
+        me, now, KIND,
+        listOfNotNull(
+            listOf("a", "${Kind.ARTICLE}:${article.pubkey}:${article.identifier}", relay),
+            listOf("p", article.pubkey, relay, "author"),
+            comment?.trim()?.takeIf { it.isNotEmpty() }?.let { listOf("comment", it) }
+        ),
+        text.trim()
+    )
+
+    fun parse(e: Event): Highlight? {
+        if (e.kind != KIND || e.content.isBlank()) return null
+        return Highlight(
+            e, e.content.trim(),
+            comment = e.firstTag("comment")?.getOrNull(1)?.trim()?.ifBlank { null },
+            articleAddress = e.tags.firstOrNull { it.size >= 2 && it[0] == "a" }?.get(1),
+            noteId = e.tags.firstOrNull { it.size >= 2 && it[0] == "e" }?.get(1),
+            url = e.tags.firstOrNull { it.size >= 2 && it[0] == "r" && (it[1].startsWith("https://") || it[1].startsWith("http://")) }?.get(1)
+        )
+    }
+
+    /** Plain text of a Markdown block's spans, to highlight and to match highlights against. */
+    fun textOf(spans: List<Markdown.Span>): String = spans.joinToString("") { s ->
+        when (s) {
+            is Markdown.Span.Plain -> s.text
+            is Markdown.Span.Bold -> s.text
+            is Markdown.Span.Italic -> s.text
+            is Markdown.Span.Code -> s.text
+            is Markdown.Span.Link -> s.text
+        }
+    }.trim()
+}

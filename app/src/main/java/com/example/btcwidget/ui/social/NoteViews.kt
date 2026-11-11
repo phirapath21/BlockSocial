@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.background
@@ -280,6 +281,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         }
         return
     }
+    if (note.kind == com.example.btcwidget.nostr.core.Kind.HIGHLIGHT) { HighlightBody(note, actions, fontSize); return }
     val segments = remember(note.id) {
         // Links that imeta tags mark as images show as images even without a file extension.
         val images = com.example.btcwidget.nostr.core.Imeta.imageUrls(note)
@@ -434,6 +436,33 @@ private fun ReadMore(note: Event, actions: NoteActions) {
         "Read more…", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(top = 4.dp).clickable(onClickLabel = "Read the whole post") { actions.openNote(note) }.padding(vertical = 2.dp)
     )
+}
+
+/** A highlight (NIP-84): the reader's comment, the passage with an orange bar, and where it's from. */
+@Composable
+private fun HighlightBody(note: Event, actions: NoteActions, fontSize: Int) {
+    val h = remember(note.id) { com.example.btcwidget.nostr.core.Highlights.parse(note) } ?: return
+    h.comment?.let { Text(it, color = EInk.Value, fontSize = fontSize.sp, lineHeight = (fontSize * 1.35).sp, modifier = Modifier.padding(top = 2.dp)) }
+    Row(Modifier.padding(top = 6.dp).height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
+        Box(Modifier.width(3.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(androidx.compose.ui.graphics.Color(0xFFF7931A)))
+        Text(
+            h.text, color = EInk.Value, fontSize = fontSize.sp, lineHeight = (fontSize * 1.35).sp,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, maxLines = 12, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 10.dp)
+        )
+    }
+    // Where it's from: the article (opens it), else the web page.
+    val address = remember(note.id) {
+        h.articleAddress?.split(':', limit = 3)?.takeIf { it.size == 3 && it[0] == com.example.btcwidget.nostr.core.Kind.ARTICLE.toString() }
+            ?.let { com.example.btcwidget.nostr.core.Nip19.Address(it[0].toInt(), it[1], it[2], emptyList()) }
+    }
+    when {
+        address != null -> ArticleCard(address, actions)
+        h.url != null -> Text(
+            "From " + h.url.substringAfter("://").substringBefore('/'), color = EInk.Caption, fontSize = 13.sp,
+            modifier = Modifier.padding(top = 6.dp).clickable { actions.openLink(h.url, note) }
+        )
+    }
 }
 
 /** A note's words as plain text: mentions as names, links kept, media and quotes left out. */

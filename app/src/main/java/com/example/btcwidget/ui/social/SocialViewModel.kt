@@ -770,6 +770,10 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         say("Following ${pubkeys.size} people")
     }
 
+    suspend fun highlightsOf(article: com.example.btcwidget.nostr.core.Article) = runCatching { repo.highlightsOf(article) }.getOrDefault(emptyList())
+    fun highlight(article: com.example.btcwidget.nostr.core.Article, text: String, comment: String?, onDone: () -> Unit) =
+        tracked("Highlighting", "Highlighted", "Couldn't highlight", finally = onDone) { repo.highlight(article, text, comment) }
+
     val followedTags get() = repo.followedTags
     fun followHashtag(tag: String, follow: Boolean) =
         act(if (follow) "Couldn't follow #$tag" else "Couldn't unfollow #$tag") { repo.setHashtagFollowed(tag, follow) }

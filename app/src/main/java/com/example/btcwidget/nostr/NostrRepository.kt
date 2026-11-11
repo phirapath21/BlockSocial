@@ -582,7 +582,7 @@ class NostrRepository private constructor(private val context: Context) {
         events.filter { it.kind == Kind.REPOST }.forEach { store(it) }
         val items = events.mapNotNull { e ->
             when (e.kind) {
-                Kind.TEXT_NOTE, Kind.POLL, Kind.PICTURE, Kind.VIDEO, Kind.SHORT_VIDEO -> FeedItem(e)
+                in Kind.POSTS -> FeedItem(e)
                 Kind.REPOST -> (embedded[e] ?: e.tagValues("e").firstOrNull()?.let { notes[it] })
                     ?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
                 else -> null
@@ -1546,6 +1546,20 @@ class NostrRepository private constructor(private val context: Context) {
         val id = ids.firstOrNull() ?: return null
         return note(id)?.takeIf { it.pubkey == pubkey }
     }
+
+    // ---- Highlights (NIP-84) ----
+
+    /** Highlights of [article] by anyone, newest first (muted people's left out). */
+    suspend fun highlightsOf(article: com.example.btcwidget.nostr.core.Article): List<com.example.btcwidget.nostr.core.Highlights.Highlight> {
+        val address = "${Kind.ARTICLE}:${article.pubkey}:${article.identifier}"
+        val events = queryEverywhere(listOf(Filter(kinds = listOf(Kind.HIGHLIGHT), tags = mapOf("a" to listOf(address)), limit = 100)), timeoutMs = 5_000)
+        return events.filter { !hidden(it) }.sortedByDescending { it.createdAt }
+            .mapNotNull { com.example.btcwidget.nostr.core.Highlights.parse(it) }
+            .also { list -> loadProfilesLater(list.map { it.event.pubkey }) }
+    }
+
+    suspend fun highlight(article: com.example.btcwidget.nostr.core.Article, text: String, comment: String?): Event =
+        publish(com.example.btcwidget.nostr.core.Highlights.of(requireMe(), text, article, comment, relayHint()))
 
     // ---- Lists of people (NIP-51 kind 30000) ----
 

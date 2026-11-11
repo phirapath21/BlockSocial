@@ -102,3 +102,21 @@ class FollowPackTest {
         org.junit.Assert.assertEquals("relays", next.content)
     }
 }
+
+class HighlightTest {
+    @org.junit.Test
+    fun highlightPointsAtTheArticleAndItsAuthor() {
+        val me = "a".repeat(64); val writer = "b".repeat(64)
+        val articleEvent = com.example.btcwidget.nostr.core.Event("art", writer, 1, com.example.btcwidget.nostr.core.Kind.ARTICLE, listOf(listOf("d", "why-btc")), "body", "")
+        val article = com.example.btcwidget.nostr.core.Article(articleEvent, "why-btc", "Why", null, null, 1)
+        val h = com.example.btcwidget.nostr.core.Highlights.of(me, "  Sound money.  ", article, "So true", "wss://r", 9)
+        org.junit.Assert.assertEquals(com.example.btcwidget.nostr.core.Kind.HIGHLIGHT, h.kind)
+        org.junit.Assert.assertEquals("Sound money.", h.content)
+        val parsed = com.example.btcwidget.nostr.core.Highlights.parse(h.signed("s"))!!
+        org.junit.Assert.assertEquals("30023:$writer:why-btc", parsed.articleAddress)
+        org.junit.Assert.assertEquals("So true", parsed.comment)
+        org.junit.Assert.assertTrue(listOf("p", writer, "wss://r", "author") in h.tags)
+        val spans = listOf(com.example.btcwidget.nostr.core.Markdown.Span.Plain("Hello "), com.example.btcwidget.nostr.core.Markdown.Span.Bold("world"))
+        org.junit.Assert.assertEquals("Hello world", com.example.btcwidget.nostr.core.Highlights.textOf(spans))
+    }
+}
