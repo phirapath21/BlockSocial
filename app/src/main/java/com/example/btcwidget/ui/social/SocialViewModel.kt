@@ -713,7 +713,8 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         _newPosts.value = emptyList()
         stopLive = repo.liveFeed(authors, newest) { item ->
             val shown = _home.value.items.any { it.key == item.key }
-            if (!shown) _newPosts.update { pending -> (pending + item).distinctBy { it.key } }
+            // At most the newest 300 wait (it kept growing while the app sat on another screen).
+            if (!shown) _newPosts.update { pending -> (pending + item).distinctBy { it.key }.takeLast(300) }
         }
     }
 

@@ -132,7 +132,16 @@ class NostrRepository private constructor(private val context: Context) {
     /** Pubkeys the user muted (NIP-51 kind 10000); hidden everywhere. */
     val muted: StateFlow<Set<String>> = _muted.asStateFlow()
 
-    private val notes = ConcurrentHashMap<String, Event>()
+    /**
+     * Notes seen this session, the most recently used [MAX_NOTES] (about 10 MB). It used to keep
+     * every note ever seen until the app was closed, so a long scroll through Global kept
+     * growing it; older ones are still in the local database and are fetched again if needed.
+     */
+    private val notes: MutableMap<String, Event> = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, Event>(256, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Event>?) = size > MAX_NOTES
+        }
+    )
     private val profileEvents = ConcurrentHashMap<String, Event>()
     private var contactsEvent: Event? = null
     private var muteEvent: Event? = null
@@ -584,7 +593,7 @@ class NostrRepository private constructor(private val context: Context) {
     /** Hashtags starting with [prefix] in notes seen so far, most used first (for autocomplete). */
     fun hashtagSuggestions(prefix: String, limit: Int = 5): List<String> {
         val p = prefix.lowercase()
-        return notes.values.asSequence()
+        return synchronized(notes) { notes.values.toList() }.asSequence()
             .flatMap { it.tagValues("t").asSequence() }
             .map { it.lowercase() }
             .filter { it.startsWith(p) && it != p && it.length <= 40 }
@@ -918,7 +927,12 @@ class NostrRepository private constructor(private val context: Context) {
                 else -> s
             }
         }
-        _stats.update { old -> old + update.mapValues { (id, new) -> mergeStats(old[id], new) } }
+        _stats.update { old ->
+            // Updated notes move to the end, so the ones dropped below are those not seen for longest.
+            val merged = (old - update.keys) + update.mapValues { (id, new) -> mergeStats(old[id], new) }
+            // Counts for recent notes only: each update copies the whole map.
+            if (merged.size <= MAX_STATS) merged else merged.entries.drop(merged.size - MAX_STATS * 3 / 4).associate { it.key to it.value }
+        }
     }
 
     /** Keeps optimistic local actions (a like just sent) when relays haven't caught up. */
@@ -1515,6 +1529,9 @@ class NostrRepository private constructor(private val context: Context) {
         _stats.update { it + (id to change(it[id] ?: NoteStats())) }
 
     companion object {
+        /** Notes kept in memory, and notes whose counts are kept (see [notes], [stats]). */
+        private const val MAX_NOTES = 5_000
+        private const val MAX_STATS = 4_000
         /** Relays that index profiles, follow lists and relay lists (also used by Amethyst). */
         val INDEXER_RELAYS = listOf("wss://purplepag.es", "wss://user.kindpag.es", "wss://indexer.coracle.social")
 

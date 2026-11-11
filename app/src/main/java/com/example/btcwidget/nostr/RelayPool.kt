@@ -56,6 +56,31 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
     private val subs = ConcurrentHashMap<String, Sub>()
     private val okWaiters = ConcurrentHashMap<String, CompletableDeferred<PublishResult>>()
     private val nextId = AtomicInteger()
+    private var sleepJob: kotlinx.coroutines.Job? = null
+
+    init { synchronized(all) { all.add(this) } }
+
+    /**
+     * Closes every connection without forgetting anything: relays don't reconnect until they're
+     * needed (something is sent or subscribed) or the app comes back. Live subscriptions are
+     * sent again when a relay reconnects.
+     */
+    fun sleep() {
+        sleepJob?.cancel(); sleepJob = null
+        relays.values.forEach { it.sleep() }
+    }
+
+    /** Reconnects every sleeping relay. */
+    fun wake() {
+        sleepJob?.cancel(); sleepJob = null
+        relays.values.forEach { it.wake() }
+    }
+
+    /** In the background, a relay woken by use goes back to sleep after a couple of minutes. */
+    private fun sleepAgainLater() {
+        if (!backgrounded || sleepJob?.isActive == true) return
+        sleepJob = scope.launch { delay(BACKGROUND_AWAKE_MS); if (backgrounded) sleep() }
+    }
 
     private class Sub(
         val filters: List<Filter>,
@@ -191,6 +216,8 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
     }
 
     fun closeAll() {
+        synchronized(all) { all.remove(this) }
+        sleepJob?.cancel()
         relays.values.forEach { it.close() }
         relays.clear()
         subs.clear()
@@ -236,6 +263,7 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
         @Volatile private var open = false
         @Volatile private var closed = false
         @Volatile private var badAddress = false
+        @Volatile private var sleeping = false
         @Volatile private var startedAt = 0L
         @Volatile private var connectMs: Long? = null
         @Volatile private var lastError: String? = null
@@ -292,10 +320,28 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
             open = false
             // Pending subscriptions on this relay won't get EOSE now.
             subs.values.forEach { if (it.only == null || url in it.only) it.onEose(url, false) }
-            if (closed) return
+            if (closed || sleeping) return
             attempts++
             val wait = (1_000L shl attempts.coerceAtMost(6)).coerceAtMost(60_000)
             retryJob = scope.launch { delay(wait); runCatching { connect() } }
+        }
+
+        /** Disconnects until [wake]; nothing is lost (queued messages and live subscriptions stay). */
+        fun sleep() {
+            if (closed) return
+            sleeping = true
+            retryJob?.cancel()
+            attempts = 0
+            generation.incrementAndGet() // the closing socket's callbacks are ignored
+            open = false
+            runCatching { socket?.close(1000, null) }
+            socket = null
+        }
+
+        fun wake() {
+            if (closed || !sleeping) return
+            sleeping = false
+            connect()
         }
 
         fun retryNow() {
@@ -323,7 +369,14 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
 
         fun send(message: String) {
             if (open && socket?.send(message) == true) return
-            // REQ for live subs is replayed on open; queue the rest (EVENT, CLOSE, one-off REQ).
+            // Asleep (app in the background): something needs this relay, so connect now.
+            if (sleeping) { wake(); sleepAgainLater() }
+            // A live subscription's REQ is sent again on open anyway: queueing it too made the relay
+            // send all its stored events twice. Queue the rest (EVENT, CLOSE).
+            if (message.startsWith("[\"REQ\",\"")) {
+                val id = message.substring(8, message.indexOf('"', 8).coerceAtLeast(8))
+                if (subs.containsKey(id)) return
+            }
             if (queue.size < 200) queue.add(message)
         }
 
@@ -335,6 +388,27 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
 
     companion object {
         private const val TAG = "RelayPool"
+        private const val BACKGROUND_AWAKE_MS = 120_000L
+
+        /** Every open pool, to put them all to sleep when the app goes to the background. */
+        private val all: MutableSet<RelayPool> = java.util.Collections.newSetFromMap(java.util.WeakHashMap())
+        @Volatile private var backgrounded = false
+
+        /**
+         * The app left the screen: close relay connections (they'd otherwise stay open, pinging
+         * and receiving live events, using battery and data). Background work still gets the
+         * relays it uses: sending to a sleeping relay wakes it for a couple of minutes.
+         */
+        fun enterBackground() {
+            backgrounded = true
+            synchronized(all) { all.toList() }.forEach { it.sleep() }
+        }
+
+        /** The app is back: reconnect everything, live subscriptions included. */
+        fun enterForeground() {
+            backgrounded = false
+            synchronized(all) { all.toList() }.forEach { it.wake() }
+        }
 
         val DEFAULT_RELAYS = listOf("wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net")
 
