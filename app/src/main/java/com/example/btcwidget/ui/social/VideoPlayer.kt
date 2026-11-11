@@ -180,15 +180,14 @@ private fun VideoBadge(onClick: (() -> Unit)? = null, label: String? = null, con
  * left, speed (1x › 1.5x › 2x › 0.5x), sound, and rotate to landscape.
  */
 @Composable
-internal fun VideoControls(player: ExoPlayer, url: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
+internal fun VideoControls(player: ExoPlayer, url: String, landscape: Boolean, onRotate: () -> Unit, modifier: Modifier = Modifier) {
     var position by remember { mutableLongStateOf(player.currentPosition) }
     var duration by remember { mutableLongStateOf(player.duration) }
     var playing by remember { mutableStateOf(player.isPlaying) }
     var dragging by remember { mutableStateOf<Float?>(null) }
-    var speedIndex by remember { mutableStateOf(0) }
+    // Read back from the player: these controls are rebuilt when the screen turns.
+    var speedIndex by remember { mutableStateOf(SPEEDS.indexOf(player.playbackParameters.speed).coerceAtLeast(0)) }
     var muted by remember { mutableStateOf(player.volume == 0f) }
-    var landscape by remember { mutableStateOf(false) }
     LaunchedEffect(player) {
         while (true) {
             position = player.currentPosition
@@ -198,8 +197,6 @@ internal fun VideoControls(player: ExoPlayer, url: String, modifier: Modifier = 
             delay(250)
         }
     }
-    // Back to the phone's own orientation when the viewer closes.
-    DisposableEffect(Unit) { onDispose { context.findActivity()?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
 
     Column(modifier.fillMaxWidth()) {
         val total = duration.coerceAtLeast(1)
@@ -227,11 +224,7 @@ internal fun VideoControls(player: ExoPlayer, url: String, modifier: Modifier = 
                 muted = !muted
                 player.volume = if (muted) 0f else 1f
             }
-            ControlIcon(Glyphs.Rotate, if (landscape) "Back to portrait" else "Landscape") {
-                landscape = !landscape
-                context.findActivity()?.requestedOrientation =
-                    if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            }
+            ControlIcon(Glyphs.Rotate, if (landscape) "Back to portrait" else "Landscape", onRotate)
         }
     }
 }
@@ -245,6 +238,22 @@ private fun ControlIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
         Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp)) }
+}
+
+/**
+ * Turns the screen for a full-screen video: [landscape] true locks it sideways, false gives
+ * it back to the phone. Released (back to the phone) when the viewer closes.
+ */
+@Composable
+internal fun rememberVideoOrientation(): Pair<Boolean, () -> Unit> {
+    val context = LocalContext.current
+    var locked by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) { onDispose { context.findActivity()?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
+    return locked to {
+        locked = !locked
+        context.findActivity()?.requestedOrientation =
+            if (locked) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
