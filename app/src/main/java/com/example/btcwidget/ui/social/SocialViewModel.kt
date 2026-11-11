@@ -763,6 +763,13 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     // ---- Lists of people (NIP-51) ----
 
+    suspend fun followPacks() = runCatching { repo.followPacks() }.getOrDefault(emptyList())
+    suspend fun followPack(address: String) = runCatching { repo.followPack(address) }.getOrNull()
+    fun followAll(pubkeys: Collection<String>) = act("Couldn't follow them") {
+        repo.followAll(pubkeys)
+        say("Following ${pubkeys.size} people")
+    }
+
     val followedTags get() = repo.followedTags
     fun followHashtag(tag: String, follow: Boolean) =
         act(if (follow) "Couldn't follow #$tag" else "Couldn't unfollow #$tag") { repo.setHashtagFollowed(tag, follow) }

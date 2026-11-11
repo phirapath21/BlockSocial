@@ -1197,6 +1197,40 @@ class NostrRepository private constructor(private val context: Context) {
         }
     }
 
+    /** Follows everyone in [targets] with one contact list update (a follow pack's "Follow all"). */
+    suspend fun followAll(targets: Collection<String>) {
+        val me = requireMe()
+        val add = targets.filter { it != me && it !in _following.value }.distinct()
+        if (add.isEmpty()) return
+        val before = _following.value
+        _following.value = before + add
+        try {
+            contactsLock.withLock {
+                if (!accountFresh) loadAccount()
+                if (contactsEvent == null && before.isNotEmpty()) error("Couldn't load your follow list; try again")
+                val event = publish(com.example.btcwidget.nostr.core.Events.contactsAdding(me, contactsEvent, add), fast = true)
+                contactsEvent = event
+                _following.value = withPendingFollows(event.tagValues("p").toSet())
+                saveAccount()
+            }
+        } catch (e: Throwable) {
+            _following.value = withPendingFollows(contactsEvent?.tagValues("p")?.toSet() ?: before)
+            throw e
+        }
+    }
+
+    /** Follow packs (kind 39089) from our relays and the indexers. */
+    suspend fun followPacks(): List<com.example.btcwidget.nostr.core.FollowPack> =
+        com.example.btcwidget.nostr.core.FollowPack.latest(
+            queryEverywhere(listOf(Filter(kinds = listOf(com.example.btcwidget.nostr.core.FollowPack.KIND), limit = 80)), timeoutMs = 6_000)
+        ).filter { it.owner !in _muted.value }.also { packs -> loadProfilesLater(packs.map { it.owner } + packs.flatMap { it.members.take(4) }) }
+
+    suspend fun followPack(address: String): com.example.btcwidget.nostr.core.FollowPack? {
+        val p = address.split(':', limit = 3).takeIf { it.size == 3 } ?: return null
+        val events = queryEverywhere(listOf(Filter(kinds = listOf(com.example.btcwidget.nostr.core.FollowPack.KIND), authors = listOf(p[1]), tags = mapOf("d" to listOf(p[2])))), timeoutMs = 6_000)
+        return com.example.btcwidget.nostr.core.FollowPack.latest(events).firstOrNull()?.also { loadProfiles(it.members + it.owner) }
+    }
+
     private fun followedTagsOf(contacts: Event): Set<String> =
         contacts.tagValues("t").map { it.trim().removePrefix("#").lowercase() }.filter { it.isNotEmpty() }.toSet()
 

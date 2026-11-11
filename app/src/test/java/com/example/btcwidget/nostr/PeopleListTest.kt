@@ -86,3 +86,19 @@ class HashtagFollowTest {
         org.junit.Assert.assertEquals(listOf(listOf("p", bob), listOf("t", "bitcoin")), off.tags)
     }
 }
+
+class FollowPackTest {
+    @org.junit.Test
+    fun packsParseAndFollowAllKeepsTheList() {
+        val me = "a".repeat(64); val bob = "b".repeat(64); val carol = "c".repeat(64); val dave = "d".repeat(64)
+        val e = com.example.btcwidget.nostr.core.Event("p", dave, 5, com.example.btcwidget.nostr.core.FollowPack.KIND,
+            listOf(listOf("d", "btc"), listOf("title", "Bitcoin devs"), listOf("p", bob), listOf("p", carol), listOf("p", "bad")), "", "")
+        val pack = com.example.btcwidget.nostr.core.FollowPack.parse(e)!!
+        org.junit.Assert.assertEquals(listOf(bob, carol), pack.members)
+        org.junit.Assert.assertEquals("39089:$dave:btc", pack.address)
+        val current = com.example.btcwidget.nostr.core.Event("c", me, 1, com.example.btcwidget.nostr.core.Kind.CONTACTS, listOf(listOf("p", bob), listOf("t", "nostr")), "relays", "")
+        val next = com.example.btcwidget.nostr.core.Events.contactsAdding(me, current, pack.members + me)
+        org.junit.Assert.assertEquals(listOf(listOf("p", bob), listOf("t", "nostr"), listOf("p", carol)), next.tags) // no duplicates, not yourself
+        org.junit.Assert.assertEquals("relays", next.content)
+    }
+}

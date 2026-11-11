@@ -175,6 +175,13 @@ object Events {
         return UnsignedEvent(pubkey, now(), Kind.CONTACTS, tags, current?.content.orEmpty())
     }
 
+    /** The contact list with all of [targets] followed (a follow pack), everything else kept. */
+    fun contactsAdding(pubkey: String, current: Event?, targets: Collection<String>): UnsignedEvent {
+        val have = current?.tagValues("p").orEmpty().toSet()
+        val tags = current?.tags.orEmpty() + targets.distinct().filter { it !in have && it != pubkey }.map { listOf("p", it) }
+        return UnsignedEvent(pubkey, now(), Kind.CONTACTS, tags, current?.content.orEmpty())
+    }
+
     /** The contact list with hashtag [tag] followed or not (NIP-02 "t" tags, as Amethyst writes them). */
     fun contactsHashtag(pubkey: String, current: Event?, tag: String, follow: Boolean): UnsignedEvent {
         val t = tag.trim().removePrefix("#").lowercase()

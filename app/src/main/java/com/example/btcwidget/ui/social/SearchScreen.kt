@@ -226,7 +226,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                     )
                 }
                 // Before searching: Explore, recent notes from everyone or from one relay.
-                searched == null -> ExploreFeed(vm, actions)
+                searched == null -> ExploreFeed(vm, actions, navigate)
                 tab == "people" -> if (people.isEmpty() && searched?.startsWith("#") != true) EmptyNote("No people found for \"$searched\".") else {
                     LazyColumn(Modifier.fillMaxSize()) {
                         com.example.btcwidget.nostr.core.HomeFeed.cleanTag(searched.orEmpty())?.takeIf { searched?.startsWith("#") == true }?.let { tag ->
@@ -275,13 +275,14 @@ private fun localPeople(profiles: Map<String, Profile>, q: String): List<Profile
 
 /** Recent notes from all relays, or one chosen relay: to find people beyond your follows. */
 @Composable
-private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
+private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions, navigate: (NavKey) -> Unit) {
     val stats by vm.stats.collectAsState()
     val scope = rememberCoroutineScope()
     val account by vm.account.collectAsState()
     var suggestions by rememberSaveable { mutableStateOf(false) }
     var feeds by rememberSaveable { mutableStateOf(false) }
     var reads by rememberSaveable { mutableStateOf(false) }
+    var packs by rememberSaveable { mutableStateOf(false) }
     var relay by rememberSaveable { mutableStateOf<String?>(null) }
     var items by remember(relay) { mutableStateOf<List<FeedItem>?>(null) }
     var loadingMore by remember(relay) { mutableStateOf(false) }
@@ -292,16 +293,18 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            EInkChip(text = "ARTICLES", selected = reads, onClick = { reads = true; feeds = false; suggestions = false })
-            EInkChip(text = "FEEDS", selected = feeds, onClick = { feeds = true; suggestions = false; reads = false })
-            if (account != null) EInkChip(text = "WHO TO FOLLOW", selected = suggestions, onClick = { suggestions = true; feeds = false; reads = false })
-            EInkChip(text = "GLOBAL", selected = !suggestions && !feeds && !reads && relay == null, onClick = { suggestions = false; feeds = false; reads = false; relay = null })
+            EInkChip(text = "ARTICLES", selected = reads, onClick = { reads = true; feeds = false; suggestions = false; packs = false })
+            EInkChip(text = "FEEDS", selected = feeds, onClick = { feeds = true; suggestions = false; reads = false; packs = false })
+            EInkChip(text = "FOLLOW PACKS", selected = packs, onClick = { packs = true; suggestions = false; feeds = false; reads = false })
+            if (account != null) EInkChip(text = "WHO TO FOLLOW", selected = suggestions, onClick = { suggestions = true; feeds = false; reads = false; packs = false })
+            EInkChip(text = "GLOBAL", selected = !suggestions && !feeds && !reads && !packs && relay == null, onClick = { suggestions = false; feeds = false; reads = false; packs = false; relay = null })
             vm.relays.forEach { url ->
-                EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = !suggestions && !feeds && !reads && relay == url, onClick = { suggestions = false; feeds = false; reads = false; relay = url })
+                EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = !suggestions && !feeds && !reads && !packs && relay == url, onClick = { suggestions = false; feeds = false; reads = false; packs = false; relay = url })
             }
         }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
         if (suggestions) { WhoToFollow(vm, actions); return@Column }
+        if (packs) { FollowPackList(vm, navigate); return@Column }
         if (feeds) { DvmFeeds(vm, actions); return@Column }
         if (reads) { RecentArticles(vm, actions); return@Column }
         when (val list = items) {

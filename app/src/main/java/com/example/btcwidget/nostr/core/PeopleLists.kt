@@ -69,3 +69,39 @@ data class PeopleList(
         )
     }
 }
+
+/**
+ * Follow packs (kind 39089, "starter packs"): a set of people someone recommends, with a title,
+ * picture and description, to follow all at once.
+ */
+data class FollowPack(
+    val owner: String,
+    val d: String,
+    val title: String,
+    val description: String?,
+    val image: String?,
+    val members: List<String>,
+    val createdAt: Long
+) {
+    val address: String get() = "$KIND:$owner:$d"
+
+    companion object {
+        const val KIND = 39089
+
+        fun parse(e: Event): FollowPack? {
+            if (e.kind != KIND) return null
+            val d = e.firstTag("d")?.get(1) ?: return null
+            val members = e.tags.filter { it.size >= 2 && it[0] == "p" && Hex.isKey(it[1]) }.map { it[1] }.distinct()
+            if (members.isEmpty()) return null
+            fun tag(n: String) = e.firstTag(n)?.getOrNull(1)?.trim()?.ifBlank { null }
+            return FollowPack(e.pubkey, d, (tag("title") ?: tag("name") ?: "Follow pack").take(80), tag("description") ?: tag("summary"),
+                tag("image")?.takeIf { it.startsWith("https://") }, members, e.createdAt)
+        }
+
+        /** Newest version of each pack; bigger packs first, then newer. */
+        fun latest(events: List<Event>): List<FollowPack> =
+            events.filter { it.kind == KIND }.groupBy { it.pubkey to it.firstTag("d")?.get(1) }.values
+                .mapNotNull { parse(it.maxBy { e -> e.createdAt }) }
+                .sortedWith(compareByDescending<FollowPack> { it.members.size.coerceAtMost(50) }.thenByDescending { it.createdAt })
+    }
+}
