@@ -1,5 +1,6 @@
 package com.example.btcwidget
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
@@ -29,6 +30,7 @@ fun MainNavigation() {
   // "go back"s landed together (e.g. a screen's done and back callbacks both firing).
   val back: () -> Unit = { if (backStack.size > 1) backStack.removeLastOrNull() }
 
+  androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
   NavDisplay(
     backStack = backStack,
     // System back on the main screen leaves the app instead.
@@ -80,4 +82,7 @@ fun MainNavigation() {
         entry<SearchKey> { com.example.btcwidget.ui.social.SearchScreen(social, navigate, back) }
       },
   )
+  // While a repost, reply or post is being sent: what it's waiting for, over every screen.
+  com.example.btcwidget.ui.social.PublishStatusBar(social, androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter))
+  }
 }

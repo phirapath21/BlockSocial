@@ -50,6 +50,21 @@ data class FeedItem(val note: Event, val repostedBy: String? = null, val sortTim
 }
 
 /** A notification about the user's notes or account. */
+/**
+ * Put in the coroutine context of an action the user is waiting on (repost, reply, post) to
+ * hear how [NostrRepository.publish] is getting on: signing, then relays answering.
+ */
+class PublishTracker(val onStage: (Stage) -> Unit) : kotlin.coroutines.AbstractCoroutineContextElement(PublishTracker) {
+    companion object Key : kotlin.coroutines.CoroutineContext.Key<PublishTracker>
+
+    sealed interface Stage {
+        /** Waiting for the signature; [signer] says whose (an app or a remote signer can take a while). */
+        data class Signing(val signer: SignerType?) : Stage
+        /** Sent to [total] relays; [answered] have replied, [accepted] of them took it. */
+        data class Sending(val answered: Int, val accepted: Int, val total: Int) : Stage
+    }
+}
+
 data class NostrNotification(
     val event: Event,
     val type: Type,
@@ -948,11 +963,28 @@ class NostrRepository private constructor(private val context: Context) {
 
     internal fun requireSigner(): NostrSigner = signer ?: throw IllegalStateException("Log in to Nostr first")
 
-    /** Signs and publishes; succeeds if at least one relay accepted it. */
+    /**
+     * Signs and publishes; succeeds if at least one relay accepted it. Inside a [PublishTracker]
+     * (an action the user is watching, like a repost or reply) it reports each step, and is done
+     * as soon as one relay has it while the rest answer in the background.
+     */
     suspend fun publish(unsigned: UnsignedEvent, fast: Boolean = false): Event {
+        val tracker = kotlin.coroutines.coroutineContext[PublishTracker]
+        tracker?.onStage?.invoke(PublishTracker.Stage.Signing(_account.value?.type))
         val signed = requireSigner().sign(unsigned)
         // [fast]: done once one relay has it (lists the UI already shows as changed).
-        val results = pool.publish(signed, untilFirstAccepted = fast)
+        var total = 0
+        val answered = java.util.concurrent.atomic.AtomicInteger()
+        val accepted = java.util.concurrent.atomic.AtomicInteger()
+        val results = pool.publish(
+            signed,
+            untilFirstAccepted = fast || tracker != null,
+            onSent = { n -> total = n; tracker?.onStage?.invoke(PublishTracker.Stage.Sending(0, 0, n)) },
+            onAnswer = { r ->
+                val a = if (r.accepted) accepted.incrementAndGet() else accepted.get()
+                tracker?.onStage?.invoke(PublishTracker.Stage.Sending(answered.incrementAndGet(), a, total))
+            }
+        )
         if (results.none { it.accepted }) {
             throw IllegalStateException(results.firstOrNull { it.message.isNotBlank() }?.message ?: "No relay accepted the post")
         }

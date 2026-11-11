@@ -82,7 +82,9 @@ fun ImageViewer(
     /** Show [url] as a video with X-style controls instead of an image. Tap shows or hides everything around it. */
     video: Boolean = false,
     /** The reply card under the actions, told when it opens; null hides it. */
-    replyBar: (@Composable (onActiveChange: (Boolean) -> Unit) -> Unit)? = null
+    replyBar: (@Composable (onActiveChange: (Boolean) -> Unit) -> Unit)? = null,
+    /** Shown over the top while a reply or repost made here is being sent (the viewer is its own window). */
+    statusBar: @Composable () -> Unit = {}
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -258,6 +260,7 @@ fun ImageViewer(
                 if (player != null && !replying) VideoControls(player, url, landscape = rotated, onRotate = rotate, modifier = Modifier.padding(top = 8.dp))
             }
         }
+        statusBar()
     }
 }
 
