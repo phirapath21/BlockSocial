@@ -284,13 +284,23 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         // Links that imeta tags mark as images show as images even without a file extension.
         val images = com.example.btcwidget.nostr.core.Imeta.imageUrls(note)
         val videos = com.example.btcwidget.nostr.core.Imeta.videoUrls(note)
-        Content.parse(note.content.trim(), com.example.btcwidget.nostr.core.CustomEmoji.of(note)).map { seg ->
+        val parsed = Content.parse(note.content.trim(), com.example.btcwidget.nostr.core.CustomEmoji.of(note)).map { seg ->
             when {
                 seg is Content.Segment.Link && seg.url in images -> Content.Segment.Image(seg.url)
                 seg is Content.Segment.Link && seg.url in videos -> Content.Segment.Video(seg.url)
                 else -> seg
             }
         }
+        // Picture and video posts (NIP-68, NIP-71) keep their media in imeta tags, not the text.
+        val inText = parsed.mapNotNull { (it as? Content.Segment.Image)?.url ?: (it as? Content.Segment.Video)?.url }.toSet()
+        val fromTags = when (note.kind) {
+            com.example.btcwidget.nostr.core.Kind.PICTURE ->
+                com.example.btcwidget.nostr.core.Imeta.urls(note).filter { it !in inText }.map { Content.Segment.Image(it) }
+            com.example.btcwidget.nostr.core.Kind.VIDEO, com.example.btcwidget.nostr.core.Kind.SHORT_VIDEO ->
+                com.example.btcwidget.nostr.core.Imeta.urls(note).filter { it !in inText }.take(1).map { Content.Segment.Video(it) }
+            else -> emptyList()
+        }
+        parsed + fromTags
     }
     val uriHandler = LocalUriHandler.current
     val linkStyle = TextLinkStyles(SpanStyle(color = EInk.Value, fontWeight = FontWeight.Bold))
@@ -395,6 +405,9 @@ internal fun noteImageUrls(note: Event): List<String> {
             seg is Content.Segment.Link && seg.url in images -> seg.url
             else -> null
         }
+    }.let { inText ->
+        // Picture posts (NIP-68) list their photos in imeta tags.
+        if (note.kind == com.example.btcwidget.nostr.core.Kind.PICTURE) inText + com.example.btcwidget.nostr.core.Imeta.urls(note) else inText
     }.distinct()
 }
 

@@ -401,12 +401,12 @@ class NostrRepository private constructor(private val context: Context) {
         // Following nobody yet: show your own notes plus #bitcoin, so the timeline isn't empty.
         if (_following.value.isEmpty()) {
             return timeline(
-                Filter(authors = listOf(me), kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit),
+                Filter(authors = listOf(me), kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit),
                 Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("t" to listOf("bitcoin")), until = until, limit = limit)
             )
         }
         val authors = (_following.value + me).toList()
-        return authoredTimeline(authors) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }
+        return authoredTimeline(authors) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit) }
     }
 
     /** One page of [feed] for Home; [until] pages back (DVM feeds come as one page). */
@@ -416,17 +416,27 @@ class NostrRepository private constructor(private val context: Context) {
         }
         is com.example.btcwidget.nostr.core.HomeFeed.Global -> globalFeed(feed.relay, until)
         is com.example.btcwidget.nostr.core.HomeFeed.Hashtag -> hashtagFeed(feed.tag, until)
+        is com.example.btcwidget.nostr.core.HomeFeed.Media -> mediaFeed(feed, until)
         is com.example.btcwidget.nostr.core.HomeFeed.People -> peopleList(feed.owner, feed.d)?.members.orEmpty().let { members ->
             if (members.isEmpty()) emptyList()
-            else authoredTimeline(members) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = 40) }
+            else authoredTimeline(members) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = 40) }
         }
         is com.example.btcwidget.nostr.core.HomeFeed.Dvm ->
             if (until != null) emptyList() else dvmFeed(com.example.btcwidget.nostr.core.Dvm.Service(feed.pubkey, feed.dvmId, feed.name, null, null, false))
     }
 
+    /** Picture posts (kind 20) or video posts (21, 22): by the people you follow, or by everyone. */
+    suspend fun mediaFeed(feed: com.example.btcwidget.nostr.core.HomeFeed.Media, until: Long? = null): List<FeedItem> {
+        val kinds = if (feed.videos) listOf(Kind.VIDEO, Kind.SHORT_VIDEO) else listOf(Kind.PICTURE)
+        if (feed.everyone) return timeline(Filter(kinds = kinds, until = until, limit = 40))
+        val me = pubkey ?: return emptyList()
+        val authors = (_following.value + me).toList()
+        return authoredTimeline(authors) { Filter(authors = it, kinds = kinds, until = until, limit = 40) }
+    }
+
     /** A profile's notes and reposts. */
     suspend fun profileFeed(pubkey: String, until: Long? = null, limit: Int = 30): List<FeedItem> =
-        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), until = until, limit = limit) }
+        authoredTimeline(listOf(pubkey)) { Filter(authors = it, kinds = Kind.POSTS + Kind.REPOST, until = until, limit = limit) }
 
     // ---- Outbox model (NIP-65): read people from the relays they write to ----
 
@@ -550,7 +560,7 @@ class NostrRepository private constructor(private val context: Context) {
     private suspend fun buildTimeline(events: List<Event>): List<FeedItem> {
         // Reposts carry the note as JSON; fetch the few that don't in one request.
         val embedded = events.filter { it.kind == Kind.REPOST }.associateWith { r ->
-            runCatching { Event.fromJson(r.content) }.getOrNull()?.takeIf { it.kind == Kind.TEXT_NOTE && it.verify() }
+            runCatching { Event.fromJson(r.content) }.getOrNull()?.takeIf { it.kind in Kind.POSTS && it.verify() }
         }
         val missing = embedded.filterValues { it == null }.keys.mapNotNull { it.tagValues("e").firstOrNull() }
             .filter { !notes.containsKey(it) }.distinct()
@@ -560,7 +570,7 @@ class NostrRepository private constructor(private val context: Context) {
         events.filter { it.kind == Kind.REPOST }.forEach { store(it) }
         val items = events.mapNotNull { e ->
             when (e.kind) {
-                Kind.TEXT_NOTE, Kind.POLL -> FeedItem(e)
+                Kind.TEXT_NOTE, Kind.POLL, Kind.PICTURE, Kind.VIDEO, Kind.SHORT_VIDEO -> FeedItem(e)
                 Kind.REPOST -> (embedded[e] ?: e.tagValues("e").firstOrNull()?.let { notes[it] })
                     ?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
                 else -> null
@@ -1543,13 +1553,13 @@ class NostrRepository private constructor(private val context: Context) {
      * "new posts" pill). Call the returned function to stop.
      */
     fun liveFeed(authors: List<String>, since: Long, onItem: (FeedItem) -> Unit): () -> Unit =
-        pool.subscribe(listOf(Filter(authors = authors, kinds = listOf(Kind.TEXT_NOTE, Kind.REPOST, Kind.POLL), since = since + 1)), { e, _ ->
+        pool.subscribe(listOf(Filter(authors = authors, kinds = Kind.POSTS + Kind.REPOST, since = since + 1)), { e, _ ->
             if (hidden(e)) return@subscribe
             val item = when (e.kind) {
-                Kind.TEXT_NOTE -> FeedItem(e)
-                else -> runCatching { Event.fromJson(e.content) }.getOrNull()
-                    ?.takeIf { it.kind == Kind.TEXT_NOTE && it.verify() }
+                Kind.REPOST -> runCatching { Event.fromJson(e.content) }.getOrNull()
+                    ?.takeIf { it.kind in Kind.POSTS && it.verify() }
                     ?.let { FeedItem(it, repostedBy = e.pubkey, sortTime = e.createdAt) }
+                else -> FeedItem(e)
             } ?: return@subscribe
             remember(item.note)
             onItem(item)

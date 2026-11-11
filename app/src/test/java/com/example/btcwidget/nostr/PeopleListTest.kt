@@ -54,3 +54,21 @@ class PeopleListTest {
         assertEquals(feed, HomeFeed.parse(feed.id))
     }
 }
+
+class MediaPostsTest {
+    @org.junit.Test
+    fun mediaFeedsAndImetaUrls() {
+        val pk = "a".repeat(64)
+        val pic = com.example.btcwidget.nostr.core.Event("id", pk, 1, com.example.btcwidget.nostr.core.Kind.PICTURE, listOf(
+            listOf("imeta", "url https://x/a.jpg", "m image/jpeg", "blurhash LEHV6nWB2yk8pyo0adR*.7kCMdnj"),
+            listOf("imeta", "url https://x/b.jpg", "m image/jpeg"),
+            listOf("imeta", "m image/jpeg") // no url
+        ), "caption", "")
+        org.junit.Assert.assertEquals(listOf("https://x/a.jpg", "https://x/b.jpg"), com.example.btcwidget.nostr.core.Imeta.urls(pic))
+        org.junit.Assert.assertEquals("LEHV6nWB2yk8pyo0adR*.7kCMdnj", com.example.btcwidget.nostr.core.Imeta.blurhash(pic, "https://x/a.jpg"))
+        org.junit.Assert.assertNull(com.example.btcwidget.nostr.core.Imeta.blurhash(pic, "https://x/b.jpg"))
+        listOf("pictures", "pictures:all", "videos", "videos:all").forEach { id ->
+            org.junit.Assert.assertEquals(id, com.example.btcwidget.nostr.core.HomeFeed.parse(id)!!.id)
+        }
+    }
+}

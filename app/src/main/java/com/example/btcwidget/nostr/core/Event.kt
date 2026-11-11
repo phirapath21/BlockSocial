@@ -22,6 +22,13 @@ object Kind {
     const val POLL = 1068
     const val EMOJI_LIST = 10030
     const val POLL_RESPONSE = 1018
+    /** Picture post (NIP-68): photos in imeta tags, the text as a caption. */
+    const val PICTURE = 20
+    /** Video posts (NIP-71): landscape and short (vertical) videos in imeta tags. */
+    const val VIDEO = 21
+    const val SHORT_VIDEO = 22
+    /** What timelines show: notes, polls and picture and video posts. */
+    val POSTS = listOf(TEXT_NOTE, POLL, PICTURE, VIDEO, SHORT_VIDEO)
 }
 
 /** An event before signing: everything but id and sig. */

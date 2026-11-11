@@ -461,7 +461,7 @@ private fun AddFeed(vm: SocialViewModel, existing: List<com.example.btcwidget.no
             }
         }
         // Built-in feeds that were removed can come back.
-        com.example.btcwidget.nostr.core.HomeFeed.DEFAULTS.filter { it !in existing }.forEach { f ->
+        (com.example.btcwidget.nostr.core.HomeFeed.DEFAULTS + com.example.btcwidget.nostr.core.HomeFeed.SUGGESTED).filter { it !in existing }.forEach { f ->
             Text("+ " + f.title, color = EInk.Value, fontSize = 14.sp, modifier = Modifier.clickable { vm.addFeed(f) }.padding(vertical = 6.dp))
         }
         if (kind == 2) {

@@ -78,6 +78,12 @@ object Imeta {
             fields["blurhash"]?.takeIf { fields["url"] == url && Blurhash.isValid(it) }
         }
 
+    /** Every URL in [event]'s imeta tags, in order (pictures and video posts list their media this way). */
+    fun urls(event: Event): List<String> =
+        event.tags.filter { it.firstOrNull() == "imeta" }.mapNotNull { tag ->
+            tag.drop(1).firstOrNull { it.startsWith("url ") }?.substringAfter(' ')?.trim()?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+        }.distinct()
+
     /** URLs that [event]'s imeta tags mark as videos. */
     fun videoUrls(event: Event): Set<String> =
         event.tags.filter { it.firstOrNull() == "imeta" }.mapNotNull { tag ->
