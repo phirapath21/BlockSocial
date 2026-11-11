@@ -251,6 +251,6 @@ app/src/main/java/com/example/btcwidget/
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License: see [`LICENSE`](LICENSE).
 
 Fonts: [Oswald](https://github.com/googlefonts/OswaldFont) and [VT323](https://fonts.google.com/specimen/VT323), both under the SIL Open Font License (see [`licenses/`](licenses/)).
