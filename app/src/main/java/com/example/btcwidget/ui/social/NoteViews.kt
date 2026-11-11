@@ -78,6 +78,8 @@ class NoteActions(
     val isBookmarked: (String) -> Boolean,
     /** Opens an image full screen, with its note's author and actions. */
     val openImage: (url: String, note: Event) -> Unit,
+    /** Opens a web link: in Block's browser with [note] under it, or the phone's browser (a setting). */
+    val openLink: (url: String, note: Event?) -> Unit,
     /** Opens a video full screen (it carries on from where the timeline left it). */
     val openVideo: (url: String, note: Event) -> Unit,
     /** Videos may start by themselves, muted (the user's setting and the current connection). */
@@ -300,7 +302,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
     val text: AnnotatedString = buildAnnotatedString {
         for (seg in segments) when (seg) {
             is Content.Segment.Text -> append(seg.text)
-            is Content.Segment.Link -> withLink(LinkAnnotation.Clickable("url", linkStyle) { uriHandler.openUri(seg.url) }) {
+            is Content.Segment.Link -> withLink(LinkAnnotation.Clickable("url", linkStyle) { actions.openLink(seg.url, note) }) {
                 append(seg.url.removePrefix("https://").removePrefix("http://").let { if (it.length > 40) it.take(38) + "…" else it })
             }
             is Content.Segment.Hashtag -> withLink(LinkAnnotation.Clickable("tag", linkStyle) { actions.openHashtag(seg.tag) }) {
@@ -372,7 +374,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
     segments.filterIsInstance<Content.Segment.Video>().take(2).forEach { VideoPlayer(it.url, note, actions) }
     // A card for the first web link (not for posts that already show photos, video or a quote).
     if (depth == 0 && segments.none { it is Content.Segment.Image || it is Content.Segment.Video || it is Content.Segment.NoteRef || it is Content.Segment.AddressRef }) {
-        segments.filterIsInstance<Content.Segment.Link>().firstOrNull()?.let { LinkCard(it.url, actions) }
+        segments.filterIsInstance<Content.Segment.Link>().firstOrNull()?.let { LinkCard(it.url, note, actions) }
     }
     if (depth == 0) {
         segments.filterIsInstance<Content.Segment.NoteRef>().distinctBy { it.id }.take(2).forEach { ref ->
@@ -385,8 +387,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
 
 /** Link preview: image, site and title, boxed like X's cards. Nothing shows until it loads. */
 @Composable
-private fun LinkCard(url: String, actions: NoteActions) {
-    val uriHandler = LocalUriHandler.current
+private fun LinkCard(url: String, note: Event, actions: NoteActions) {
     val preview by produceState<com.example.btcwidget.nostr.core.LinkPreview?>(null, url) { value = actions.linkPreview(url) }
     val p = preview ?: return
     Column(
@@ -395,7 +396,7 @@ private fun LinkCard(url: String, actions: NoteActions) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
-            .clickable(onClickLabel = "Open link") { uriHandler.openUri(url) }
+            .clickable(onClickLabel = "Open link") { actions.openLink(url, note) }
     ) {
         p.image?.let {
             AsyncImage(
@@ -538,7 +539,7 @@ private fun QuotedNote(id: String, actions: NoteActions) {
 
 /** Reply · Repost (menu: repost or quote) · Like · Zap, with counts. */
 @Composable
-private fun ActionRow(note: Event, stats: NoteStats, actions: NoteActions) {
+internal fun ActionRow(note: Event, stats: NoteStats, actions: NoteActions) {
     var repostMenu by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier

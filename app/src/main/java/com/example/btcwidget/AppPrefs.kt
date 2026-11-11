@@ -32,6 +32,7 @@ object AppPrefs {
     private const val VIDEO_AUTOPLAY = "video_autoplay"
     private const val VIDEO_QUALITY = "video_quality"
     private const val LANDING_DONE = "landing_done"
+    private const val LINKS_IN_APP = "links_in_app"
     private fun modeEnabled(mode: Int) = "mode_enabled_$mode"
     private fun widgetMode(id: Int) = "mode_$id"
     private fun halvingMode(id: Int) = "halving_mode_$id"
@@ -51,6 +52,10 @@ object AppPrefs {
         prefs(context).edit().apply(block).apply()
 
     // ---- Display ----
+
+    /** Open web links in Block's own browser (true, the default) or the phone's browser. */
+    fun linksInApp(context: Context): Boolean = prefs(context).getBoolean(LINKS_IN_APP, true)
+    fun setLinksInApp(context: Context, inApp: Boolean) = edit(context) { putBoolean(LINKS_IN_APP, inApp) }
 
     /** Whether the welcome page was passed (logged in, or chose to look around first). */
     fun landingDone(context: Context): Boolean = prefs(context).getBoolean(LANDING_DONE, false)
