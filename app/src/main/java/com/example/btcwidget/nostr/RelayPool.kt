@@ -175,6 +175,7 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
     }
 
     /** Sends [event] to every relay and waits for their OK (or [timeoutMs]). */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class) // Deferred.getCompleted, inside completion handlers
     suspend fun publish(
         event: Event,
         timeoutMs: Long = 8_000,
@@ -196,7 +197,7 @@ class RelayPool(private val client: OkHttpClient = defaultClient) {
         if (untilFirstAccepted && waiters.isNotEmpty()) {
             // Return as soon as one relay has it; the others keep receiving it in the background.
             val first = CompletableDeferred<PublishResult>()
-            waiters.values.forEach { d -> d.invokeOnCompletion { if (d.getCompleted().accepted) first.complete(d.getCompleted()) } }
+            waiters.values.forEach { d -> d.invokeOnCompletion { e -> if (e == null && d.getCompleted().accepted) first.complete(d.getCompleted()) } }
             val accepted = withTimeoutOrNull(timeoutMs) {
                 kotlinx.coroutines.selects.select<PublishResult?> {
                     first.onAwait { it }

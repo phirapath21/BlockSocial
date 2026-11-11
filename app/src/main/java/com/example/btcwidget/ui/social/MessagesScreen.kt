@@ -290,7 +290,7 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
     var replyTo by remember { mutableStateOf<com.example.btcwidget.nostr.core.Nip17.Message?>(null) }
     var menuFor by remember { mutableStateOf<String?>(null) }
     var photoSending by remember { mutableStateOf(false) }
-    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val photoPicker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
             photoSending = true
@@ -367,7 +367,8 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                                     actions = buildList {
                                         add(SheetAction(Glyphs.Reply, "Reply") { replyTo = m })
                                         if (m.kind != com.example.btcwidget.nostr.core.Nip17.FILE) add(SheetAction(Glyphs.Copy, "Copy text") {
-                                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(m.content))
+                                            (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                                                .setPrimaryClip(android.content.ClipData.newPlainText("message", m.content))
                                         })
                                     },
                                     header = {

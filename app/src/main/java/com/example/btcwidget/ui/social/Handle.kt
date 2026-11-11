@@ -21,7 +21,7 @@ fun handleText(profile: Profile?, pubkey: String): String {
     LaunchedEffect(pubkey, id) { if (id != null) repo.verifyNip05(pubkey, id) }
     return when {
         id != null && verified["$pubkey|$id"] == true -> "✓ " + id.removePrefix("_@")
-        !profile?.name.isNullOrBlank() && ' ' !in profile!!.name!! -> "@" + profile.name
+        profile?.name?.takeIf { it.isNotBlank() && ' ' !in it } != null -> "@" + profile.name
         else -> Profile.shortNpub(pubkey)
     }
 }
