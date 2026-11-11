@@ -43,7 +43,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
@@ -62,6 +64,10 @@ internal object VideoPositions {
 /** Builds a player for [url], starting where it was left, and reports the video's shape. */
 internal fun newPlayer(context: Context, url: String, onRatio: (Float) -> Unit): ExoPlayer =
     ExoPlayer.Builder(context).build().apply {
+        // Data saver: the lowest quality whenever the video offers a choice.
+        if (VideoQuality.fromName(com.example.btcwidget.AppPrefs.videoQuality(context)) == VideoQuality.DATA_SAVER) {
+            trackSelectionParameters = trackSelectionParameters.buildUpon().setForceLowestBitrate(true).build()
+        }
         setMediaItem(MediaItem.fromUri(url))
         repeatMode = Player.REPEAT_MODE_ONE
         prepare()
@@ -72,6 +78,25 @@ internal fun newPlayer(context: Context, url: String, onRatio: (Float) -> Unit):
             }
         })
     }
+
+/** A resolution a video offers ("720p") and the override that picks it. */
+internal class QualityOption(val height: Int, val pick: TrackSelectionOverride) {
+    val label get() = "${height}p"
+}
+
+/** The resolutions this video offers, highest first; empty or one when there's no choice. */
+internal fun ExoPlayer.qualityOptions(): List<QualityOption> =
+    currentTracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }.flatMap { g ->
+        (0 until g.length).filter { g.isTrackSupported(it) }.map { i -> QualityOption(g.getTrackFormat(i).height, TrackSelectionOverride(g.mediaTrackGroup, i)) }
+    }.filter { it.height > 0 }.distinctBy { it.height }.sortedByDescending { it.height }
+
+/** Picks [option], or Auto (the player chooses, or the lowest in data saver) when null. */
+internal fun ExoPlayer.chooseQuality(option: QualityOption?, context: Context) {
+    val b = trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+    if (option != null) b.setOverrideForType(option.pick).setForceLowestBitrate(false)
+    else b.setForceLowestBitrate(VideoQuality.fromName(com.example.btcwidget.AppPrefs.videoQuality(context)) == VideoQuality.DATA_SAVER)
+    trackSelectionParameters = b.build()
+}
 
 /** "-3:48": time left, as X shows it. */
 internal fun remainingLabel(durationMs: Long, positionMs: Long): String {
@@ -213,6 +238,7 @@ internal fun VideoControls(player: ExoPlayer, url: String, landscape: Boolean, o
             }
             Text(remainingLabel(duration, position), color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 4.dp))
             Box(Modifier.weight(1f))
+            QualityButton(player)
             Text(
                 SPEED_LABELS[speedIndex], color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClickLabel = "Playback speed") {
@@ -225,6 +251,40 @@ internal fun VideoControls(player: ExoPlayer, url: String, landscape: Boolean, o
                 player.volume = if (muted) 0f else 1f
             }
             ControlIcon(Glyphs.Rotate, if (landscape) "Back to portrait" else "Landscape", onRotate)
+        }
+    }
+}
+
+/**
+ * "Auto ▾" / "720p ▾": shown only when the video offers more than one resolution (most
+ * Nostr videos are a single file, so there's nothing to choose).
+ */
+@Composable
+private fun QualityButton(player: ExoPlayer) {
+    val context = LocalContext.current
+    var options by remember { mutableStateOf(player.qualityOptions()) }
+    var open by remember { mutableStateOf(false) }
+    // Tracks arrive once the video starts loading.
+    LaunchedEffect(player) { while (true) { options = player.qualityOptions(); delay(1_000) } }
+    if (options.size < 2) return
+    val manual = player.trackSelectionParameters.overrides.values.any { it.type == C.TRACK_TYPE_VIDEO }
+    val label = if (manual) (player.videoSize.height.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto") else "Auto"
+    Box {
+        Text(
+            "$label ▾", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClickLabel = "Video quality") { open = true }.padding(horizontal = 10.dp, vertical = 8.dp)
+        )
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text((if (!manual) "✓ " else "") + "Auto") },
+                onClick = { open = false; player.chooseQuality(null, context) }
+            )
+            options.forEach { o ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text((if (manual && player.videoSize.height == o.height) "✓ " else "") + o.label) },
+                    onClick = { open = false; player.chooseQuality(o, context) }
+                )
+            }
         }
     }
 }

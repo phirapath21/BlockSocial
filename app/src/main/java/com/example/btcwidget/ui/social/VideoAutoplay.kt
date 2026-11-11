@@ -4,6 +4,20 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 
+/**
+ * Which quality videos start at, when they offer more than one (streams with several
+ * resolutions); a single-file video always plays as it is.
+ */
+enum class VideoQuality(val label: String) {
+    AUTO("Auto"),
+    /** The lowest quality available, to save mobile data. */
+    DATA_SAVER("Data saver");
+
+    companion object {
+        fun fromName(name: String?) = entries.firstOrNull { it.name == name } ?: AUTO
+    }
+}
+
 /** When videos in the timeline start by themselves (muted), as on X. */
 enum class VideoAutoplay(val label: String) {
     ALWAYS("Always"),

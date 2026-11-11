@@ -143,6 +143,16 @@ private fun VideoSection(vm: SocialViewModel) {
             EInkChip(text = (if (m == mode) "✓ " else "") + m.label.uppercase(), selected = m == mode, onClick = { vm.setVideoAutoplay(m) })
         }
     }
+    val quality by vm.videoQuality.collectAsState()
+    Text(
+        "Quality: videos that come in several resolutions start at this. Most Nostr videos are a single file and always play as they are.",
+        color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
+    )
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        VideoQuality.entries.forEach { q ->
+            EInkChip(text = (if (q == quality) "✓ " else "") + q.label.uppercase(), selected = q == quality, onClick = { vm.setVideoQuality(q) })
+        }
+    }
 }
 
 /** Posts waiting to be published, with Post now and Cancel. */

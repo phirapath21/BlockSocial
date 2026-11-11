@@ -30,6 +30,7 @@ object AppPrefs {
     private const val HISTORY = "history_cache"
     private const val HISTORY_AT = "history_fetched_at"
     private const val VIDEO_AUTOPLAY = "video_autoplay"
+    private const val VIDEO_QUALITY = "video_quality"
     private fun modeEnabled(mode: Int) = "mode_enabled_$mode"
     private fun widgetMode(id: Int) = "mode_$id"
     private fun halvingMode(id: Int) = "halving_mode_$id"
@@ -53,6 +54,10 @@ object AppPrefs {
     /** When videos in notes play by themselves (muted): a [com.example.btcwidget.ui.social.VideoAutoplay] name. */
     fun videoAutoplay(context: Context): String? = prefs(context).getString(VIDEO_AUTOPLAY, null)
     fun setVideoAutoplay(context: Context, value: String) = edit(context) { putString(VIDEO_AUTOPLAY, value) }
+
+    /** Default video quality: a [com.example.btcwidget.ui.social.VideoQuality] name. */
+    fun videoQuality(context: Context): String? = prefs(context).getString(VIDEO_QUALITY, null)
+    fun setVideoQuality(context: Context, value: String) = edit(context) { putString(VIDEO_QUALITY, value) }
 
     fun currency(context: Context): String = prefs(context).getString(CURRENCY, "USD") ?: "USD"
     fun setCurrency(context: Context, value: String) = edit(context) { putString(CURRENCY, value) }
