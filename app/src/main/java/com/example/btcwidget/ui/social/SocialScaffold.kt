@@ -114,7 +114,11 @@ fun SocialScaffold(
         pollTally = { vm.pollTally(it) },
         vote = { poll, ids, done -> if (account == null) { navigate(LoginKey); done(false) } else vm.vote(poll, ids, done) },
         resolveArticle = { vm.article(it) },
-        openArticle = { a -> navigate(com.example.btcwidget.ArticleKey(Nip19.naddr(a.kind, a.pubkey, a.identifier, a.relays))) },
+        openArticle = { a ->
+            // Addresses of live streams open the stream; anything else as an article.
+            if (a.kind == com.example.btcwidget.nostr.core.LiveStreams.KIND) navigate(com.example.btcwidget.LiveKey("${a.kind}:${a.pubkey}:${a.identifier}"))
+            else navigate(com.example.btcwidget.ArticleKey(Nip19.naddr(a.kind, a.pubkey, a.identifier, a.relays)))
+        },
         linkPreview = { vm.linkPreview(it) },
         me = account?.pubkey
     )

@@ -355,6 +355,13 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         act("Couldn't send", finally = { onResult(ok) }) { repo.spaces.sendToChannel(channel, text); ok = true }
     }
 
+    suspend fun liveStreams() = runCatching { repo.spaces.liveStreams() }.getOrDefault(emptyList())
+    suspend fun liveStream(address: String) = runCatching { repo.spaces.liveStream(address) }.getOrNull()
+    fun sendLiveChat(live: com.example.btcwidget.nostr.core.LiveStreams.Live, text: String, onResult: (Boolean) -> Unit) {
+        var ok = false
+        act("Couldn't send", finally = { onResult(ok) }) { repo.spaces.sendLiveChat(live, text); ok = true }
+    }
+
     suspend fun group(address: com.example.btcwidget.nostr.core.RelayGroups.Address) = runCatching { repo.spaces.group(address) }.getOrNull()
 
     /** [onResult] gets null when sent, or the relay's reason. */

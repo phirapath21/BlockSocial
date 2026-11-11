@@ -366,6 +366,18 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         }
         segments.filterIsInstance<Content.Segment.AddressRef>().filter { it.address.kind == com.example.btcwidget.nostr.core.Kind.ARTICLE }
             .distinctBy { it.address.identifier + it.address.pubkey }.take(2).forEach { ArticleCard(it.address, actions) }
+        // A linked live stream (NIP-53): a button to watch it.
+        segments.filterIsInstance<Content.Segment.AddressRef>().filter { it.address.kind == com.example.btcwidget.nostr.core.LiveStreams.KIND }
+            .take(1).forEach { ref ->
+                Row(
+                    Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
+                        .clickable(onClickLabel = "Watch the stream") { actions.openArticle(ref.address) }.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("● LIVE", color = androidx.compose.ui.graphics.Color(0xFFE5534B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("  Live stream · tap to watch", color = EInk.Value, fontSize = 14.sp)
+                }
+            }
     }
 }
 
