@@ -80,6 +80,9 @@ dependencies {
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
+  // Activity results (the signer app's answers) need Fragment 1.3+. It used to come in through
+  // ML Kit; the QR scanner alone brings an old one, which release lint rejects.
+  implementation(libs.androidx.fragment)
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
