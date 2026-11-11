@@ -49,6 +49,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import android.view.SurfaceView
 import android.view.TextureView
@@ -63,9 +64,15 @@ internal object VideoPositions {
     operator fun set(url: String, ms: Long) { positions[url] = ms.coerceAtLeast(0) }
 }
 
-/** Builds a player for [url], starting where it was left, and reports the video's shape. */
-internal fun newPlayer(context: Context, url: String, onRatio: (Float) -> Unit): ExoPlayer =
-    ExoPlayer.Builder(context).build().apply {
+/**
+ * Builds a player for [url], starting where it was left, and reports the video's shape.
+ *
+ * Its buffer is kept small: ExoPlayer's default reads ahead up to 50 seconds or about 125 MB
+ * of video, held in the app's memory, which with a few videos (a paused one in the feed and the
+ * same one full screen) filled the whole heap and crashed. Short social videos need far less.
+ */
+internal fun newPlayer(context: Context, url: String, fullScreen: Boolean = false, onRatio: (Float) -> Unit): ExoPlayer =
+    ExoPlayer.Builder(context).setLoadControl(smallBuffer(fullScreen)).build().apply {
         // Data saver: the lowest quality whenever the video offers a choice.
         if (VideoQuality.fromName(com.example.btcwidget.AppPrefs.videoQuality(context)) == VideoQuality.DATA_SAVER) {
             trackSelectionParameters = trackSelectionParameters.buildUpon().setForceLowestBitrate(true).build()
@@ -80,6 +87,18 @@ internal fun newPlayer(context: Context, url: String, onRatio: (Float) -> Unit):
             }
         })
     }
+
+/** Reads 15 s ahead in the feed and 30 s full screen, and never more than 12 or 32 MB of data. */
+private fun smallBuffer(fullScreen: Boolean): DefaultLoadControl = DefaultLoadControl.Builder()
+    .setBufferDurationsMs(
+        /* minBufferMs = */ if (fullScreen) 10_000 else 5_000,
+        /* maxBufferMs = */ if (fullScreen) 30_000 else 15_000,
+        /* bufferForPlaybackMs = */ 1_000,
+        /* bufferForPlaybackAfterRebufferMs = */ 2_000
+    )
+    .setTargetBufferBytes((if (fullScreen) 32 else 12) * 1024 * 1024)
+    .setPrioritizeTimeOverSizeThresholds(false) // the byte limit wins over the time
+    .build()
 
 /** A resolution a video offers ("720p") and the override that picks it. */
 internal class QualityOption(val height: Int, val pick: TrackSelectionOverride) {
@@ -176,6 +195,13 @@ fun VideoPlayer(url: String, note: Event, actions: NoteActions) {
         } else if (p != null) {
             VideoPositions[url] = p.currentPosition
             p.pause()
+            // A stopped video lets go of its player and buffer: right away when it opens full
+            // screen (which has its own player), else after a moment, so a small scroll back and
+            // forth doesn't restart it. Playing again starts from the saved position.
+            if (actions.openVideoUrl != url) delay(3_000)
+            VideoPositions[url] = p.currentPosition
+            p.release()
+            player = null
         }
     }
     DisposableEffect(url) {
