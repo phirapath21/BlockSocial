@@ -81,7 +81,7 @@ private fun EngagementRow(profile: Profile?, pubkey: String, badge: String?, com
         Avatar(profile, pubkey, size = 42)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(profile?.bestName ?: Profile.shortNpub(pubkey), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            DisplayName(profile, pubkey, EInk.Value, 15.sp)
             Text(handleText(profile, pubkey), color = EInk.Caption, fontSize = 13.sp, maxLines = 1)
             if (comment != null) Text(comment, color = EInk.Label, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }

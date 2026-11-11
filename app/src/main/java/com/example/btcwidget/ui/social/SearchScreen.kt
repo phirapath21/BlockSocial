@@ -461,7 +461,7 @@ internal fun PersonRow(profile: Profile, isFollowing: Boolean, onClick: () -> Un
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(profile.bestName, color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                DisplayName(profile, profile.pubkey, EInk.Value, 15.sp, Modifier.weight(1f, fill = false))
                 if (isFollowing) Text("  · Following", color = EInk.Caption, fontSize = 12.sp)
             }
             Text(handleText(profile, profile.pubkey), color = EInk.Caption, fontSize = 13.sp, maxLines = 1)

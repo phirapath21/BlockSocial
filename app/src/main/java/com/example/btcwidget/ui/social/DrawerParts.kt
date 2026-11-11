@@ -40,11 +40,7 @@ fun DrawerAccountHeader(vm: SocialViewModel, onLogin: () -> Unit, navigate: (and
             // Your profile as a QR code (and a scanner), to follow each other in person.
             QrButton("My QR code") { showQr = true }
         }
-        Text(
-            profile?.bestName ?: Profile.shortNpub(me),
-            color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp)
-        )
+        DisplayName(profile, me, EInk.Value, 18.sp, Modifier.padding(top = 10.dp))
         Text(
             handleText(profile, me),
             color = EInk.Caption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis

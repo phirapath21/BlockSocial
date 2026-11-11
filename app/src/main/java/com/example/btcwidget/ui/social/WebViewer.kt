@@ -129,7 +129,7 @@ private fun PostSheet(note: Event, stats: NoteStats, actions: NoteActions, level
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(author, note.pubkey, size = 40, onClick = { onLeave(); actions.openProfile(note.pubkey) })
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                    Text(author?.bestName ?: Profile.shortNpub(note.pubkey), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    DisplayName(author, note.pubkey, EInk.Value, 15.sp)
                     Text(handleText(author, note.pubkey), color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (note.pubkey != actions.me) Text(

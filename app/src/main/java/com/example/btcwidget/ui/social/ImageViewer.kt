@@ -214,7 +214,7 @@ fun ImageViewer(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Avatar(author, note.pubkey, size = 44, onClick = { onDismiss(); actions.openProfile(note.pubkey) })
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                        Text(author?.bestName ?: Profile.shortNpub(note.pubkey), color = OnDark, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        DisplayName(author, note.pubkey, OnDark, 16.sp)
                         val handle = handleText(author, note.pubkey)
                         Text(handle, color = OnDarkDim, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }

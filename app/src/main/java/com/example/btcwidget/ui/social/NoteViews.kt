@@ -193,7 +193,7 @@ private fun ReplyingTo(note: Event, actions: NoteActions, modifier: Modifier = M
 }
 
 /**
- * The author line, as Amethyst lays it out: the name in bold (with ✓ when their NIP-05
+ * The author line, as Amethyst lays it out: the name in bold (with the verified badge when their NIP-05
  * address is verified), then the short time ("• 20m") and ⋮ at the far right. In the opened
  * post ([large]) the handle has its own line below and the full date sits under the text, so
  * only ⋮ is on the right.
@@ -202,7 +202,7 @@ private fun ReplyingTo(note: Event, actions: NoteActions, modifier: Modifier = M
 private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, large: Boolean = false, small: Boolean = false) {
     var menu by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        // Name and ✓ take all the room the time and ⋮ leave; a long name ends in "…".
+        // Name and badge take all the room the time and ⋮ leave; a long name ends in "…".
         Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = author?.bestName ?: Profile.shortNpub(note.pubkey),
@@ -213,10 +213,7 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, larg
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            if (isVerified(author, note.pubkey)) Text(
-                " ✓", color = VerifiedOrange, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.semantics { contentDescription = "verified" }
-            )
+            if (isVerified(author, note.pubkey)) VerifiedBadge(if (small) 15.dp else 17.dp, Modifier.padding(start = 3.dp))
         }
         if (!large) Text(
             "• " + relativeTime(note.createdAt), color = EInk.Caption, fontSize = if (small) 13.sp else 14.sp, maxLines = 1
@@ -230,8 +227,6 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, larg
         }
     }
 }
-
-private val VerifiedOrange = androidx.compose.ui.graphics.Color(0xFFF7931A)
 
 /** A note's ⋯ menu, as a sheet from the bottom like X's. */
 @Composable
