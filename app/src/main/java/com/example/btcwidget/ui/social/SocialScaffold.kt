@@ -110,11 +110,12 @@ fun SocialScaffold(
         ImageViewer(
             url, note, stats[note.id] ?: com.example.btcwidget.nostr.NoteStats(), actions,
             onDismiss = { viewImage = null },
-            replyBar = {
+            replyBar = { onActive ->
                 ReplyBar(
                     vm, note, dark = true,
                     onLogin = { viewImage = null; navigate(com.example.btcwidget.LoginKey) },
-                    onExpand = { viewImage = null; navigate(com.example.btcwidget.ComposeKey(replyTo = note.id)) }
+                    onExpand = { viewImage = null; navigate(com.example.btcwidget.ComposeKey(replyTo = note.id)) },
+                    onActiveChange = onActive
                 )
             }
         )

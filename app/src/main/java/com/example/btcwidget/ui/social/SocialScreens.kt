@@ -474,8 +474,9 @@ fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit
             if (t == null) {
                 Spinner(Modifier.padding(top = 40.dp))
             } else {
-                Column(Modifier.fillMaxSize().imePadding()) {
-                    LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+                Box(Modifier.fillMaxSize()) {
+                    // Room at the end so the last reply can scroll above the floating card.
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)) {
                         items(t.ancestors, key = { "a" + it.id }) { NoteCard(it, stats[it.id] ?: NoteStats(), actions) }
                         item(key = "focus") { NoteCard(t.focus, stats[t.focus.id] ?: NoteStats(), actions, large = true) }
                         items(t.replies, key = { "r" + it.event.id }) { row ->
@@ -483,13 +484,13 @@ fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit
                         }
                         if (t.replies.isEmpty()) item { EmptyNote("No replies yet.") }
                     }
-                    // Pinned at the bottom, as on X; it stays while you scroll the replies.
+                    // Floats over the post and replies, as on X, and rides above the keyboard.
                     ReplyBar(
                         vm, t.focus,
                         onLogin = { navigate(LoginKey) },
                         onExpand = { navigate(ComposeKey(replyTo = t.focus.id)) },
                         onSent = { reload++ },
-                        modifier = Modifier.navigationBarsPadding().padding(horizontal = 10.dp, vertical = 6.dp)
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(horizontal = 10.dp, vertical = 8.dp)
                     )
                 }
             }
