@@ -102,6 +102,9 @@ class NostrRepository private constructor(private val context: Context) {
     val stats: StateFlow<Map<String, NoteStats>> = _stats.asStateFlow()
 
     private val _following = MutableStateFlow<Set<String>>(emptySet())
+    /** Follow changes shown already but not yet published: pubkey to follow (true) or unfollow. */
+    private val pendingFollows = ConcurrentHashMap<String, Boolean>()
+    private val contactsLock = kotlinx.coroutines.sync.Mutex()
     /** Pubkeys the user follows. */
     val following: StateFlow<Set<String>> = _following.asStateFlow()
 
@@ -289,6 +292,7 @@ class NostrRepository private constructor(private val context: Context) {
         emojiListEvent = null
         _emojis.value = emptyMap()
         _bookmarks.value = emptyList()
+        pendingFollows.clear()
         _following.value = emptySet()
         _muted.value = emptySet()
         _mutes.value = com.example.btcwidget.nostr.core.MuteRules()
@@ -315,7 +319,7 @@ class NostrRepository private constructor(private val context: Context) {
     private fun applyAccountEvents(events: List<Event>, fromRelays: Boolean) {
         fun latest(kind: Int) = events.filter { it.kind == kind }.maxByOrNull { it.createdAt }
         latest(Kind.METADATA)?.let { remember(it) }
-        latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = it.tagValues("p").toSet() } }
+        latest(Kind.CONTACTS)?.let { if (it.createdAt >= (contactsEvent?.createdAt ?: 0)) { contactsEvent = it; _following.value = withPendingFollows(it.tagValues("p").toSet()) } }
         latest(Kind.PINNED)?.let { if (it.createdAt >= (pinEvent?.createdAt ?: 0)) { pinEvent = it; _pinned.value = it.tagValues("e") } }
         latest(Kind.EMOJI_LIST)?.let { if (it.createdAt >= (emojiListEvent?.createdAt ?: 0)) { emojiListEvent = it; _emojis.value = com.example.btcwidget.nostr.core.CustomEmoji.of(it) } }
         latest(Kind.BOOKMARKS)?.let { if (it.createdAt >= (bookmarkEvent?.createdAt ?: 0)) { bookmarkEvent = it; _bookmarks.value = it.tagValues("e").reversed() } }
@@ -936,9 +940,10 @@ class NostrRepository private constructor(private val context: Context) {
     internal fun requireSigner(): NostrSigner = signer ?: throw IllegalStateException("Log in to Nostr first")
 
     /** Signs and publishes; succeeds if at least one relay accepted it. */
-    suspend fun publish(unsigned: UnsignedEvent): Event {
+    suspend fun publish(unsigned: UnsignedEvent, fast: Boolean = false): Event {
         val signed = requireSigner().sign(unsigned)
-        val results = pool.publish(signed)
+        // [fast]: done once one relay has it (lists the UI already shows as changed).
+        val results = pool.publish(signed, untilFirstAccepted = fast)
         if (results.none { it.accepted }) {
             throw IllegalStateException(results.firstOrNull { it.message.isNotBlank() }?.message ?: "No relay accepted the post")
         }
@@ -1078,16 +1083,36 @@ class NostrRepository private constructor(private val context: Context) {
     }
 
 
+    private fun withPendingFollows(base: Set<String>): Set<String> =
+        base + pendingFollows.filterValues { it }.keys - pendingFollows.filterValues { !it }.keys
+
+    /**
+     * Follows or unfollows [target]. The change shows at once; publishing the contact list
+     * (loading it first if needed, signing, sending) happens after, one change at a time so
+     * quick taps on several people don't overwrite each other. On failure it's undone.
+     */
     suspend fun setFollowing(target: String, follow: Boolean) {
         val me = requireMe()
-        // Never overwrite a contact list we haven't read from relays this session: a missing or
-        // stale list (e.g. from the cache) would wipe follows made in other apps.
-        if (!accountFresh) loadAccount()
-        if (contactsEvent == null && _following.value.isNotEmpty()) error("Couldn't load your follow list; try again")
-        val event = publish(Events.contacts(me, contactsEvent, target, follow))
-        contactsEvent = event
-        _following.value = event.tagValues("p").toSet()
-        saveAccount()
+        pendingFollows[target] = follow
+        _following.value = withPendingFollows(_following.value - target)
+        try {
+            contactsLock.withLock {
+                // Never overwrite a contact list we haven't read from relays this session: a missing or
+                // stale list (e.g. from the cache) would wipe follows made in other apps.
+                if (!accountFresh) loadAccount()
+                if (contactsEvent == null && (_following.value - pendingFollows.keys).isNotEmpty()) error("Couldn't load your follow list; try again")
+                val want = pendingFollows[target] ?: follow
+                val event = publish(Events.contacts(me, contactsEvent, target, want), fast = true)
+                contactsEvent = event
+                if (pendingFollows[target] == want) pendingFollows.remove(target)
+                _following.value = withPendingFollows(event.tagValues("p").toSet())
+                saveAccount()
+            }
+        } catch (e: Throwable) {
+            pendingFollows.remove(target)
+            _following.value = withPendingFollows(contactsEvent?.tagValues("p")?.toSet() ?: (_following.value - target))
+            throw e
+        }
     }
 
     /** Mutes (or unmutes) [target] with a public NIP-51 mute list. */
