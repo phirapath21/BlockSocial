@@ -340,6 +340,14 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     private val _videoAutoplay = MutableStateFlow(VideoAutoplay.fromName(com.example.btcwidget.AppPrefs.videoAutoplay(application)))
     val videoAutoplay: StateFlow<VideoAutoplay> = _videoAutoplay.asStateFlow()
 
+    private val _videoQuality = MutableStateFlow(VideoQuality.fromName(com.example.btcwidget.AppPrefs.videoQuality(application)))
+    val videoQuality: StateFlow<VideoQuality> = _videoQuality.asStateFlow()
+
+    fun setVideoQuality(q: VideoQuality) {
+        com.example.btcwidget.AppPrefs.setVideoQuality(getApplication(), q.name)
+        _videoQuality.value = q
+    }
+
     fun setVideoAutoplay(mode: VideoAutoplay) {
         com.example.btcwidget.AppPrefs.setVideoAutoplay(getApplication(), mode.name)
         _videoAutoplay.value = mode

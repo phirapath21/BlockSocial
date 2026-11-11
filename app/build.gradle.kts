@@ -127,6 +127,8 @@ dependencies {
   implementation(libs.coil.gif)
   implementation(libs.media3.exoplayer)
   implementation(libs.media3.ui)
+  // HLS (.m3u8) streams: the videos that offer several qualities to choose from
+  implementation(libs.media3.exoplayer.hls)
   // Translating notes on the device (models download once from Google)
   implementation(libs.mlkit.translate)
   implementation(libs.mlkit.language.id)
