@@ -110,21 +110,28 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
      */
     suspend fun topicPeople(tags: List<String>): List<Profile> = runCatching {
         val me = repo.pubkey
-        val notes = kotlinx.coroutines.coroutineScope {
-            tags.take(5).map { t -> async { runCatching { repo.hashtagFeed(t) }.getOrDefault(emptyList()) } }.map { it.await() }.flatten()
-        }
-        val ranked = notes.map { it.note.pubkey }.filter { it != me && it !in repo.muted.value }
-            .groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(30).map { it.key }
+        // One quick query for recent notes with any of the topics (not a full hashtag search each).
+        val ranked = repo.topicAuthors(tags.take(6)).filter { it != me && it !in repo.muted.value }.take(30)
         repo.loadProfiles(ranked)
         ranked.mapNotNull { repo.profiles.value[it] }.take(20)
     }.getOrDefault(emptyList())
 
-    fun saveProfile(name: String, about: String, picture: String?, onDone: () -> Unit) {
-        val me = repo.pubkey ?: return
-        act("Couldn't save your profile") {
+    /** Well-known Bitcoin and Nostr people (each shown only if their profile matches who we expect). */
+    suspend fun starterPeople(): List<Profile> = runCatching {
+        val known = com.example.btcwidget.nostr.core.StarterPeople.LIST
+        repo.loadProfiles(known.map { it.pubkey })
+        val profiles = repo.profiles.value
+        known.mapNotNull { k -> profiles[k.pubkey]?.takeIf { p -> k.matches(p) } }
+    }.getOrDefault(emptyList())
+
+    /** Saves the new account's profile, showing its progress; [onDone] gets whether it was saved. */
+    fun saveProfile(name: String, about: String, picture: String?, onDone: (Boolean) -> Unit) {
+        val me = repo.pubkey ?: return onDone(false)
+        var ok = false
+        tracked("Saving your profile", "Profile saved", "Couldn't save your profile", finally = { onDone(ok) }) {
             val current = repo.profiles.value[me] ?: Profile(me)
             repo.updateProfile(current.copy(name = name.trim().ifEmpty { current.name }, about = about.trim().ifEmpty { current.about }, picture = picture ?: current.picture))
-            onDone()
+            ok = true
         }
     }
 

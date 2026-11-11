@@ -1626,6 +1626,16 @@ class NostrRepository private constructor(private val context: Context) {
         return note(id)?.takeIf { it.pubkey == pubkey }
     }
 
+    /** Authors of recent notes with any of [tags], most active first: one query to our relays and the search relays. */
+    suspend fun topicAuthors(tags: List<String>): List<String> = coroutineScope {
+        if (tags.isEmpty()) return@coroutineScope emptyList()
+        val f = Filter(kinds = listOf(Kind.TEXT_NOTE), tags = mapOf("t" to tags.map { it.lowercase() }.distinct()), limit = 150)
+        val ours = async { runCatching { pool.query(listOf(f), timeoutMs = 4_000) }.getOrDefault(emptyList()) }
+        val indexed = async { runCatching { searchPool.query(listOf(f), timeoutMs = 4_000) }.getOrDefault(emptyList()) }
+        (ours.await() + indexed.await()).distinctBy { it.id }.filter { !hidden(it) }
+            .groupingBy { it.pubkey }.eachCount().entries.sortedByDescending { it.value }.map { it.key }
+    }
+
     // ---- Highlights (NIP-84) ----
 
     /** Highlights of [article] by anyone, newest first (muted people's left out). */

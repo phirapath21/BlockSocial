@@ -135,13 +135,29 @@ private fun BigButton(text: String, filled: Boolean, onClick: () -> Unit) {
  */
 @Composable
 fun OnboardingScreen(vm: SocialViewModel, onFinish: () -> Unit) {
-    var step by remember { mutableStateOf(0) }
+    var step by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
     var topics by remember { mutableStateOf(setOf("bitcoin", "nostr")) }
+    // Back (button or gesture) goes to the previous step; from the first, it leaves as usual.
+    androidx.activity.compose.BackHandler(enabled = step > 0) { step-- }
     Column(Modifier.fillMaxSize().background(EInk.Background).statusBarsPadding().navigationBarsPadding().imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Step ${step + 1} of 4", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (step > 0) Text(
+                "← Back", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable(onClickLabel = "Previous step") { step-- }.padding(8.dp)
+            )
+            Text(
+                "Step ${step + 1} of 4", color = EInk.Caption, fontSize = 13.sp,
+                modifier = Modifier.weight(1f).padding(start = if (step > 0) 4.dp else 8.dp)
+            )
             Text("Skip", color = EInk.Label, fontSize = 15.sp, modifier = Modifier.clickable { if (step < 3) step++ else onFinish() }.padding(8.dp))
         }
+        // Where you are in the four steps, in the accent colour.
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { (step + 1) / 4f }, color = OnboardOrange, trackColor = EInk.Track,
+            drawStopIndicator = {}, gapSize = 0.dp,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(3.dp).clip(RoundedCornerShape(50))
+        )
+        Spacer(Modifier.height(14.dp))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (step) {
                 0 -> ProfileStep(vm) { step = 1 }
@@ -170,8 +186,9 @@ private fun ProfileStep(vm: SocialViewModel, onNext: () -> Unit) {
     val me = account?.pubkey
     val current = me?.let { profiles[it] }
     var name by remember { mutableStateOf(current?.name.orEmpty()) }
-    var about by remember { mutableStateOf("") }
-    var picture by remember { mutableStateOf<String?>(null) }
+    var about by remember { mutableStateOf(current?.about.orEmpty()) }
+    var picture by remember { mutableStateOf(current?.picture) }
+    val activity by vm.activity.collectAsState()
     var uploading by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -200,11 +217,25 @@ private fun ProfileStep(vm: SocialViewModel, onNext: () -> Unit) {
             colors = fieldColors(), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
         Spacer(Modifier.height(24.dp))
-        BigButton(if (saving) "Saving…" else "Next", filled = true) {
+        BigButton(if (saving) "Saving…" else if (uploading) "Uploading photo…" else "Next", filled = true) {
             if (saving || uploading) return@BigButton
             if (name.isBlank() && about.isBlank() && picture == null) { onNext(); return@BigButton }
             saving = true
-            vm.saveProfile(name, about, picture) { saving = false; onNext() }
+            vm.saveProfile(name, about, picture) { ok -> saving = false; if (ok) onNext() }
+        }
+        // While saving: what it's waiting for (signing, then relays answering), with an orange bar.
+        if (saving) {
+            val a = activity
+            Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                val progress = a?.progress
+                if (progress == null) androidx.compose.material3.LinearProgressIndicator(
+                    color = OnboardOrange, trackColor = EInk.Track, modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(50))
+                ) else androidx.compose.material3.LinearProgressIndicator(
+                    progress = { progress }, color = OnboardOrange, trackColor = EInk.Track, drawStopIndicator = {}, gapSize = 0.dp,
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(50))
+                )
+                Text(a?.status ?: "Preparing…", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            }
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -235,36 +266,61 @@ private fun TopicsStep(selected: Set<String>, onChange: (Set<String>) -> Unit, o
 @Composable
 private fun PeopleStep(vm: SocialViewModel, topics: List<String>, onNext: () -> Unit) {
     val following by vm.following.collectAsState()
-    val people by produceState<List<Profile>?>(null, topics) { value = vm.topicPeople(topics.ifEmpty { listOf("bitcoin", "nostr") }) }
+    val tags = topics.ifEmpty { listOf("bitcoin", "nostr") }
+    // Well-known people first (quick: profiles from the indexers), then who posts about your topics.
+    val starters by produceState<List<Profile>?>(null) { value = vm.starterPeople() }
+    val topical by produceState<List<Profile>?>(null, tags) { value = vm.topicPeople(tags) }
+    val shownTopical = topical.orEmpty().filter { p -> starters.orEmpty().none { it.pubkey == p.pubkey } }
+    val everyone = starters.orEmpty() + shownTopical
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
-        StepTitle("Follow a few people", "People posting lately about " + topics.take(3).joinToString(", ") { "#$it" } + ". Your Home fills with what they post.")
-        val list = people
+        StepTitle("Follow a few people", "Your Home fills with what they post. You can change this any time.")
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                list == null -> Column(Modifier.fillMaxWidth().padding(top = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = EInk.Value, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                    Text("Finding people…", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
-                }
-                list.isEmpty() -> Text("Couldn't find anyone right now. You can follow people later from Search.", color = EInk.Caption, fontSize = 14.sp)
-                else -> Column(Modifier.verticalScroll(rememberScrollState())) {
-                    list.forEach { p ->
-                        val on = p.pubkey in following
-                        PersonRow(p, isFollowing = on, onClick = { vm.follow(p.pubkey, !on) }) {
-                            EInkChip(text = if (on) "FOLLOWING" else "FOLLOW", selected = !on, onClick = { vm.follow(p.pubkey, !on) })
-                        }
-                    }
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                PeopleSection("Well known in Bitcoin and Nostr", starters, "Looking them up…", following, vm)
+                PeopleSection(
+                    "Posting about " + tags.take(3).joinToString(", ") { "#$it" }, if (topical == null) null else shownTopical,
+                    "Finding people posting about " + tags.take(3).joinToString(", ") { "#$it" } + "…", following, vm
+                )
+                if (starters?.isEmpty() == true && topical?.isEmpty() == true) {
+                    Text("Couldn't find anyone right now. You can follow people later from Search.", color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp))
                 }
             }
         }
         Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val all = people.orEmpty()
-            if (all.isNotEmpty()) Box(Modifier.weight(1f)) {
-                BigButton("Follow all", filled = false) { all.filter { it.pubkey !in following }.forEach { vm.follow(it.pubkey, true) } }
+            val notYet = everyone.filter { it.pubkey !in following }
+            if (everyone.isNotEmpty()) Box(Modifier.weight(1f)) {
+                // One update of your follow list, not one per person.
+                BigButton(if (notYet.isEmpty()) "✓ All followed" else "Follow all (${notYet.size})", filled = false) {
+                    if (notYet.isNotEmpty()) vm.followAll(notYet.map { it.pubkey })
+                }
             }
             Box(Modifier.weight(1f)) { BigButton("Next", filled = true, onClick = onNext) }
         }
     }
 }
+
+/** A titled group of people to follow; while [people] is null, an orange bar and what it's doing. */
+@Composable
+private fun PeopleSection(title: String, people: List<Profile>?, loading: String, following: Set<String>, vm: SocialViewModel) {
+    Text(title, color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+    when {
+        people == null -> Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+            androidx.compose.material3.LinearProgressIndicator(
+                color = OnboardOrange, trackColor = EInk.Track, modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(50))
+            )
+            Text(loading, color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        }
+        people.isEmpty() -> Text("No one found here.", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+        else -> people.forEach { p ->
+            val on = p.pubkey in following
+            PersonRow(p, isFollowing = on, onClick = { vm.follow(p.pubkey, !on) }) {
+                EInkChip(text = if (on) "FOLLOWING" else "FOLLOW", selected = !on, onClick = { vm.follow(p.pubkey, !on) })
+            }
+        }
+    }
+}
+
+private val OnboardOrange = androidx.compose.ui.graphics.Color(0xFFF7931A)
 
 @Composable
 private fun InboxStep(vm: SocialViewModel, onFinish: () -> Unit) {

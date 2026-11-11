@@ -1,6 +1,10 @@
 package com.example.btcwidget
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
@@ -35,6 +39,18 @@ fun MainNavigation() {
     backStack = backStack,
     // System back on the main screen leaves the app instead.
     onBack = { if (backStack.size > 1) backStack.removeLastOrNull() else activity?.finish() },
+    // Like X: a new screen slides in from the right over the old one, which drifts a little left;
+    // back (button or gesture) slides it away to the right. Navigation 3's default was a slow
+    // cross-fade, so the screen you were leaving stayed visible behind the new one.
+    transitionSpec = {
+      slideInHorizontally(tween(SLIDE_MS)) { it } togetherWith slideOutHorizontally(tween(SLIDE_MS)) { -it / 4 }
+    },
+    popTransitionSpec = {
+      slideInHorizontally(tween(SLIDE_MS)) { -it / 4 } togetherWith slideOutHorizontally(tween(SLIDE_MS)) { it }
+    },
+    predictivePopTransitionSpec = {
+      slideInHorizontally(tween(SLIDE_MS)) { -it / 4 } togetherWith slideOutHorizontally(tween(SLIDE_MS)) { it }
+    },
     entryProvider =
       entryProvider {
         entry<Main> { MainScreen(onItemClick = navigate) }
@@ -88,3 +104,6 @@ fun MainNavigation() {
   com.example.btcwidget.ui.social.PublishStatusBar(social, androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter))
   }
 }
+
+/** How long a screen takes to slide in or out. */
+private const val SLIDE_MS = 280
