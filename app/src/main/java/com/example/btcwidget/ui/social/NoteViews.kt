@@ -78,6 +78,12 @@ class NoteActions(
     val isBookmarked: (String) -> Boolean,
     /** Opens an image full screen, with its note's author and actions. */
     val openImage: (url: String, note: Event) -> Unit,
+    /** Opens a video full screen (it carries on from where the timeline left it). */
+    val openVideo: (url: String, note: Event) -> Unit,
+    /** Videos may start by themselves, muted (the user's setting and the current connection). */
+    val autoplayVideos: Boolean,
+    /** The video open full screen, if any: its timeline copy pauses meanwhile. */
+    val openVideoUrl: String?,
     val follow: (pubkey: String, follow: Boolean) -> Unit,
     /** Opens who reposted (0), liked (1) or zapped (2) a note. */
     val openEngagement: (note: Event, tab: Int) -> Unit,
@@ -346,7 +352,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         com.example.btcwidget.nostr.core.Poll.of(note)?.let { PollView(it, actions) }
     }
     segments.filterIsInstance<Content.Segment.Image>().take(4).forEach { img -> NoteImage(note, img.url, actions) }
-    segments.filterIsInstance<Content.Segment.Video>().take(2).forEach { VideoPlayer(it.url) }
+    segments.filterIsInstance<Content.Segment.Video>().take(2).forEach { VideoPlayer(it.url, note, actions) }
     // A card for the first web link (not for posts that already show photos, video or a quote).
     if (depth == 0 && segments.none { it is Content.Segment.Image || it is Content.Segment.Video || it is Content.Segment.NoteRef || it is Content.Segment.AddressRef }) {
         segments.filterIsInstance<Content.Segment.Link>().firstOrNull()?.let { LinkCard(it.url, actions) }

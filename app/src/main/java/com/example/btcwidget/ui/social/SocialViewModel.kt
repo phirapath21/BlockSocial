@@ -335,6 +335,16 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     /** The feed, or the reason it couldn't load. */
     suspend fun dvmFeed(service: com.example.btcwidget.nostr.core.Dvm.Service): Result<List<FeedItem>> = runCatching { repo.dvmFeed(service) }
 
+    // ---- Video autoplay (a device setting, in AppPrefs) ----
+
+    private val _videoAutoplay = MutableStateFlow(VideoAutoplay.fromName(com.example.btcwidget.AppPrefs.videoAutoplay(application)))
+    val videoAutoplay: StateFlow<VideoAutoplay> = _videoAutoplay.asStateFlow()
+
+    fun setVideoAutoplay(mode: VideoAutoplay) {
+        com.example.btcwidget.AppPrefs.setVideoAutoplay(getApplication(), mode.name)
+        _videoAutoplay.value = mode
+    }
+
     suspend fun followSuggestions() = runCatching { repo.followSuggestions() }.getOrDefault(emptyList())
     suspend fun badgesOf(pubkey: String) = runCatching { repo.badgesOf(pubkey) }.getOrDefault(emptyList())
 
