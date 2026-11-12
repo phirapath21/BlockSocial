@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.shape.CircleShape
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -291,6 +292,8 @@ internal fun SpaceChat(
     hosts: Set<String> = emptySet(),
     /** False when drawn over a full-screen video: no title bar, see-through. */
     showTopBar: Boolean = true,
+    /** 0..1 while the pinned video is dragged down to the mini player: everything else fades with it. */
+    fade: () -> Float = { 0f },
     onSend: (String, (String?) -> Unit) -> Unit
 ) {
     val account by vm.account.collectAsState()
@@ -320,10 +323,11 @@ internal fun SpaceChat(
     }
     val fill = if (showTopBar) EInk.Background else androidx.compose.ui.graphics.Color.Transparent
     Column(Modifier.fillMaxSize().background(fill).imePadding()) {
-        if (showTopBar) SocialTopBar(title, onBack)
+        if (showTopBar) Box(Modifier.graphicsLayer { alpha = 1f - fade() }) { SocialTopBar(title, onBack) }
         SocialScaffold(vm, navigate) { _ ->
             Column(Modifier.fillMaxSize()) {
                 androidx.compose.runtime.CompositionLocalProvider(LocalChatCompact provides keyboardOpen) { pinned?.invoke() }
+                Column(Modifier.weight(1f).fillMaxWidth().graphicsLayer { alpha = 1f - fade() }) {
                 if (zaps.isNotEmpty()) TopZaps(zaps, profiles)
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
@@ -405,6 +409,7 @@ internal fun SpaceChat(
                         if (sending) androidx.compose.material3.CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                         else androidx.compose.material3.Icon(Glyphs.Send, contentDescription = tr("Send"), tint = if (ready) androidx.compose.ui.graphics.Color.Black else EInk.Caption, modifier = Modifier.size(20.dp))
                     }
+                }
                 }
             }
         }

@@ -176,6 +176,10 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
     )
     val onZap: () -> Unit = { if (account == null) navigate(LoginKey) else zapping = true }
 
+    // Drag the stream down for the mini player, as on YouTube: the video shrinks with your finger
+    // while everything else on the screen (details, chat, the box to type in) fades away together.
+    val drag = dragToMinimize(enabled = !fullscreen && live?.isLive == true && live.streaming != null, onMinimize = onBack)
+    val fade = { drag.progress * 1.6f }
     val chat: @Composable (pinned: (@Composable () -> Unit)?, overVideo: Boolean) -> Unit = { pinned, overVideo ->
         SpaceChat(
             vm, navigate, onBack,
@@ -185,6 +189,7 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
             pinned = pinned,
             hosts = setOfNotNull(live?.host),
             showTopBar = !overVideo,
+            fade = if (overVideo) ({ 0f }) else fade,
             onSend = { text, done -> live?.let { vm.sendLiveChat(it, text) { ok -> done(if (ok) null else tr("Couldn't send")) } } ?: done(tr("Still loading")) }
         )
     }
@@ -194,7 +199,7 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             LiveVideo(
                 live, profiles[live.host], replayPlayer, Modifier.fillMaxSize(),
-                fullscreen = true, onFullscreen = { fullscreen = false }, onMinimize = {},
+                fullscreen = true, onFullscreen = { fullscreen = false },
                 chatShown = chatOver, onChat = { chatOver = !chatOver }
             )
             if (chatOver) Box(
@@ -213,7 +218,8 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
                 onFollow = { if (account == null) navigate(LoginKey) else vm.follow(l.host, l.host !in following) },
                 onZap = onZap,
                 onFullscreen = { fullscreen = true },
-                onMinimize = onBack,
+                drag = drag.modifier,
+                fade = fade,
                 onHost = { navigate(ProfileKey(l.host)) }
             )
         }
@@ -235,7 +241,7 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
 private fun LivePlayer(
     live: LiveStreams.Live, host: Profile?, replayPlayer: androidx.media3.exoplayer.ExoPlayer?,
     isMe: Boolean, isFollowing: Boolean,
-    onFollow: () -> Unit, onZap: () -> Unit, onFullscreen: () -> Unit, onMinimize: () -> Unit, onHost: () -> Unit
+    onFollow: () -> Unit, onZap: () -> Unit, onFullscreen: () -> Unit, drag: Modifier, fade: () -> Float, onHost: () -> Unit
 ) {
     // Typing in the chat: a shorter video and no details, so the chat and its box fit above the keyboard.
     val compact = LocalChatCompact.current
@@ -243,9 +249,9 @@ private fun LivePlayer(
         LiveVideo(
             live, host, replayPlayer,
             Modifier.fillMaxWidth().then(if (compact) Modifier.height(COMPACT_VIDEO) else Modifier.aspectRatio(16f / 9f)),
-            fullscreen = false, onFullscreen = onFullscreen, onMinimize = onMinimize
+            fullscreen = false, onFullscreen = onFullscreen, drag = drag
         )
-        if (!compact) LiveInfo(live, host, isMe, isFollowing, onFollow, onZap, onHost)
+        if (!compact) Box(Modifier.graphicsLayer { alpha = 1f - fade() }) { LiveInfo(live, host, isMe, isFollowing, onFollow, onZap, onHost) }
     }
 }
 
@@ -257,12 +263,12 @@ private fun LivePlayer(
 @Composable
 private fun LiveVideo(
     live: LiveStreams.Live, host: Profile?, replayPlayer: androidx.media3.exoplayer.ExoPlayer?, modifier: Modifier,
-    fullscreen: Boolean, onFullscreen: () -> Unit, onMinimize: () -> Unit,
+    fullscreen: Boolean, onFullscreen: () -> Unit,
+    drag: Modifier = Modifier,
     chatShown: Boolean = false, onChat: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val url = live.streaming
-    val drag = rememberDragToMinimize(enabled = !fullscreen && live.isLive && url != null, onMinimize = onMinimize)
     Box(modifier.background(Color.Black).then(drag), contentAlignment = Alignment.Center) {
         val screenButtons: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
             if (onChat != null) {

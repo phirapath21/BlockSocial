@@ -844,6 +844,6 @@ internal val THAI: Map<String, String> = hashMapOf(
     "Show new messages" to "ดูข้อความใหม่",
     "Someone" to "ใครบางคน",
     "Top zaps" to "zap สูงสุด",
-    "{0} new message{1}" to "ข้อความใหม่ {0} ข้อความ",
+    "{0} new message{1}" to "ข้อความใหม่ {0} ข้อความ{1}",
     "{0} sats" to "{0} sats",
 )
