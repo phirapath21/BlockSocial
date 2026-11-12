@@ -11,10 +11,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.clip
@@ -257,42 +253,20 @@ fun MainScreenContent(
     accountSwitcher: (@Composable (onDismiss: () -> Unit) -> Unit)? = null
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    // Your pages (Profile, Lists… Settings) rise from the bottom, under the avatar button that
+    // opens them: easy to reach one-handed, closed by swiping down or Back.
+    // Not saved: opening a page from it (or your profile from its header) and coming Back finds it closed.
+    var panelOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val openPage: (MainTab) -> Unit = { tab ->
         onTabSelected(tab)
-        scope.launch { drawerState.close() }
+        panelOpen = false
     }
-    // Back closes the side bar first, then returns from a side-bar page to Home.
-    BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
-    BackHandler(enabled = !drawerState.isOpen && selectedTab !in BAR_TABS) { onTabSelected(MainTab.HOME) }
+    // Back from one of the panel's pages returns to Home.
+    BackHandler(enabled = !panelOpen && selectedTab !in BAR_TABS) { onTabSelected(MainTab.HOME) }
 
-    // The side panel slides in from the right, next to its button at the right of the bottom
-    // bar: the drawer is laid out right-to-left, and everything inside it back left-to-right.
-    val ltr = androidx.compose.ui.platform.LocalLayoutDirection.current
-    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        // Swipe in from the right edge to open, back to the right to close. Pages with sideways
-        // drags of their own (the price chart scrub, widget reordering) use the button instead.
-        gesturesEnabled = drawerState.isOpen || selectedTab !in DRAG_PAGES,
-        drawerContent = {
-            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides ltr) {
-                ModalDrawerSheet(
-                    drawerContainerColor = EInk.Background,
-                    drawerContentColor = EInk.Value,
-                    drawerShape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp),
-                    modifier = Modifier.width(310.dp)
-                ) {
-                    SideBar(selectedTab = selectedTab, header = drawerHeader, onOpen = openPage, onClose = { scope.launch { drawerState.close() } })
-                }
-            }
-        },
-        modifier = modifier
-    ) {
-    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides ltr) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(EInk.Background)
             .statusBarsPadding()
@@ -425,18 +399,18 @@ fun MainScreenContent(
             BottomBar(
                 selectedTab = selectedTab,
                 badges = badges,
-                menuOpen = drawerState.isOpen || selectedTab in DRAWER_PAGES,
+                menuOpen = panelOpen || selectedTab in DRAWER_PAGES,
                 menuIcon = menuButtonIcon,
                 // The tab you're on: back to the top, or refresh when already there.
                 onTab = { tab -> if (tab == selectedTab) com.example.btcwidget.ui.social.TabTaps.tap(tab.name) else onTabSelected(tab) },
-                onMenu = { scope.launch { if (drawerState.isOpen) drawerState.close() else drawerState.open() } },
+                onMenu = { panelOpen = !panelOpen },
                 onMenuLongPress = if (accountSwitcher != null) ({ switcher = true }) else null
             )
         }
         if (switcher) accountSwitcher?.invoke { switcher = false }
     }
-    }
-    }
+    if (panelOpen) com.example.btcwidget.ui.social.BlockSheet(onDismiss = { panelOpen = false }) {
+        SideBar(selectedTab = selectedTab, header = drawerHeader, onOpen = openPage)
     }
 }
 
@@ -559,20 +533,19 @@ private fun TopBar(title: String, notifications: Int, notificationsOpen: Boolean
 }
 
 /**
- * The side panel, as on X: your account at the top, then your pages in large type, Settings
- * last under a line. Opens from the right, by the button at the right of the bottom bar.
+ * Your pages, in a sheet that rises from the bottom: your account at the top, then the pages
+ * in large type, Settings last under a line. Opened by your avatar at the right of the bottom bar.
  */
 @Composable
-private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen: (MainTab) -> Unit, onClose: () -> Unit) {
+private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen: (MainTab) -> Unit) {
     Column(
         Modifier
-            .fillMaxHeight()
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 8.dp)
+            .navigationBarsPadding()
+            .padding(bottom = 8.dp)
     ) {
-        Box(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 8.dp, bottom = 12.dp)) { header() }
+        Box(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 0.dp, bottom = 12.dp)) { header() }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(bottom = 6.dp))
         DRAWER_PAGES.forEach { tab ->
             if (tab == MainTab.SETTINGS) HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(vertical = 6.dp))
@@ -602,7 +575,7 @@ private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen
 
 /**
  * Pages. The bottom bar holds Home, Search, Bitcoin and Messages, then the side panel's button;
- * Notifications opens from the top bar; the side panel holds Profile, Lists, Bookmarks,
+ * Notifications opens from the top bar; the panel (a sheet from the bottom) holds Profile, Lists, Bookmarks,
  * Communities, Widgets, Price alerts and Settings. [label] names the bar
  * icon for TalkBack, [title] is shown in the top bar and side bar.
  */
@@ -625,9 +598,6 @@ enum class MainTab(val label: String, val icon: com.example.btcwidget.ui.social.
 // enum while this file's other top-level vals are still null (that crashed the app once).
 private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SEARCH, MainTab.DASHBOARD, MainTab.MESSAGES)
 private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.LISTS, MainTab.BOOKMARKS, MainTab.COMMUNITIES, MainTab.WIDGETS, MainTab.ALERTS, MainTab.SETTINGS)
-
-/** Pages with sideways drags of their own, where a swipe must not open the side bar. */
-private val DRAG_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS)
 
 /** Feeds, where the bars slide away while you scroll down (not forms, settings or the dashboard). */
 private val HIDING_PAGES get() = setOf(MainTab.HOME, MainTab.NOTIFICATIONS, MainTab.MESSAGES, MainTab.PROFILE, MainTab.BOOKMARKS, MainTab.LISTS, MainTab.COMMUNITIES)
