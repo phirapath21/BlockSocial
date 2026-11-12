@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -287,12 +288,15 @@ internal fun SpaceChat(
     val sendHaptics = rememberHaptics()
     var error by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
-    LaunchedEffect(messages?.size) { messages?.let { if (it.isNotEmpty()) listState.animateScrollToItem(it.size) } }
+    // The keyboard is up: what's pinned above the chat (a live stream) shrinks so the box you
+    // type in and the newest messages stay on screen.
+    val keyboardOpen = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
+    LaunchedEffect(messages?.size, keyboardOpen) { messages?.let { if (it.isNotEmpty()) listState.animateScrollToItem(it.size) } }
     Column(Modifier.fillMaxSize().background(EInk.Background).imePadding()) {
         SocialTopBar(title, onBack)
         SocialScaffold(vm, navigate) { _ ->
             Column(Modifier.fillMaxSize()) {
-                pinned?.invoke()
+                androidx.compose.runtime.CompositionLocalProvider(LocalChatCompact provides keyboardOpen) { pinned?.invoke() }
                 LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp)) {
                     item(key = "head") {
                         Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
@@ -343,3 +347,6 @@ internal fun SpaceChat(
         }
     }
 }
+
+/** True while the keyboard is up in a chat: what's pinned above it should take little room. */
+internal val LocalChatCompact = androidx.compose.runtime.compositionLocalOf { false }

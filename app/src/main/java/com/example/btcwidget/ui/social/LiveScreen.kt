@@ -159,7 +159,12 @@ private fun LivePlayer(live: LiveStreams.Live, host: Profile?, onMinimize: () ->
         // Drag the stream down to shrink it into the mini player and leave its screen (as on
         // YouTube); a short drag springs back.
         val drag = rememberDragToMinimize(enabled = live.isLive && live.streaming != null, onMinimize = onMinimize)
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black).then(drag), contentAlignment = Alignment.Center) {
+        // Typing in the chat: a shorter video and no details, so the chat and its box fit above the keyboard.
+        val compact = LocalChatCompact.current
+        Box(
+            Modifier.fillMaxWidth().then(if (compact) Modifier.height(COMPACT_VIDEO) else Modifier.aspectRatio(16f / 9f)).background(Color.Black).then(drag),
+            contentAlignment = Alignment.Center
+        ) {
             val url = live.streaming
             if (live.isLive && url != null) {
                 val info = PipVideo.Live(live.address, live.title, host?.bestName ?: Profile.shortNpub(live.host))
@@ -211,15 +216,18 @@ private fun LivePlayer(live: LiveStreams.Live, host: Profile?, onMinimize: () ->
                 )
             }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (!compact) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(host, live.host, size = 36, onClick = onHost)
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                 Text(live.title, color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text((host?.bestName ?: Profile.shortNpub(live.host)) + " · " + statusLine(live), color = EInk.Caption, fontSize = 12.sp, maxLines = 1)
             }
         }
-        live.summary?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 14.dp)) }
-        Spacer(Modifier.height(6.dp))
+        if (!compact) live.summary?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 14.dp)) }
+        if (!compact) Spacer(Modifier.height(6.dp))
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
     }
 }
+
+/** The stream's height while the keyboard is up. */
+private val COMPACT_VIDEO = 150.dp
