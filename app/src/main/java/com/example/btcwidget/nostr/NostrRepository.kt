@@ -294,14 +294,6 @@ class NostrRepository private constructor(private val context: Context) {
         onLoggedIn()
     }
 
-    /** Saves the current account aside so another can log in (Add account). */
-    fun stashForNewLogin() {
-        if (_account.value == null) return
-        NostrAccountStore.stashActive(context)
-        resetSession()
-        _savedAccounts.value = NostrAccountStore.savedAccounts(context)
-    }
-
     fun removeSavedAccount(pubkey: String) {
         NostrAccountStore.removeSaved(context, pubkey)
         Drafts.clear(context, pubkey)
