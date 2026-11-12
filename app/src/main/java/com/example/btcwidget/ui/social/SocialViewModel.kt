@@ -483,6 +483,11 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun afterLogin() {
+        // Another account may have been in use (Add account, Create account): nothing of its
+        // feeds, live audio or scroll positions carries over.
+        forgetScroll()
+        stopLive?.invoke(); stopLive = null
+        _newPosts.value = emptyList()
         reloadReadState()
         accountLoaded = false
         _home.value = Paged()
@@ -510,18 +515,11 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /** Keeps the current account on the phone and logs out of it, so another can log in. */
-    fun prepareAddAccount() {
-        stopLive?.invoke(); stopLive = null
-        repo.stashForNewLogin()
-        logout(keepAccount = true)
-    }
-
     fun removeSavedAccount(pubkey: String) = repo.removeSavedAccount(pubkey)
 
-    fun logout(keepAccount: Boolean = false) {
+    fun logout() {
         forgetScroll()
-        if (!keepAccount) repo.logout()
+        repo.logout()
         reloadReadState()
         stopLive?.invoke(); stopLive = null
         _newPosts.value = emptyList()

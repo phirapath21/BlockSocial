@@ -22,6 +22,8 @@ object LiveStreams {
         val summary: String?,
         val image: String?,
         val streaming: String?,
+        /** The video of a stream that has ended, to watch again (NIP-53 "recording"). */
+        val recording: String?,
         val status: Status,
         val starts: Long?,
         val viewers: Int?,
@@ -48,6 +50,7 @@ object LiveStreams {
             event = e, address = "$KIND:${e.pubkey}:$d", host = host,
             title = tag("title") ?: "Live stream", summary = tag("summary"), image = tag("image"),
             streaming = tag("streaming")?.takeIf { it.startsWith("https://") || it.startsWith("http://") },
+            recording = tag("recording")?.takeIf { it.startsWith("https://") || it.startsWith("http://") },
             status = status, starts = tag("starts")?.toLongOrNull(),
             viewers = tag("current_participants")?.toIntOrNull(), relays = relays.take(5)
         )

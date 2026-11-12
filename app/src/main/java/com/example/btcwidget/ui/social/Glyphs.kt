@@ -144,4 +144,8 @@ object Glyphs {
     val Calendar = stroked("Calendar", "M5.5,5.5h13a1.5,1.5 0,0 1,1.5 1.5v11.5a1.5,1.5 0,0 1,-1.5 1.5h-13a1.5,1.5 0,0 1,-1.5 -1.5V7a1.5,1.5 0,0 1,1.5 -1.5zM4,10h16M8.5,3.5v3.5M15.5,3.5v3.5M12,13v2.5l1.8,1.2")
     val Warning = stroked("Warning", "M12,4.5L21,19.5H3zM12,10v4.5M12,17h0.01")
     val CloseLine = stroked("CloseLine", "M6,6l12,12M18,6L6,18", 2f)
+
+    // Skip back / forward 10 s on live streams and replays (drawn for Block; "10" goes inside).
+    val Replay = stroked("Replay", "M12,4a8,8 0,1 0,8 8M14.5,1.5L12,4l2.5,2.5", 1.8f)
+    val Forward = stroked("Forward", "M12,4a8,8 0,1 1,-8 8M9.5,1.5L12,4l-2.5,2.5", 1.8f)
 }

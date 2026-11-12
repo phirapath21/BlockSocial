@@ -107,7 +107,7 @@ fun AccountSwitcherSheet(vm: SocialViewModel, navigate: (androidx.navigation3.ru
             androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(vertical = 6.dp))
             Text(
                 tr("+ Add account"), color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth().clickable { onDismiss(); vm.prepareAddAccount(); navigate(com.example.btcwidget.LoginKey) }
+                modifier = Modifier.fillMaxWidth().clickable { onDismiss(); navigate(com.example.btcwidget.LoginKey) }
                     .padding(horizontal = 20.dp, vertical = 14.dp)
             )
         }

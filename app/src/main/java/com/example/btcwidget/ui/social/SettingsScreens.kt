@@ -198,7 +198,7 @@ private fun AccountPage(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
             SettingsButton(tr("Remove"), destructive = true) { removing = a.pubkey }
         }
     }
-    SettingsLinkRow(tr("+ Add account"), chevron = false) { vm.prepareAddAccount(); navigate(com.example.btcwidget.LoginKey) }
+    SettingsLinkRow(tr("+ Add account"), chevron = false) { navigate(com.example.btcwidget.LoginKey) }
 
     if (acct.type == SignerType.LOCAL) {
         SettingsDivider()

@@ -40,4 +40,12 @@ class LiveStreamsTest {
         assertEquals(listOf("Stream big", "Stream small", "Stream p"), list.map { it.title })
         assertNull(LiveStreams.parse(Event("i", service, now, 1, emptyList(), "", ""), now))
     }
+
+    @Test
+    fun endedStreamKeepsItsRecording() {
+        val live = LiveStreams.parse(ev("r", "ended", extra = listOf(listOf("recording", "https://cdn.example/r.mp4"))), now)!!
+        assertEquals("https://cdn.example/r.mp4", live.recording)
+        assertNull(LiveStreams.parse(ev("n", "ended", extra = listOf(listOf("recording", "ftp://nope"))), now)!!.recording)
+        assertNull(LiveStreams.parse(ev("none", "ended"), now)!!.recording)
+    }
 }
