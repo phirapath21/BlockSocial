@@ -36,6 +36,7 @@ object AppPrefs {
     private const val PRIVATE_LISTS = "private_lists"
     private const val LANGUAGE = "language"
     private const val RECENT_SEARCHES = "recent_searches"
+    private const val RECENT_PROFILES = "recent_profiles"
     private const val TIPS_SEEN = "tips_seen"
     private fun modeEnabled(mode: Int) = "mode_enabled_$mode"
     private fun widgetMode(id: Int) = "mode_$id"
@@ -95,6 +96,15 @@ object AppPrefs {
     fun removeRecentSearch(context: Context, query: String) =
         edit(context) { putString(RECENT_SEARCHES, recentSearches(context).filterNot { it == query }.joinToString("\n")) }
     fun clearRecentSearches(context: Context) = edit(context) { remove(RECENT_SEARCHES) }
+
+    /** Profiles opened from Search lately (pubkeys), newest first, kept only on this phone. */
+    fun recentProfiles(context: Context): List<String> =
+        prefs(context).getString(RECENT_PROFILES, null).orEmpty().split('\n').filter { it.isNotBlank() }
+    fun addRecentProfile(context: Context, pubkey: String) {
+        val list = (listOf(pubkey) + recentProfiles(context).filterNot { it == pubkey }).take(12)
+        edit(context) { putString(RECENT_PROFILES, list.joinToString("\n")) }
+    }
+    fun clearRecentProfiles(context: Context) = edit(context) { remove(RECENT_PROFILES) }
 
     /** First-run tips already shown (each shows once). */
     fun tipSeen(context: Context, id: String): Boolean = id in prefs(context).getStringSet(TIPS_SEEN, emptySet()).orEmpty()

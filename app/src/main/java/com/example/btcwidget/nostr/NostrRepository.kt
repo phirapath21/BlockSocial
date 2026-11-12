@@ -560,7 +560,20 @@ class NostrRepository private constructor(private val context: Context) {
         return buildTimeline(outbox.query(listOf(filter), timeoutMs = 6_000, only = setOf(relay)))
     }
 
-    /** Notes tagged with [hashtag]. */
+    /** A hashtag people are using now: how many different people, in how many notes. */
+    data class Trend(val tag: String, val people: Int, val notes: Int)
+
+    /**
+     * What's trending, worked out from our own relays (no outside service): the hashtags in
+     * the last day's notes, ranked by how many different people used them (so one busy
+     * account can't push a tag up), then by notes. Tags only one person used are left out.
+     */
+    suspend fun trendingHashtags(max: Int = 20): List<Trend> {
+        val since = System.currentTimeMillis() / 1000 - 86_400
+        val events = pool.query(listOf(Filter(kinds = listOf(Kind.TEXT_NOTE), since = since, limit = 500)))
+        return trendsOf(events).take(max)
+    }
+
     /**
      * Notes with #[hashtag]: from our relays and the search relays (which index far more),
      * matching the "t" tag in any common casing (not every app lowercases it), plus notes
@@ -1818,6 +1831,21 @@ class NostrRepository private constructor(private val context: Context) {
         const val MEDIA_SERVER_LIST = 10063
 
         /** Public relays that implement NIP-50 search. */
+        /** Hashtags ranked by distinct people, then notes; lowercased; single-person tags dropped. */
+        fun trendsOf(events: List<Event>): List<Trend> {
+            val people = HashMap<String, MutableSet<String>>()
+            val notes = HashMap<String, Int>()
+            events.distinctBy { it.id }.forEach { e ->
+                e.tagValues("t").map { it.trim().removePrefix("#").lowercase() }.filter { it.length in 2..40 }.distinct().forEach { t ->
+                    people.getOrPut(t) { HashSet() }.add(e.pubkey)
+                    notes[t] = (notes[t] ?: 0) + 1
+                }
+            }
+            return people.filter { it.value.size >= 2 }
+                .map { (t, who) -> Trend(t, who.size, notes[t] ?: 0) }
+                .sortedWith(compareByDescending<Trend> { it.people }.thenByDescending { it.notes }.thenBy { it.tag })
+        }
+
         val SEARCH_RELAYS = listOf("wss://relay.nostr.band", "wss://search.nos.today")
 
         @Volatile private var instance: NostrRepository? = null

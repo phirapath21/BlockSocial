@@ -480,7 +480,7 @@ internal fun FeedTabBar(
 
 /** One tab: the name, and an orange bar under it when it's open. */
 @Composable
-private fun FeedTab(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun FeedTab(label: String, selected: Boolean, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
