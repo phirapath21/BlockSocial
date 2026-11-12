@@ -78,7 +78,7 @@ private val Accent = Color(0xFFF7931A)
  * buttons on the right are the usual note actions.
  */
 @Composable
-fun ShortsScreen(vm: SocialViewModel, startEveryone: Boolean, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
+fun ShortsScreen(vm: SocialViewModel, startEveryone: Boolean, navigate: (NavKey) -> Unit, onBack: (() -> Unit)?) {
     // Following and Everyone side by side: swipe left or right between them (or tap the tabs).
     val feeds = androidx.compose.foundation.pager.rememberPagerState(initialPage = if (startEveryone) 1 else 0) { 2 }
     val scope = rememberCoroutineScope()
@@ -90,7 +90,7 @@ fun ShortsScreen(vm: SocialViewModel, startEveryone: Boolean, navigate: (NavKey)
             }
             FirstTimeTip(
                 "shorts-swipe", tr("Swipe up for the next video, left or right to switch feeds. Double-tap to like."),
-                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 96.dp)
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = LocalBottomOverlay.current).padding(start = 12.dp, end = 12.dp, bottom = 96.dp)
             )
             ShortsTopBar(
                 position = feeds.currentPage + feeds.currentPageOffsetFraction,
@@ -101,19 +101,27 @@ fun ShortsScreen(vm: SocialViewModel, startEveryone: Boolean, navigate: (NavKey)
     }
 }
 
+/**
+ * How much of the bottom of the screen something else covers (the bottom bar, drawn over the
+ * video when Shorts is a tab), so captions and buttons sit above it.
+ */
+val LocalBottomOverlay = androidx.compose.runtime.compositionLocalOf { 0.dp }
+
 /** Back, and the two feeds as tabs; the orange line slides between them with your swipe. */
 @Composable
-private fun ShortsTopBar(position: Float, onBack: () -> Unit, onSelect: (Int) -> Unit) {
+private fun ShortsTopBar(position: Float, onBack: (() -> Unit)?, onSelect: (Int) -> Unit) {
     Row(
         Modifier.fillMaxWidth()
             .background(Brush.verticalGradient(listOf(Color(0x88000000), Color.Transparent)))
             .statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
+        // As a tab of its own there's nothing to go back to.
+        if (onBack != null) Box(
             Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = tr("Back"), onClick = onBack),
             contentAlignment = Alignment.Center
         ) { Icon(Glyphs.Back, contentDescription = tr("Back"), tint = Color.White, modifier = Modifier.size(24.dp)) }
+        else Spacer(Modifier.width(44.dp))
         Spacer(Modifier.weight(1f))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row {
@@ -253,7 +261,7 @@ private fun ShortsPager(vm: SocialViewModel, everyone: Boolean, actions: NoteAct
             onToggleMute = { muted = !muted }
         )
     }
-    if (loading) Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 8.dp), contentAlignment = Alignment.BottomCenter) {
+    if (loading) Box(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = LocalBottomOverlay.current).padding(bottom = 8.dp), contentAlignment = Alignment.BottomCenter) {
         Box(Modifier.size(width = 40.dp, height = 3.dp).clip(RoundedCornerShape(2.dp)).background(Accent))
     }
 }
@@ -326,14 +334,14 @@ private fun ShortPage(
         )
 
         Row(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 14.dp),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = LocalBottomOverlay.current).padding(bottom = 14.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             ShortCaption(note, author, actions, Modifier.weight(1f).padding(start = 14.dp, end = 8.dp))
             ShortSideBar(note, author, stats, muted, actions, onToggleMute, Modifier.padding(end = 8.dp))
         }
 
-        if (active && player != null) ShortProgress(player, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+        if (active && player != null) ShortProgress(player, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = LocalBottomOverlay.current))
     }
 }
 

@@ -20,6 +20,8 @@ class NavIcon(val outline: ImageVector, val filled: ImageVector) {
  */
 object NavIcons {
     private const val HOUSE = "M4,10.2L10.6,4.9Q12,3.8 13.4,4.9L20,10.2V19a1.5,1.5 0,0 1,-1.5 1.5H15v-5.5h-6v5.5H5.5A1.5,1.5 0,0 1,4 19z"
+    private const val PHONE = "M8,3h8a3,3 0,0 1,3 3v12a3,3 0,0 1,-3 3h-8a3,3 0,0 1,-3 -3V6a3,3 0,0 1,3 -3z"
+    private const val PLAY = "M10.3,9.1v5.8a0.6,0.6 0,0 0,0.9 0.5l4.5,-2.9a0.6,0.6 0,0 0,0 -1l-4.5,-2.9a0.6,0.6 0,0 0,-0.9 0.5z"
     private const val BUBBLE = "M7,4.5h10a3.5,3.5 0,0 1,3.5 3.5v6a3.5,3.5 0,0 1,-3.5 3.5h-5.5l-4.5,3.5v-3.5a3.5,3.5 0,0 1,-3.5 -3.5v-6a3.5,3.5 0,0 1,3.5 -3.5z"
     private sealed class Part(val d: String) {
         class Fill(d: String) : Part(d)
@@ -83,6 +85,11 @@ object NavIcons {
     val Messages = NavIcon(
         icon("Messages", Part.Stroke(BUBBLE, 1.9f)),
         icon("MessagesFilled", Part.Fill(BUBBLE), Part.Stroke(BUBBLE, 1.9f))
+    )
+    // A screen standing on end with a play button: short videos, one at a time (drawn for Block).
+    val Shorts = NavIcon(
+        icon("Shorts", Part.Stroke(PHONE, 1.9f), Part.Fill(PLAY)),
+        icon("ShortsFilled", Part.EvenOdd(PHONE + PLAY), Part.Stroke(PHONE, 1.9f))
     )
     val Profile = NavIcon(
         icon("Profile", Part.Fill("M12,6c1.1,0 2,0.9 2,2s-0.9,2 -2,2 -2,-0.9 -2,-2 0.9,-2 2,-2m0,10c2.7,0 5.8,1.29 6,2H6c0.23,-0.72 3.31,-2 6,-2m0,-12C9.79,4 8,5.79 8,8s1.79,4 4,4 4,-1.79 4,-4 -1.79,-4 -4,-4zM12,14c-2.67,0 -8,1.34 -8,4v2h16v-2c0,-2.66 -5.33,-4 -8,-4z")),

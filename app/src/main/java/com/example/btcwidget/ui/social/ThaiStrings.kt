@@ -780,4 +780,5 @@ internal val THAI: Map<String, String> = hashMapOf(
     "Move up" to "เลื่อนขึ้น",
     "Move down" to "เลื่อนลง",
     "Selected" to "เลือกอยู่",
+    "Search Block" to "ค้นหาใน Block",
 )

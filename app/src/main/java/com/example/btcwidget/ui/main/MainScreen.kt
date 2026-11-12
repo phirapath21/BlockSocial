@@ -177,7 +177,7 @@ fun MainScreen(
         },
         notificationsAllowed = settings.notificationsAllowed,
         homeContent = { com.example.btcwidget.ui.social.HomeScreen(social, onItemClick) },
-        searchContent = { com.example.btcwidget.ui.social.SearchScreen(social, onItemClick, onBack = null) },
+        shortsContent = { com.example.btcwidget.ui.social.ShortsScreen(social, startEveryone = false, navigate = onItemClick, onBack = null) },
         messagesContent = { com.example.btcwidget.ui.social.MessagesScreen(social, onItemClick) },
         bookmarksContent = { com.example.btcwidget.ui.social.BookmarksScreen(social, onItemClick) },
         communitiesContent = { com.example.btcwidget.ui.social.SpacesScreen(social, onItemClick) },
@@ -245,7 +245,8 @@ fun MainScreenContent(
     profileContent: @Composable () -> Unit = {},
     /** The Settings page (its categories; each opens its own screen). */
     settingsContent: @Composable () -> Unit = {},
-    searchContent: @Composable () -> Unit = {},
+    /** Short videos, full screen, as a tab of their own. */
+    shortsContent: @Composable () -> Unit = {},
     messagesContent: @Composable () -> Unit = {},
     bookmarksContent: @Composable () -> Unit = {},
     communitiesContent: @Composable () -> Unit = {},
@@ -305,11 +306,13 @@ fun MainScreenContent(
         onMenuLongPress = if (accountSwitcher != null) ({ switcher = true }) else null,
         onTab = { tab -> if (tab == selectedTab) com.example.btcwidget.ui.social.TabTaps.tap(tab.name) else onTabSelected(tab) }
     )
+    // Shorts fills the whole screen, under the status bar too, with the bottom bar over it.
+    val shorts = selectedTab == MainTab.SHORTS
     Column(
         modifier = Modifier
             .weight(1f)
             .fillMaxHeight()
-            .statusBarsPadding()
+            .then(if (shorts) Modifier.background(Color.Black) else Modifier.statusBarsPadding())
     ) {
         // On feeds the bars slide away while you scroll down and come back when you scroll up,
         // as on X. Every page starts with them showing.
@@ -330,13 +333,14 @@ fun MainScreenContent(
         androidx.compose.runtime.LaunchedEffect(Unit) {
             com.example.btcwidget.ui.social.TabTaps.flow.collect { if (it == MainTab.DASHBOARD.name) refreshNow() }
         }
-        androidx.compose.animation.AnimatedVisibility(
+        if (!shorts) androidx.compose.animation.AnimatedVisibility(
             visible = showBars,
             enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
             exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
         ) {
             TopBar(
-                title = tr(selectedTab.title),
+                // Search sits at the top of every page, after your avatar.
+                onSearch = { onItemClick(com.example.btcwidget.SearchKey) },
                 // On the rail when wide.
                 menuIcon = if (wide) null else menuButtonIcon,
                 menuOpen = drawerState.isOpen || selectedTab in DRAWER_PAGES,
@@ -356,7 +360,9 @@ fun MainScreenContent(
             com.example.btcwidget.ui.social.ReadableColumn(enabled = wide && selectedTab !in FULL_WIDTH_PAGES) {
             when (selectedTab) {
                 MainTab.HOME -> homeContent()
-                MainTab.SEARCH -> searchContent()
+                MainTab.SHORTS -> androidx.compose.runtime.CompositionLocalProvider(
+                    com.example.btcwidget.ui.social.LocalBottomOverlay provides if (wide) 0.dp else BOTTOM_BAR_HEIGHT
+                ) { shortsContent() }
                 MainTab.MESSAGES -> messagesContent()
                 MainTab.BOOKMARKS -> bookmarksContent()
                 MainTab.COMMUNITIES -> communitiesContent()
@@ -432,10 +438,18 @@ fun MainScreenContent(
                 MainTab.SETTINGS -> settingsContent()
             }
             }
+            // On Shorts the bottom bar lies over the video, see-through, as on Reels.
+            if (shorts && !wide) BottomBar(
+                selectedTab = selectedTab,
+                badges = badges,
+                overVideo = true,
+                onTab = { tab -> if (tab == selectedTab) com.example.btcwidget.ui.social.TabTaps.tap(tab.name) else onTabSelected(tab) },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
 
         }
-        if (!wide) androidx.compose.animation.AnimatedVisibility(
+        if (!wide && !shorts) androidx.compose.animation.AnimatedVisibility(
             visible = showBars,
             enter = androidx.compose.animation.expandVertically(expandFrom = Alignment.Top) + androidx.compose.animation.fadeIn(),
             exit = androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Top) + androidx.compose.animation.fadeOut()
@@ -459,11 +473,14 @@ private val Accent = Color(0xFFF7931A)
 private const val WIDE_DP = 600
 
 /** Pages that use the whole width even when wide. */
-private val FULL_WIDTH_PAGES get() = setOf(MainTab.WIDGETS)
+private val FULL_WIDTH_PAGES get() = setOf(MainTab.WIDGETS, MainTab.SHORTS)
+
+/** The bottom bar's height above the navigation bar. */
+private val BOTTOM_BAR_HEIGHT = 56.dp
 
 /**
  * The tabs on a rail at the left, for wide screens: your avatar on top (opens the side bar,
- * long-press to switch accounts), then Home, Search, Bitcoin, Notifications, Messages with the
+ * long-press to switch accounts), then Home, Shorts, Bitcoin, Notifications, Messages with the
  * same icons and unread bubbles as the bottom bar.
  */
 @Composable
@@ -523,7 +540,7 @@ private fun SideRail(
 }
 
 /**
- * The bottom bar, as on X: Home, Search, Bitcoin, Notifications, Messages as icons only,
+ * The bottom bar, as on X: Home, Shorts, Bitcoin, Notifications, Messages as icons only,
  * outlined, the open page's filled; on the page's own background with a hairline above.
  * Unread counts sit on the icon in an orange bubble.
  */
@@ -531,12 +548,20 @@ private fun SideRail(
 private fun BottomBar(
     selectedTab: MainTab,
     badges: Map<MainTab, Int>,
-    onTab: (MainTab) -> Unit
+    onTab: (MainTab) -> Unit,
+    /** Over a video: see-through with a soft shade, white icons, no line above. */
+    overVideo: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
-    Column(Modifier.fillMaxWidth().background(EInk.Background)) {
-        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+    Column(
+        modifier.fillMaxWidth().then(
+            if (overVideo) Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0x99000000))))
+            else Modifier.background(EInk.Background)
+        )
+    ) {
+        if (!overVideo) HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().height(56.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().height(BOTTOM_BAR_HEIGHT),
             verticalAlignment = Alignment.CenterVertically
         ) {
             BAR_TABS.forEach { tab ->
@@ -548,7 +573,7 @@ private fun BottomBar(
                     onClick = { onTab(tab) }
                 ) {
                     Box {
-                        Icon(tab.icon.of(selected), contentDescription = null, tint = EInk.Value, modifier = Modifier.size(27.dp))
+                        Icon(tab.icon.of(selected), contentDescription = null, tint = if (overVideo) Color.White else EInk.Value, modifier = Modifier.size(27.dp))
                         if (count > 0) CountBadge(count, Modifier.align(Alignment.TopEnd).offset(x = 9.dp, y = (-6).dp))
                     }
                 }
@@ -590,7 +615,7 @@ private fun CountBadge(count: Int, modifier: Modifier = Modifier) {
  * switch accounts), as on X; ringed in orange while one of the side bar's pages is open.
  */
 @Composable
-private fun TopBar(title: String, menuIcon: (@Composable () -> Unit)?, menuOpen: Boolean, onMenu: () -> Unit, onMenuLongPress: (() -> Unit)?) {
+private fun TopBar(onSearch: () -> Unit, menuIcon: (@Composable () -> Unit)?, menuOpen: Boolean, onMenu: () -> Unit, onMenuLongPress: (() -> Unit)?) {
     val haptics = com.example.btcwidget.ui.social.rememberHaptics()
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -619,13 +644,22 @@ private fun TopBar(title: String, menuIcon: (@Composable () -> Unit)?, menuOpen:
                 contentAlignment = Alignment.Center
             ) { menuIcon() }
         }
-        Text(
-            text = title,
-            color = EInk.Value,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = if (menuIcon != null) 10.dp else 8.dp)
-        )
+        // Search, as a long pill after your avatar (X's Explore has it there).
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .padding(start = if (menuIcon != null) 6.dp else 4.dp, end = 4.dp)
+                .weight(1f)
+                .height(38.dp)
+                .clip(CircleShape)
+                .background(EInk.Body)
+                .clickable(onClickLabel = tr("Search"), onClick = onSearch)
+                .semantics(mergeDescendants = true) { contentDescription = tr("Search") }
+                .padding(horizontal = 14.dp)
+        ) {
+            Icon(com.example.btcwidget.ui.social.NavIcons.Search.outline, contentDescription = null, tint = EInk.Caption, modifier = Modifier.size(18.dp))
+            Text(tr("Search Block"), color = EInk.Caption, fontSize = 15.sp, maxLines = 1, modifier = Modifier.padding(start = 10.dp))
+        }
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
@@ -680,7 +714,7 @@ private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen
  */
 enum class MainTab(val label: String, val icon: com.example.btcwidget.ui.social.NavIcon, val title: String = label) {
     HOME("Home", com.example.btcwidget.ui.social.NavIcons.Home),
-    SEARCH("Search", com.example.btcwidget.ui.social.NavIcons.Search),
+    SHORTS("Shorts", com.example.btcwidget.ui.social.NavIcons.Shorts),
     DASHBOARD("Bitcoin", com.example.btcwidget.ui.social.NavIcons.Bitcoin),
     NOTIFICATIONS("Notifications", com.example.btcwidget.ui.social.NavIcons.Bell),
     MESSAGES("Messages", com.example.btcwidget.ui.social.NavIcons.Messages),
@@ -695,7 +729,7 @@ enum class MainTab(val label: String, val icon: com.example.btcwidget.ui.social.
 
 // Getters, not stored values: a top-level val that touches MainTab would initialize the
 // enum while this file's other top-level vals are still null (that crashed the app once).
-private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SEARCH, MainTab.DASHBOARD, MainTab.NOTIFICATIONS, MainTab.MESSAGES)
+private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SHORTS, MainTab.DASHBOARD, MainTab.NOTIFICATIONS, MainTab.MESSAGES)
 
 /** Pages with sideways drags of their own, where a swipe must not open the side bar. */
 private val DRAG_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS)

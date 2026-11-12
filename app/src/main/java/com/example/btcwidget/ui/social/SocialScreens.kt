@@ -193,7 +193,6 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                         feeds, feed,
                         // The open tab again: back to the top (and again: refresh), as on X.
                         onSelect = { f -> if (f == feed) TabTaps.tap("HOME") else vm.selectFeed(f) },
-                        onShorts = { navigate(com.example.btcwidget.ShortsKey(everyone = (feed as? com.example.btcwidget.nostr.core.HomeFeed.Media)?.everyone == true)) },
                         onManage = { feedMenu = true }
                     )
                     PullToRefreshBox(isRefreshing = home.refreshing, onRefresh = { pullHaptics.tick(); vm.refreshHome() }, modifier = Modifier.fillMaxSize()) {
@@ -445,7 +444,7 @@ internal fun feedTabTitle(f: HomeFeed): String = when (f) {
 
 /**
  * The feeds as tabs across the top of Home, as on X: tap one to switch, tap the open one again
- * to go back to the top. At the end, Shorts and the button to manage feeds. Slides away with
+ * to go back to the top. At the end, the button to manage feeds (Shorts has its own tab). Slides away with
  * the top bar while you scroll down.
  */
 @Composable
@@ -453,7 +452,6 @@ internal fun FeedTabBar(
     feeds: List<HomeFeed>,
     current: HomeFeed,
     onSelect: (HomeFeed) -> Unit,
-    onShorts: () -> Unit,
     onManage: () -> Unit
 ) {
     androidx.compose.animation.AnimatedVisibility(
@@ -473,19 +471,7 @@ internal fun FeedTabBar(
                 ) {
                     items(feeds, key = { it.id }) { f -> FeedTab(feedTabTitle(f), selected = f == current) { onSelect(f) } }
                 }
-                val videos = (current as? HomeFeed.Media)?.videos == true
-                Box(
-                    Modifier.size(36.dp).clip(CircleShape)
-                        .then(if (videos) Modifier.background(SettingsAccent) else Modifier.border(1.dp, EInk.BodyStroke, CircleShape))
-                        .clickable(onClickLabel = tr("Watch videos full screen"), onClick = onShorts),
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.material3.Icon(
-                        Glyphs.PlayLine, contentDescription = tr("Shorts"),
-                        tint = if (videos) androidx.compose.ui.graphics.Color.Black else EInk.Value, modifier = Modifier.size(18.dp)
-                    )
-                }
-                CircleIconButton(Glyphs.Sliders, tr("Manage feeds"), Modifier.padding(start = 8.dp, end = 12.dp), onClick = onManage)
+                CircleIconButton(Glyphs.Sliders, tr("Manage feeds"), Modifier.padding(start = 4.dp, end = 12.dp), onClick = onManage)
             }
             HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
         }
