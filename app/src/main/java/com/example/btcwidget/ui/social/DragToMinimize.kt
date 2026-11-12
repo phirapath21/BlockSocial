@@ -12,6 +12,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -34,11 +38,24 @@ internal fun dragToMinimize(enabled: Boolean = true, onMinimize: () -> Unit): Dr
     val threshold = with(density) { 110.dp.toPx() }
     val distance = with(density) { 320.dp.toPx() }
     val minimize by rememberUpdatedState(onMinimize)
+    val margin = with(density) { 12.dp.toPx() }
+    // Where the video sits on the screen, so it can't be dragged off the bottom of it.
+    val top = remember { floatArrayOf(0f, 0f, Float.MAX_VALUE) } // top, height, screen height
+    // Once let go past the line it stays where it is, small, while the screen fades away
+    // (springing back to full size first looked like the animation running backwards).
+    var done by remember { androidx.compose.runtime.mutableStateOf(false) }
     val modifier = if (!enabled) Modifier else Modifier
+        .onGloballyPositioned { c ->
+            top[0] = c.positionInRoot().y
+            top[1] = c.size.height.toFloat()
+            top[2] = c.findRootCoordinates().size.height.toFloat()
+        }
         .graphicsLayer {
             val p = (offset.value / distance).coerceIn(0f, 1f)
-            translationY = offset.value
             val s = 1f - 0.5f * p
+            // Follows the finger, but the shrinking video always stays on screen.
+            val room = (top[2] - top[0] - top[1] * s - margin).coerceAtLeast(0f)
+            translationY = offset.value.coerceAtMost(room)
             scaleX = s; scaleY = s
             // Shrinks toward the bottom right, where the mini player sits.
             transformOrigin = TransformOrigin(0.9f, 0f)
@@ -46,14 +63,18 @@ internal fun dragToMinimize(enabled: Boolean = true, onMinimize: () -> Unit): Dr
         .pointerInput(Unit) {
             detectVerticalDragGestures(
                 onDragEnd = {
+                    if (done) return@detectVerticalDragGestures
                     if (offset.value > threshold) {
                         haptics.tick()
+                        done = true
+                        // The screen leaves with a quiet fade, not its usual slide.
+                        PipVideo.minimizedAt = System.currentTimeMillis()
                         minimize()
-                        scope.launch { offset.snapTo(0f) }
                     } else scope.launch { offset.animateTo(0f, spring(dampingRatio = 0.75f)) }
                 },
                 onDragCancel = { scope.launch { offset.animateTo(0f, spring(dampingRatio = 0.75f)) } }
             ) { change, dy ->
+                if (done) return@detectVerticalDragGestures
                 val next = (offset.value + dy).coerceAtLeast(0f)
                 if (next > 0f || dy > 0f) change.consume()
                 scope.launch { offset.snapTo(next) }

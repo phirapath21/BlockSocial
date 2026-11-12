@@ -62,6 +62,11 @@ object PipVideo {
     data class MiniVideo(val url: String, val note: com.example.btcwidget.nostr.core.Event, val title: String, val author: String)
     var miniVideo: MiniVideo? by mutableStateOf(null)
 
+    /** When a video was last dragged down into the mini player: its screen then fades out instead of sliding. */
+    @Volatile var minimizedAt = 0L
+    /** The screen being left was just dragged down into the mini player. */
+    val leavingForMini: Boolean get() = System.currentTimeMillis() - minimizedAt < 800
+
     /**
      * The in-app mini player shows: a live stream still playing after its screen was left, or a
      * video dragged down out of the full-screen viewer (as on YouTube).
