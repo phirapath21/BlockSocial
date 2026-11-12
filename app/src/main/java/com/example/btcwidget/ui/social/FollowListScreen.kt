@@ -35,16 +35,16 @@ fun FollowListScreen(vm: SocialViewModel, pubkey: String, followers: Boolean, na
     val owner = profiles[pubkey]?.bestName ?: Profile.shortNpub(pubkey)
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar(if (followers) "Followers of $owner" else "$owner follows", onBack)
+        SocialTopBar(if (followers) tr("Followers of {0}", owner) else tr("{0} follows", owner), onBack)
         SocialScaffold(vm, navigate) { _ ->
             val list = people
             when {
                 list == null -> Spinner(Modifier.padding(top = 30.dp))
-                list.isEmpty() -> EmptyNote(if (followers) "No followers found on these relays." else "Not following anyone yet.")
+                list.isEmpty() -> EmptyNote(if (followers) tr("No followers found on these relays.") else tr("Not following anyone yet."))
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     item(key = "count") {
                         Text(
-                            if (followers && list.size >= 500) "At least ${list.size} (relays return up to 500)" else "${list.size} people",
+                            if (followers && list.size >= 500) tr("At least {0} (relays return up to 500)", list.size) else tr("{0} people", list.size),
                             color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         )
                     }
@@ -58,7 +58,7 @@ fun FollowListScreen(vm: SocialViewModel, pubkey: String, followers: Boolean, na
                             onClick = { navigate(ProfileKey(pk)) },
                             trailing = if (pk == account?.pubkey) null else {
                                 {
-                                    PillButton(if (isFollowing) "Following" else "Follow", filled = !isFollowing) {
+                                    PillButton(if (isFollowing) tr("Following") else tr("Follow"), filled = !isFollowing) {
                                         if (account == null) navigate(LoginKey) else vm.follow(pk, !isFollowing)
                                     }
                                 }

@@ -111,7 +111,7 @@ private fun PublishCard(a: SocialViewModel.PublishActivity) {
         if (progress == null) {
             LinearProgressIndicator(color = color, trackColor = EInk.Track, modifier = barModifier)
         } else {
-            val shown by animateFloatAsState(progress, animationSpec = tween(300), label = "publish progress")
+            val shown by animateFloatAsState(progress, animationSpec = tween(300), label = tr("publish progress"))
             LinearProgressIndicator(progress = { shown }, color = color, trackColor = EInk.Track, drawStopIndicator = {}, gapSize = 0.dp, modifier = barModifier)
         }
     }

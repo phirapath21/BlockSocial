@@ -96,9 +96,9 @@ private fun ShortsTopBar(everyone: Boolean, onBack: () -> Unit, onEveryone: (Boo
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = "Back", onClick = onBack),
+            Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = tr("Back"), onClick = onBack),
             contentAlignment = Alignment.Center
-        ) { Icon(Glyphs.Back, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(24.dp)) }
+        ) { Icon(Glyphs.Back, contentDescription = tr("Back"), tint = Color.White, modifier = Modifier.size(24.dp)) }
         Spacer(Modifier.weight(1f))
         ShortsTab("Following", selected = !everyone) { onEveryone(false) }
         ShortsTab("Everyone", selected = everyone) { onEveryone(true) }
@@ -153,7 +153,7 @@ private fun ShortsPager(vm: SocialViewModel, everyone: Boolean, actions: NoteAct
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (loading) Spinner()
             else Text(
-                if (everyone) "No videos on your relays right now." else "No videos from the people you follow yet. Try Everyone.",
+                if (everyone) tr("No videos on your relays right now.") else tr("No videos from the people you follow yet. Try Everyone."),
                 color = Color.White, fontSize = 15.sp, modifier = Modifier.padding(32.dp)
             )
         }
@@ -284,7 +284,7 @@ private fun ShortPage(
         if (active && paused) Box(
             Modifier.align(Alignment.Center).size(72.dp).clip(CircleShape).background(Color(0x66000000)),
             contentAlignment = Alignment.Center
-        ) { Icon(Glyphs.Play, contentDescription = "Paused", tint = Color.White, modifier = Modifier.size(44.dp)) }
+        ) { Icon(Glyphs.Play, contentDescription = tr("Paused"), tint = Color.White, modifier = Modifier.size(44.dp)) }
 
         heartAt?.let { at ->
             val half = with(density) { 48.dp.toPx() }
@@ -350,7 +350,7 @@ private fun ShortSideBar(
             }
             if (note.pubkey != actions.me && !actions.isFollowing(note.pubkey)) Box(
                 Modifier.size(20.dp).clip(CircleShape).background(Accent)
-                    .clickable(onClickLabel = "Follow") { actions.follow(note.pubkey, true) },
+                    .clickable(onClickLabel = tr("Follow")) { actions.follow(note.pubkey, true) },
                 contentAlignment = Alignment.Center
             ) { Text("+", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
         }

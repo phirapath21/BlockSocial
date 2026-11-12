@@ -44,7 +44,7 @@ internal fun FollowPackList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val packs by produceState<List<FollowPack>?>(null) { value = vm.followPacks() }
     when (val l = packs) {
         null -> Spinner(Modifier.padding(top = 30.dp))
-        else -> if (l.isEmpty()) EmptyNote("No follow packs found on your relays.") else LazyColumn(Modifier.fillMaxSize()) {
+        else -> if (l.isEmpty()) EmptyNote(tr("No follow packs found on your relays.")) else LazyColumn(Modifier.fillMaxSize()) {
             items(l, key = { it.address }) { pack ->
                 Row(
                     Modifier.fillMaxWidth().clickable { navigate(PackKey(pack.address)) }.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -57,7 +57,7 @@ internal fun FollowPackList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                     Column(Modifier.weight(1f).padding(start = 12.dp)) {
                         Text(pack.title, color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
-                            "${pack.members.size} people · by " + (profiles[pack.owner]?.bestName ?: Profile.shortNpub(pack.owner)),
+                            tr("{0} people · by ", pack.members.size) + (profiles[pack.owner]?.bestName ?: Profile.shortNpub(pack.owner)),
                             color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
                         pack.description?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
@@ -78,11 +78,11 @@ fun FollowPackScreen(vm: SocialViewModel, address: String, navigate: (NavKey) ->
     val loaded by produceState<Any?>(Unit, address) { value = vm.followPack(address) }
     val pack = loaded as? FollowPack
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar(pack?.title ?: "Follow pack", onBack)
+        SocialTopBar(pack?.title ?: tr("Follow pack"), onBack)
         SocialScaffold(vm, navigate) { actions ->
             when {
                 loaded == Unit -> Spinner(Modifier.padding(top = 30.dp))
-                pack == null -> EmptyNote("This follow pack couldn't be found on your relays.")
+                pack == null -> EmptyNote(tr("This follow pack couldn't be found on your relays."))
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     item(key = "head") {
                         pack.image?.let { AsyncImage(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().aspectRatio(3f)) }
@@ -92,14 +92,14 @@ fun FollowPackScreen(vm: SocialViewModel, address: String, navigate: (NavKey) ->
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp).clickable { navigate(ProfileKey(pack.owner)) }) {
                                 Avatar(profiles[pack.owner], pack.owner, size = 20)
                                 Text(
-                                    "by " + (profiles[pack.owner]?.bestName ?: Profile.shortNpub(pack.owner)) + " · ${pack.members.size} people",
+                                    tr("by ") + (profiles[pack.owner]?.bestName ?: Profile.shortNpub(pack.owner)) + tr(" · {0} people", pack.members.size),
                                     color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp)
                                 )
                             }
                             val toFollow = pack.members.filter { it !in following && it != account?.pubkey }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
-                                if (toFollow.isEmpty()) PillButton("Following all", filled = false) {}
-                                else PillButton("Follow all (${toFollow.size})") {
+                                if (toFollow.isEmpty()) PillButton(tr("Following all"), filled = false) {}
+                                else PillButton(tr("Follow all ({0})", toFollow.size)) {
                                     if (account == null) navigate(LoginKey) else vm.followAll(toFollow)
                                 }
                             }
@@ -116,7 +116,7 @@ fun FollowPackScreen(vm: SocialViewModel, address: String, navigate: (NavKey) ->
                                 p?.about?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                             }
                             if (pk != account?.pubkey) Text(
-                                if (on) "Following" else "Follow", color = if (on) EInk.Value else androidx.compose.ui.graphics.Color.Black,
+                                if (on) tr("Following") else tr("Follow"), color = if (on) EInk.Value else androidx.compose.ui.graphics.Color.Black,
                                 fontSize = 13.sp, fontWeight = FontWeight.Bold,
                                 modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) EInk.Track else EInk.Value)
                                     .clickable { actions.follow(pk, !on) }.padding(horizontal = 14.dp, vertical = 6.dp)

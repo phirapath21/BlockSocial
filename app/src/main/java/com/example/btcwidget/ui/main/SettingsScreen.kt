@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.main
 
+import com.example.btcwidget.ui.social.tr
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,17 +65,17 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp)
     ) {
-        HeaderSection(title = "SETTINGS", subtitle = "App preferences")
+        HeaderSection(title = tr("SETTINGS"), subtitle = tr("App preferences"))
 
         nostrSettings()
 
-        EInkPanel(title = "Your stack") {
+        EInkPanel(title = tr("Your stack")) {
             StackInput(stackSats = stackSats, stackUnit = stackUnit, onStackChange = onStackChange)
             Text(
                 text = if (stackSats > 0 && stackValue != null) {
-                    "Worth $stackValue · stored only on this device"
+                    tr("Worth {0} · stored only on this device", stackValue)
                 } else {
-                    "How much bitcoin you hold. Stored only on this device."
+                    tr("How much bitcoin you hold. Stored only on this device.")
                 },
                 color = EInk.Caption,
                 fontSize = 10.sp,
@@ -85,18 +86,28 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        EInkPanel(title = "Display") {
-            SettingRow("Widget theme", note = "Home-screen widgets and their previews; the app keeps its own look") {
+        EInkPanel(title = tr("Display")) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            SettingRow(tr("Language"), note = tr("Text in menus, buttons and messages. Posts stay in the language they were written in.")) {
+                com.example.btcwidget.ui.social.Lang.Choice.entries.forEach { option ->
+                    EInkChip(
+                        text = if (option == com.example.btcwidget.ui.social.Lang.Choice.SYSTEM) tr("Auto").uppercase() else option.label.uppercase(),
+                        selected = com.example.btcwidget.ui.social.Lang.choice == option,
+                        onClick = { com.example.btcwidget.ui.social.Lang.choose(context, option) }
+                    )
+                }
+            }
+            SettingRow(tr("Widget theme"), note = tr("Home-screen widgets and their previews; the app keeps its own look")) {
                 AppTheme.entries.forEach { option ->
                     EInkChip(
                         // First word only, so three chips fit beside the label.
-                        text = option.label.substringBefore(' ').uppercase(),
+                        text = tr(option.label.substringBefore(' ')).uppercase(),
                         selected = theme == option,
                         onClick = { onThemeSelected(option) }
                     )
                 }
             }
-            SettingRow("Currency", note = "Prices, sats and alerts") {
+            SettingRow(tr("Currency"), note = tr("Prices, sats and alerts")) {
                 listOf("USD", "THB").forEach { currency ->
                     EInkChip(
                         text = currency,
@@ -109,8 +120,8 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        EInkPanel(title = "Updates") {
-            SettingRow("Refresh every", note = "Widgets and alerts in the background") {
+        EInkPanel(title = tr("Updates")) {
+            SettingRow(tr("Refresh every"), note = tr("Widgets and alerts in the background")) {
                 listOf(15, 30, 60).forEach { minutes ->
                     EInkChip(
                         text = "${minutes}m",
@@ -120,7 +131,7 @@ fun SettingsScreen(
                 }
             }
             Text(
-                text = "Pull down on the dashboard to refresh now.",
+                text = tr("Pull down on the dashboard to refresh now."),
                 color = EInk.Caption,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
@@ -130,8 +141,8 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        EInkPanel(title = "Data sources") {
-            SettingRow("BTC price", note = "Spot price in USD") {
+        EInkPanel(title = tr("Data sources")) {
+            SettingRow(tr("BTC price"), note = tr("Spot price in USD")) {
                 PriceSource.entries.forEach { source ->
                     EInkChip(
                         text = source.label.uppercase(),
@@ -141,8 +152,8 @@ fun SettingsScreen(
                 }
             }
             SettingRow(
-                "THB price",
-                note = if (dataSources.thb == ThbSource.BITKUB) "Bitkub's BTC/THB market" else "USD price × exchange rate"
+                tr("THB price"),
+                note = if (dataSources.thb == ThbSource.BITKUB) tr("Bitkub's BTC/THB market") else tr("USD price × exchange rate")
             ) {
                 ThbSource.entries.forEach { source ->
                     EInkChip(
@@ -153,7 +164,7 @@ fun SettingsScreen(
                 }
             }
             Text(
-                text = "If a source is unreachable, Block falls back to Coinbase or the last known price.",
+                text = tr("If a source is unreachable, Block falls back to Coinbase or the last known price."),
                 color = EInk.Caption,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
@@ -163,20 +174,20 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        EInkPanel(title = "About") {
-            AboutLine("Block" + (appVersion?.let { " $it" } ?: ""))
-            AboutLine("Prices: ${dataSources.price.label}" + (if (dataSources.thb == ThbSource.BITKUB) ", Bitkub (THB)" else "") + " · Network: mempool.space")
-            AboutLine("Supply: blockchain.info · MSTR: Yahoo Finance, CoinGecko")
-            AboutLine("Type: Oswald, VT323 (SIL Open Font License)")
+        EInkPanel(title = tr("About")) {
+            AboutLine(tr("Block") + (appVersion?.let { " $it" } ?: ""))
+            AboutLine(tr("Prices: {0}", dataSources.price.label) + (if (dataSources.thb == ThbSource.BITKUB) ", Bitkub (THB)" else "") + tr(" · Network: mempool.space"))
+            AboutLine(tr("Supply: blockchain.info · MSTR: Yahoo Finance, CoinGecko"))
+            AboutLine(tr("Type: Oswald, VT323 (SIL Open Font License)"))
             val uriHandler = LocalUriHandler.current
             Text(
-                text = "Privacy policy ›",
+                text = tr("Privacy policy ›"),
                 color = EInk.Value,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier
                     .padding(top = 6.dp)
-                    .clickable(onClickLabel = "Open privacy policy") { uriHandler.openUri(PRIVACY_POLICY_URL) }
+                    .clickable(onClickLabel = tr("Open privacy policy")) { uriHandler.openUri(PRIVACY_POLICY_URL) }
                     .padding(vertical = 6.dp)
             )
         }
@@ -219,54 +230,54 @@ fun NostrSettingsPanel(
     var confirmLogout by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var relayText by remember(relays) { mutableStateOf(relays.joinToString("\n")) }
-    EInkPanel(title = "Nostr") {
+    EInkPanel(title = tr("Nostr")) {
         if (account == null) {
-            SettingRow("Account", note = "Log in with a signer app or nsec") {
-                EInkChip(text = "LOG IN", selected = true, onClick = onLogin)
+            SettingRow(tr("Account"), note = tr("Log in with a signer app or nsec")) {
+                EInkChip(text = tr("LOG IN"), selected = true, onClick = onLogin)
             }
         } else {
             val npub = Nip19.npub(account.pubkey)
             SettingRow(
                 npub.take(12) + "…" + npub.takeLast(6),
-                note = when (account.type) { SignerType.AMBER -> "Signed by your signer app"; SignerType.BUNKER -> "Signed by your remote signer (bunker)"; else -> "Key encrypted on this device" }
+                note = when (account.type) { SignerType.AMBER -> tr("Signed by your signer app"); SignerType.BUNKER -> tr("Signed by your remote signer (bunker)"); else -> tr("Key encrypted on this device") }
             ) {
-                EInkChip(text = if (confirmLogout) "SURE?" else "LOG OUT", selected = confirmLogout, onClick = {
+                EInkChip(text = if (confirmLogout) tr("SURE?") else tr("LOG OUT"), selected = confirmLogout, onClick = {
                     if (confirmLogout) onLogout() else confirmLogout = true
                 })
             }
             if (confirmLogout && account.type == SignerType.LOCAL) {
                 Text(
-                    text = "Logging out deletes the key from this phone. Make sure you saved your nsec.",
+                    text = tr("Logging out deletes the key from this phone. Make sure you saved your nsec."),
                     color = EInk.Alert, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
             }
         }
         if (account != null) {
-            SettingRow("Phone notifications", note = "Replies, zaps and messages, checked every refresh interval") {
+            SettingRow(tr("Phone notifications"), note = tr("Replies, zaps and messages, checked every refresh interval")) {
                 EInkSwitch(checked = pushEnabled, onCheckedChange = onPushChange)
             }
         }
         if (account != null) {
-            SettingRow("More Nostr settings", note = "Accounts, notification types, media servers, inbox, your key") {
+            SettingRow(tr("More Nostr settings"), note = tr("Accounts, notification types, media servers, inbox, your key")) {
                 EInkChip(text = "OPEN", selected = false, onClick = onOpenNostrSettings)
             }
         }
         if (account != null) {
-            SettingRow("Wallet (NWC)", note = if (walletConnected) "Zaps pay in one tap" else "Zap without leaving the app") {
+            SettingRow(tr("Wallet (NWC)"), note = if (walletConnected) tr("Zaps pay in one tap") else tr("Zap without leaving the app")) {
                 EInkChip(
-                    text = if (walletConnected) "DISCONNECT" else "CONNECT",
+                    text = if (walletConnected) tr("DISCONNECT") else tr("CONNECT"),
                     selected = !walletConnected,
                     onClick = { if (walletConnected) onDisconnectWallet() else walletDialog = true }
                 )
             }
         }
-        SettingRow("Community rules", note = "What isn't allowed; mute and report") {
+        SettingRow(tr("Community rules"), note = tr("What isn't allowed; mute and report")) {
             EInkChip(text = "OPEN", selected = false, onClick = onOpenRules)
         }
-        SettingRow("Relays", note = relaySummary ?: "${relays.size} relays") {
+        SettingRow(tr("Relays"), note = relaySummary ?: tr("{0} relays", relays.size)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                EInkChip(text = "STATUS", selected = false, onClick = onOpenRelays)
+                EInkChip(text = tr("STATUS"), selected = false, onClick = onOpenRelays)
                 EInkChip(text = if (editing) "CLOSE" else "EDIT", selected = editing, onClick = { editing = !editing })
             }
         }
@@ -285,10 +296,10 @@ fun NostrSettingsPanel(
                     onRelaysChange(relayText.split('\n', ' ', ',').map { it.trim() }.filter { it.isNotEmpty() })
                     editing = false
                 })
-                EInkChip(text = "DEFAULTS", selected = false, onClick = { onRelaysChange(null); editing = false })
+                EInkChip(text = tr("DEFAULTS"), selected = false, onClick = { onRelaysChange(null); editing = false })
             }
             Text(
-                text = "One wss:// address per line.",
+                text = tr("One wss:// address per line."),
                 color = EInk.Caption, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(top = 4.dp)
             )
@@ -299,10 +310,10 @@ fun NostrSettingsPanel(
         var error by remember { mutableStateOf<String?>(null) }
         com.example.btcwidget.ui.social.BlockDialog(
             onDismiss = { walletDialog = false },
-            title = "Connect a wallet",
-            text = "In your wallet (Alby Hub, Primal, Coinos, Mutiny…) create a Nostr Wallet Connect link and paste it here. " +
+            title = tr("Connect a wallet"),
+            text = tr("In your wallet (Alby Hub, Primal, Coinos, Mutiny…) create a Nostr Wallet Connect link and paste it here. ") +
                 "Set a spending budget there: anyone with this link can spend up to it. It's stored encrypted on this phone.",
-            confirmLabel = "Connect",
+            confirmLabel = tr("Connect"),
             confirmEnabled = uri.isNotBlank(),
             onConfirm = {
                 val e = onConnectWallet(uri)
@@ -312,7 +323,7 @@ fun NostrSettingsPanel(
             OutlinedTextField(
                 value = uri,
                 onValueChange = { uri = it.trim(); error = null },
-                label = { Text("nostr+walletconnect://…") },
+                label = { Text(tr("nostr+walletconnect://…")) },
                 singleLine = true,
                 isError = error != null,
                 visualTransformation = PasswordVisualTransformation(),
@@ -420,7 +431,7 @@ private fun StackInput(stackSats: Long, stackUnit: StackUnit, onStackChange: (Lo
     }
     if (invalid) {
         Text(
-            text = if (unit == StackUnit.BTC) "Up to 8 decimals, max 21,000,000" else "Whole sats only",
+            text = if (unit == StackUnit.BTC) tr("Up to 8 decimals, max 21,000,000") else tr("Whole sats only"),
             color = EInk.Alert,
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,

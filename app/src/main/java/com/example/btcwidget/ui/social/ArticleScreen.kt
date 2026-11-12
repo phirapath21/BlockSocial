@@ -67,12 +67,12 @@ fun ArticleScreen(vm: SocialViewModel, naddr: String, navigate: (NavKey) -> Unit
     // Unit until loaded, then the article or null if no relay had it.
     val loaded by produceState<Any?>(Unit, address) { value = address?.let { vm.article(it) } }
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar("Article", onBack)
+        SocialTopBar(tr("Article"), onBack)
         SocialScaffold(vm, navigate) { actions ->
             when (val a = loaded) {
                 Unit -> Spinner(Modifier.padding(top = 40.dp))
                 is Article -> ArticleBody(vm, a, stats[a.event.id] ?: NoteStats(), actions, navigate)
-                else -> EmptyNote("This article couldn't be found on your relays.")
+                else -> EmptyNote(tr("This article couldn't be found on your relays."))
             }
         }
     }
@@ -140,7 +140,7 @@ private fun ArticleBody(vm: SocialViewModel, article: Article, stats: NoteStats,
         }
         if (highlights.isNotEmpty()) item(key = "highlights") {
             HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 16.dp))
-            Text("Highlights", color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+            Text(tr("Highlights"), color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
             highlights.take(30).forEach { h ->
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Avatar(profiles[h.event.pubkey], h.event.pubkey, size = 28, onClick = { actions.openProfile(h.event.pubkey) })
@@ -157,7 +157,7 @@ private fun ArticleBody(vm: SocialViewModel, article: Article, stats: NoteStats,
         }
         item(key = "end") {
             Text(
-                "Long-press a paragraph to highlight it.", color = EInk.Caption, fontSize = 12.sp,
+                tr("Long-press a paragraph to highlight it."), color = EInk.Caption, fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
             )
             Spacer(Modifier.padding(bottom = 40.dp))
@@ -165,9 +165,9 @@ private fun ArticleBody(vm: SocialViewModel, article: Article, stats: NoteStats,
     }
     menuFor?.let { text ->
         ActionSheet(onDismiss = { menuFor = null }, actions = listOf(
-            SheetAction(Glyphs.Quote, "Highlight") { highlightNow(text, null) },
-            SheetAction(Glyphs.Comment, "Highlight with a comment") { commentFor = text },
-            SheetAction(Glyphs.Copy, "Copy text") {
+            SheetAction(Glyphs.Quote, tr("Highlight")) { highlightNow(text, null) },
+            SheetAction(Glyphs.Comment, tr("Highlight with a comment")) { commentFor = text },
+            SheetAction(Glyphs.Copy, tr("Copy text")) {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
                     .setPrimaryClip(android.content.ClipData.newPlainText("text", text))
             }
@@ -181,12 +181,12 @@ private fun ArticleBody(vm: SocialViewModel, article: Article, stats: NoteStats,
     commentFor?.let { text ->
         var comment by remember { mutableStateOf("") }
         BlockDialog(
-            onDismiss = { commentFor = null }, title = "Highlight with a comment",
+            onDismiss = { commentFor = null }, title = tr("Highlight with a comment"),
             text = "“" + text.take(160) + (if (text.length > 160) "…" else "") + "”",
-            confirmLabel = "Highlight", confirmEnabled = comment.isNotBlank(),
+            confirmLabel = tr("Highlight"), confirmEnabled = comment.isNotBlank(),
             onConfirm = { commentFor = null; highlightNow(text, comment) }
         ) {
-            androidx.compose.material3.OutlinedTextField(value = comment, onValueChange = { comment = it.take(500) }, placeholder = { Text("Your comment") }, modifier = Modifier.fillMaxWidth())
+            androidx.compose.material3.OutlinedTextField(value = comment, onValueChange = { comment = it.take(500) }, placeholder = { Text(tr("Your comment")) }, modifier = Modifier.fillMaxWidth())
         }
     }
 }

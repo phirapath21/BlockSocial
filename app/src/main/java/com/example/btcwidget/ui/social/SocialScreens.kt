@@ -86,7 +86,7 @@ fun SocialTopBar(title: String, onBack: () -> Unit) {
                 color = EInk.Value,
                 fontSize = 22.sp,
                 modifier = Modifier
-                    .clickable(onClickLabel = "Back", onClick = onBack)
+                    .clickable(onClickLabel = tr("Back"), onClick = onBack)
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
             Text(title, color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -187,7 +187,7 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                         when {
                             home.loading && home.items.isEmpty() -> Spinner(Modifier.padding(top = 40.dp))
                             shown.isEmpty() && !home.loading -> LazyColumn(Modifier.fillMaxSize()) {
-                                item { EmptyNote(home.error ?: "Nothing here yet. Follow people to fill your timeline, or write your first note.") }
+                                item { EmptyNote(home.error ?: tr("Nothing here yet. Follow people to fill your timeline, or write your first note.")) }
                             }
                             else -> NoteList(
                                 items = shown, stats = stats, actions = actions, state = listState,
@@ -205,7 +205,7 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                             .padding(top = 12.dp)
                             .clip(RoundedCornerShape(50))
                             .background(EInk.Value)
-                            .clickable(onClickLabel = "Show new posts") {
+                            .clickable(onClickLabel = tr("Show new posts")) {
                                 vm.showNewPosts()
                                 scope.launch { listState.animateScrollToItem(0) }
                             }
@@ -215,7 +215,7 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                             Box(Modifier.padding(end = 2.dp)) { Avatar(actions.profileOf(item.note.pubkey), item.note.pubkey, size = 20) }
                         }
                         Text(
-                            "  ↑ ${newPosts.size} new post" + if (newPosts.size == 1) "" else "s",
+                            tr("  ↑ {0} new post{1}", newPosts.size, plural(newPosts.size)),
                             color = EInk.Background, fontSize = 13.sp, fontWeight = FontWeight.Bold
                         )
                     }
@@ -272,12 +272,12 @@ private fun WelcomeScreen(vm: SocialViewModel, actions: NoteActions, onLogin: ()
     val feed by produceState<List<FeedItem>?>(null) { value = vm.hashtagFeed("bitcoin") }
     NoteList(items = feed.orEmpty(), stats = stats, actions = actions, header = {
         Column(Modifier.fillMaxWidth().padding(20.dp)) {
-            Text("Bitcoin people, on Nostr", color = EInk.Value, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text(tr("Bitcoin people, on Nostr"), color = EInk.Value, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Text(
-                "An open social network with no company in charge. Your account is a key you own; post, follow, reply and zap sats.",
+                tr("An open social network with no company in charge. Your account is a key you own; post, follow, reply and zap sats."),
                 color = EInk.Label, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp, bottom = 14.dp)
             )
-            PillButton("Log in or create account", onClick = onLogin)
+            PillButton(tr("Log in or create account"), onClick = onLogin)
             Text("#bitcoin right now", color = EInk.Caption, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp))
         }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
@@ -298,14 +298,14 @@ fun NotificationsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     SocialScaffold(vm, navigate) { actions ->
         Column(Modifier.fillMaxSize()) {
             if (account == null) {
-                EmptyNote("Log in to see replies, likes, reposts and zaps.")
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { PillButton("Log in", onClick = { navigate(LoginKey) }) }
+                EmptyNote(tr("Log in to see replies, likes, reposts and zaps."))
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { PillButton(tr("Log in"), onClick = { navigate(LoginKey) }) }
                 return@Column
             }
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refreshNotifications, modifier = Modifier.fillMaxSize()) {
                 when {
                     state.loading -> Spinner(Modifier.padding(top = 40.dp))
-                    state.items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) { item { EmptyNote(state.error ?: "No notifications yet.") } }
+                    state.items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) { item { EmptyNote(state.error ?: tr("No notifications yet.")) } }
                     else -> {
                         val groups = remember(state.items) { NotificationGroup.of(state.items) }
                         LazyColumn(state = vm.listState("notifications"), modifier = Modifier.fillMaxSize()) {
@@ -395,23 +395,23 @@ private fun formatSats(sats: Long): String = "%,d".format(sats)
 private fun FeedHeader(feed: com.example.btcwidget.nostr.core.HomeFeed, open: Boolean, onShorts: () -> Unit, onOpen: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(
-            Modifier.weight(1f).clickable(onClickLabel = "Choose feed", onClick = onOpen).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
+            Modifier.weight(1f).clickable(onClickLabel = tr("Choose feed"), onClick = onOpen).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
         ) {
-            Text(feed.title + if (open) "  ⌃" else "  ⌄", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(feed.subtitle, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(feedTitle(feed) + if (open) "  ⌃" else "  ⌄", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(feedSubtitle(feed), color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         // Videos one at a time, full screen (Shorts). Stands out on a Videos feed.
         val videos = (feed as? com.example.btcwidget.nostr.core.HomeFeed.Media)?.videos == true
         Row(
             Modifier.padding(end = 12.dp).clip(RoundedCornerShape(50))
                 .background(if (videos) androidx.compose.ui.graphics.Color(0xFFF7931A) else EInk.Body)
-                .clickable(onClickLabel = "Watch videos full screen", onClick = onShorts)
+                .clickable(onClickLabel = tr("Watch videos full screen"), onClick = onShorts)
                 .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val ink = if (videos) androidx.compose.ui.graphics.Color.Black else EInk.Value
             androidx.compose.material3.Icon(Glyphs.Play, contentDescription = null, tint = ink, modifier = Modifier.size(18.dp))
-            Text("Shorts", color = ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(tr("Shorts"), color = ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
@@ -434,7 +434,7 @@ private fun FeedMenu(vm: SocialViewModel, onClose: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(f.title, color = EInk.Value, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(feedTitle(f), color = EInk.Value, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(f.subtitle, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (editing) {
@@ -447,11 +447,11 @@ private fun FeedMenu(vm: SocialViewModel, onClose: () -> Unit) {
             if (editing) AddFeed(vm, feeds)
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    if (editing) "Done" else "Edit", color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                    if (editing) tr("Done") else tr("Edit"), color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.clickable { editing = !editing }.padding(8.dp)
                 )
-                if (editing) Text("Reset", color = EInk.Caption, fontSize = 16.sp, modifier = Modifier.clickable { vm.resetFeeds() }.padding(8.dp))
-                Text("Close", color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onClose).padding(8.dp))
+                if (editing) Text(tr("Reset"), color = EInk.Caption, fontSize = 16.sp, modifier = Modifier.clickable { vm.resetFeeds() }.padding(8.dp))
+                Text(tr("Close"), color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onClose).padding(8.dp))
             }
         }
     }
@@ -472,7 +472,7 @@ private fun AddFeed(vm: SocialViewModel, existing: List<com.example.btcwidget.no
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
-        Text("Add a feed", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(tr("Add a feed"), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("#HASHTAG", "RELAY", "DVM").forEachIndexed { i, t ->
                 com.example.btcwidget.ui.main.EInkChip(text = t, selected = kind == i, onClick = { kind = i; input = ""; error = null })
@@ -480,13 +480,13 @@ private fun AddFeed(vm: SocialViewModel, existing: List<com.example.btcwidget.no
         }
         // Built-in feeds that were removed can come back.
         (com.example.btcwidget.nostr.core.HomeFeed.DEFAULTS + com.example.btcwidget.nostr.core.HomeFeed.SUGGESTED).filter { it !in existing }.forEach { f ->
-            Text("+ " + f.title, color = EInk.Value, fontSize = 14.sp, modifier = Modifier.clickable { vm.addFeed(f) }.padding(vertical = 6.dp))
+            Text("+ " + feedTitle(f), color = EInk.Value, fontSize = 14.sp, modifier = Modifier.clickable { vm.addFeed(f) }.padding(vertical = 6.dp))
         }
         if (kind == 2) {
             val services by produceState<List<com.example.btcwidget.nostr.core.Dvm.Service>?>(null) { value = vm.feedServices() }
             when (val l = services) {
                 null -> Spinner()
-                else -> if (l.isEmpty()) Text("No feed services found on your relays.", color = EInk.Caption, fontSize = 13.sp)
+                else -> if (l.isEmpty()) Text(tr("No feed services found on your relays."), color = EInk.Caption, fontSize = 13.sp)
                 else Column(Modifier.heightIn(max = 260.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
                     l.forEach { svc ->
                         Text(
@@ -510,7 +510,7 @@ private fun AddFeed(vm: SocialViewModel, existing: List<com.example.btcwidget.no
             com.example.btcwidget.ui.main.EInkChip(text = "ADD", selected = input.isNotBlank(), onClick = {
                 val feed = if (kind == 0) com.example.btcwidget.nostr.core.HomeFeed.cleanTag(input)?.let { com.example.btcwidget.nostr.core.HomeFeed.Hashtag(it) }
                 else com.example.btcwidget.nostr.core.normalizeRelayUrl(input.trim().let { if (it.startsWith("ws")) it else "wss://$it" })?.let { com.example.btcwidget.nostr.core.HomeFeed.Global(it) }
-                if (feed == null) error = if (kind == 0) "One word, letters and numbers only" else "Not a relay address"
+                if (feed == null) error = if (kind == 0) tr("One word, letters and numbers only") else tr("Not a relay address")
                 else { vm.addFeed(feed); input = "" }
             })
         }
@@ -526,7 +526,7 @@ fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit
     var reload by remember { mutableStateOf(0) }
     val thread by produceState<com.example.btcwidget.nostr.NostrRepository.Thread?>(null, noteId, reload) { value = vm.thread(noteId) }
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar("Post", onBack)
+        SocialTopBar(tr("Post"), onBack)
         SocialScaffold(vm, navigate) { actions ->
             val t = thread
             if (t == null) {
@@ -540,7 +540,7 @@ fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit
                         items(t.replies, key = { "r" + it.event.id }) { row ->
                             NoteCard(row.event, stats[row.event.id] ?: NoteStats(), actions, modifier = Modifier.threadIndent(row.depth))
                         }
-                        if (t.replies.isEmpty()) item { EmptyNote("No replies yet.") }
+                        if (t.replies.isEmpty()) item { EmptyNote(tr("No replies yet.")) }
                     }
                     // Floats over the post and replies, as on X, and rides above the keyboard.
                     ReplyBar(
@@ -588,17 +588,17 @@ fun HashtagScreen(vm: SocialViewModel, tag: String, navigate: (NavKey) -> Unit, 
                 // Follow the topic: its notes join Latest, and other apps see it in your follow list.
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (isFollowed) "Notes with #$tag are in your Latest." else "Follow to see notes with #$tag in your Latest.",
+                        if (isFollowed) tr("Notes with #{0} are in your Latest.", tag) else tr("Follow to see notes with #{0} in your Latest.", tag),
                         color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.weight(1f)
                     )
-                    PillButton(if (isFollowed) "Following" else "Follow", filled = !isFollowed) {
+                    PillButton(if (isFollowed) tr("Following") else tr("Follow"), filled = !isFollowed) {
                         if (account == null) navigate(LoginKey) else vm.followHashtag(tag, !isFollowed)
                     }
                 }
                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
                 when (val f = feed) {
                     null -> Spinner(Modifier.padding(top = 40.dp))
-                    else -> if (f.isEmpty()) EmptyNote("No notes with #$tag yet.")
+                    else -> if (f.isEmpty()) EmptyNote(tr("No notes with #{0} yet.", tag))
                 }
             })
         }
@@ -654,7 +654,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     }
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        if (onBack != null) SocialTopBar(profile?.bestName ?: "Profile", onBack)
+        if (onBack != null) SocialTopBar(profile?.bestName ?: tr("Profile"), onBack)
         if (addToList) AddToListSheet(vm, pubkey, onClose = { addToList = false })
         if (showQr) ProfileQrDialog(vm, pubkey, navigate, onDismiss = { showQr = false })
         if (profileMenu) {
@@ -662,18 +662,18 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
             val name = profile?.bestName ?: Profile.shortNpub(pubkey)
             val loggedIn = account != null
             ActionSheet(onDismiss = { profileMenu = false }, actions = buildList {
-                if (loggedIn && !isMe) add(SheetAction(Glyphs.AddToList, "Add or remove from Lists") { addToList = true })
-                add(SheetAction(Glyphs.Share, "Share profile") { shareProfile(context, pubkey, name) })
-                add(SheetAction(Glyphs.Qr, "QR code") { showQr = true })
-                add(SheetAction(Glyphs.Copy, "Copy npub") {
+                if (loggedIn && !isMe) add(SheetAction(Glyphs.AddToList, tr("Add or remove from Lists")) { addToList = true })
+                add(SheetAction(Glyphs.Share, tr("Share profile")) { shareProfile(context, pubkey, name) })
+                add(SheetAction(Glyphs.Qr, tr("QR code")) { showQr = true })
+                add(SheetAction(Glyphs.Copy, tr("Copy npub")) {
                     (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
                         .setPrimaryClip(android.content.ClipData.newPlainText("npub", Nip19.npub(pubkey)))
-                    android.widget.Toast.makeText(context, "npub copied", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, tr("npub copied"), android.widget.Toast.LENGTH_SHORT).show()
                 })
-                add(SheetAction(Glyphs.Person, "Lists by $name") { navigate(com.example.btcwidget.ListsKey(pubkey)) })
+                add(SheetAction(Glyphs.Person, tr("Lists by {0}", name)) { navigate(com.example.btcwidget.ListsKey(pubkey)) })
                 if (loggedIn && !isMe) {
-                    if (pubkey in muted) add(SheetAction(Glyphs.SoundOn, "Unmute $name") { vm.mute(pubkey, false) })
-                    else add(SheetAction(Glyphs.SoundOff, "Mute $name", destructive = true) { vm.mute(pubkey, true) })
+                    if (pubkey in muted) add(SheetAction(Glyphs.SoundOn, tr("Unmute {0}", name)) { vm.mute(pubkey, false) })
+                    else add(SheetAction(Glyphs.SoundOff, tr("Mute {0}", name), destructive = true) { vm.mute(pubkey, true) })
                 }
             })
         }
@@ -711,20 +711,20 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         actions = actions
                     )
                     BadgesRow(badges)
-                    FeedTabs(listOf("Posts", "Replies", "Media", "Articles"), selected = tab) { tab = it }
+                    FeedTabs(listOf(tr("Posts"), tr("Replies"), tr("Media"), tr("Articles")), selected = tab) { tab = it }
                     pinnedNote?.takeIf { tab == 0 }?.let { pin ->
-                        Text("📌 Pinned", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 8.dp))
+                        Text(tr("📌 Pinned"), color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 8.dp))
                         NoteCard(pin, stats[pin.id] ?: NoteStats(), actions)
                     }
                     val loaded = items
                     if (tab == 3) {
                         val list = articles
                         if (list == null) Spinner()
-                        else if (list.isEmpty()) EmptyNote("No articles yet.")
+                        else if (list.isEmpty()) EmptyNote(tr("No articles yet."))
                         else list.forEach { ArticleRow(it, onClick = { actions.openArticle(com.example.btcwidget.nostr.core.Nip19.Address(it.event.kind, it.pubkey, it.identifier)) }) }
                     }
                     else if (loaded == null) Spinner()
-                    else if (shown.isEmpty()) EmptyNote(listOf("No posts yet.", "No replies yet.", "No photos yet.")[tab] + if (!end && loaded.isNotEmpty()) " Scroll loads older notes." else "")
+                    else if (shown.isEmpty()) EmptyNote(listOf("No posts yet.", "No replies yet.", "No photos yet.")[tab] + if (!end && loaded.isNotEmpty()) tr(" Scroll loads older notes.") else "")
                 }
             )
         }
@@ -767,14 +767,14 @@ private fun ProfileHeader(
         Row(Modifier.fillMaxWidth().padding(top = 8.dp, end = 14.dp), horizontalArrangement = Arrangement.End) {
             PillButton("⋯", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onMore)
             when {
-                isMe -> PillButton("Edit profile", filled = false, onClick = onEdit)
-                isMuted -> PillButton("Unmute", filled = false, onClick = onUnmute)
+                isMe -> PillButton(tr("Edit profile"), filled = false, onClick = onEdit)
+                isMuted -> PillButton(tr("Unmute"), filled = false, onClick = onUnmute)
                 else -> {
                     PillButton("✉", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onMessage)
                     if (profile?.lud16 != null || profile?.lud06 != null) {
                         PillButton("⚡", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = { actions.zap(fakeProfileNote(pubkey)) })
                     }
-                    PillButton(if (isFollowing) "Following" else "Follow", filled = !isFollowing, onClick = onFollow)
+                    PillButton(if (isFollowing) tr("Following") else tr("Follow"), filled = !isFollowing, onClick = onFollow)
                 }
             }
         }
@@ -788,7 +788,7 @@ private fun ProfileHeader(
                 )
                 if (followsYou) {
                     Text(
-                        "Follows you", color = EInk.Caption, fontSize = 11.sp,
+                        tr("Follows you"), color = EInk.Caption, fontSize = 11.sp,
                         modifier = Modifier.padding(start = 8.dp).background(EInk.Track, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp)
                     )
                 }
@@ -798,19 +798,19 @@ private fun ProfileHeader(
             profile?.lud16?.let { Text("⚡ $it", color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp)) }
             Row(Modifier.padding(top = 8.dp)) {
                 Text(
-                    (followingCount?.let { compactCount(it) } ?: "…") + " Following",
+                    (followingCount?.let { compactCount(it) } ?: "…") + tr(" Following"),
                     color = EInk.Label, fontSize = 14.sp,
-                    modifier = Modifier.clickable(onClickLabel = "Show who they follow", onClick = onOpenFollowing).padding(end = 18.dp, top = 2.dp, bottom = 2.dp)
+                    modifier = Modifier.clickable(onClickLabel = tr("Show who they follow"), onClick = onOpenFollowing).padding(end = 18.dp, top = 2.dp, bottom = 2.dp)
                 )
                 Text(
-                    "Followers",
+                    tr("Followers"),
                     color = EInk.Label, fontSize = 14.sp,
-                    modifier = Modifier.clickable(onClickLabel = "Show their followers", onClick = onOpenFollowers).padding(end = 18.dp, top = 2.dp, bottom = 2.dp)
+                    modifier = Modifier.clickable(onClickLabel = tr("Show their followers"), onClick = onOpenFollowers).padding(end = 18.dp, top = 2.dp, bottom = 2.dp)
                 )
                 Text(
-                    "Lists",
+                    tr("Lists"),
                     color = EInk.Label, fontSize = 14.sp,
-                    modifier = Modifier.clickable(onClickLabel = "Show their lists", onClick = onOpenLists).padding(vertical = 2.dp)
+                    modifier = Modifier.clickable(onClickLabel = tr("Show their lists"), onClick = onOpenLists).padding(vertical = 2.dp)
                 )
             }
             Text(
@@ -852,7 +852,7 @@ private fun BadgesRow(badges: List<com.example.btcwidget.nostr.core.Badges.Defin
         }
     }
     open?.let { b ->
-        BlockDialog(onDismiss = { open = null }, title = b.name, text = b.description ?: "A badge awarded on Nostr.", dismissLabel = "Close") {
+        BlockDialog(onDismiss = { open = null }, title = b.name, text = b.description ?: "A badge awarded on Nostr.", dismissLabel = tr("Close")) {
             if (b.image != null) coil3.compose.AsyncImage(
                 model = b.image, contentDescription = b.name, contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp)

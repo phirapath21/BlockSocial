@@ -24,9 +24,9 @@ fun DrawerAccountHeader(vm: SocialViewModel, onLogin: () -> Unit, navigate: (and
     val me = account?.pubkey
     if (me == null) {
         Column {
-            Text("Block", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("Log in to post, follow and zap.", color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
-            PillButton("Log in", onClick = onLogin)
+            Text(tr("Block"), color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(tr("Log in to post, follow and zap."), color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+            PillButton(tr("Log in"), onClick = onLogin)
         }
         return
     }
@@ -45,7 +45,7 @@ fun DrawerAccountHeader(vm: SocialViewModel, onLogin: () -> Unit, navigate: (and
             handleText(profile, me),
             color = EInk.Caption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
         )
-        Text("${compactCount(following.size)} Following", color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+        Text(tr("{0} Following", compactCount(following.size)), color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
     }
 }
 

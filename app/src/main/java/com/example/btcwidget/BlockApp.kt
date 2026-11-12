@@ -19,6 +19,7 @@ class BlockApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         registerActivityLifecycleCallbacks(RelaySleeper)
+        com.example.btcwidget.ui.social.Lang.load(this)
     }
 
     /**

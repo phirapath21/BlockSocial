@@ -64,7 +64,7 @@ internal fun LiveList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val list by produceState<List<LiveStreams.Live>?>(null) { value = vm.liveStreams() }
     when (val l = list) {
         null -> Spinner(Modifier.padding(top = 30.dp))
-        else -> if (l.isEmpty()) EmptyNote("Nobody is streaming on your relays right now.") else LazyColumn(Modifier.fillMaxSize()) {
+        else -> if (l.isEmpty()) EmptyNote(tr("Nobody is streaming on your relays right now.")) else LazyColumn(Modifier.fillMaxSize()) {
             items(l, key = { it.address }) { live -> LiveRow(live, profiles[live.host]) { navigate(LiveKey(live.address)) } }
         }
     }
@@ -113,11 +113,11 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
     }
     SpaceChat(
         vm, navigate, onBack,
-        title = live?.title ?: "Live",
-        note = if (loaded == null) "This stream couldn't be found on your relays." else "Live chat: messages are public.",
+        title = live?.title ?: tr("Live"),
+        note = if (loaded == null) tr("This stream couldn't be found on your relays.") else tr("Live chat: messages are public."),
         messages = if (loaded == null) emptyList() else messages,
         pinned = live?.let { l -> { LivePlayer(l, profiles[l.host]) { navigate(ProfileKey(l.host)) } } },
-        onSend = { text, done -> live?.let { vm.sendLiveChat(it, text) { ok -> done(if (ok) null else "Couldn't send") } } ?: done("Still loading") }
+        onSend = { text, done -> live?.let { vm.sendLiveChat(it, text) { ok -> done(if (ok) null else tr("Couldn't send")) } } ?: done(tr("Still loading")) }
     )
 }
 
@@ -151,7 +151,7 @@ private fun LivePlayer(live: LiveStreams.Live, host: Profile?, onHost: () -> Uni
                     player.addListener(l)
                     onDispose { player.removeListener(l) }
                 }
-                if (!PipVideo.inPip) VideoSurface(player, Modifier.fillMaxSize().clickable(onClickLabel = if (playing) "Pause" else "Play") { PipVideo.togglePlay() })
+                if (!PipVideo.inPip) VideoSurface(player, Modifier.fillMaxSize().clickable(onClickLabel = if (playing) tr("Pause") else tr("Play")) { PipVideo.togglePlay() })
                 LiveBadge(Modifier.align(Alignment.TopStart).padding(10.dp))
                 if (!playing) Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
                     Icon(Glyphs.Play, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))

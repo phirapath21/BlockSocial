@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.main
 
+import com.example.btcwidget.ui.social.tr
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -81,7 +82,7 @@ fun PriceChartPanel(
                     text = when {
                         pick != null -> price(pick.price)
                         summary != null -> price(summary.last)
-                        else -> "BTC PRICE"
+                        else -> tr("BTC PRICE")
                     },
                     color = EInk.Value,
                     fontSize = 16.sp,
@@ -95,7 +96,7 @@ fun PriceChartPanel(
                             BlockclockMetrics.formatChange(summary.changePct),
                             "past ${if (range == ChartRange.DAY) "24 hours" else "7 days"}"
                         ).joinToString(" · ")
-                        else -> "History appears after the first refresh"
+                        else -> tr("History appears after the first refresh")
                     },
                     color = EInk.Caption,
                     fontSize = 10.sp,
@@ -112,7 +113,7 @@ fun PriceChartPanel(
 
         if (summary == null) return@Column
 
-        val description = "BTC price, past ${range.label}: from ${price(summary.first)} to ${price(summary.last)}, " +
+        val description = tr("BTC price, past {0}: from {1} to {2}, ", range.label, price(summary.first), price(summary.last)) +
             "high ${price(summary.high)}, low ${price(summary.low)}"
 
         Canvas(
@@ -184,7 +185,7 @@ fun PriceChartPanel(
             ChartStat("L", price(summary.low))
             Spacer(modifier = Modifier.weight(1f))
             if (currency != "USD") {
-                Text("Converted from USD", color = EInk.Caption, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                Text(tr("Converted from USD"), color = EInk.Caption, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
             }
         }
     }

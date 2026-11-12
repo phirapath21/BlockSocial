@@ -101,11 +101,11 @@ fun ImageViewer(
 
     fun save() = scope.launch {
         val result = ImageSaver.save(context, current)
-        Toast.makeText(context, if (result.isSuccess) "Saved to Pictures/Block" else "Couldn't save the image", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, if (result.isSuccess) tr("Saved to Pictures/Block") else tr("Couldn't save the image"), Toast.LENGTH_SHORT).show()
     }
     // Only Android 9 and below need a permission to save.
     val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) save() else Toast.makeText(context, "Storage permission is needed to save", Toast.LENGTH_SHORT).show()
+        if (granted) save() else Toast.makeText(context, tr("Storage permission is needed to save"), Toast.LENGTH_SHORT).show()
     }
 
     val author = actions.profileOf(note.pubkey)
@@ -185,11 +185,11 @@ fun ImageViewer(
                 Box {
                     RoundIcon(Glyphs.More, "More options") { menu = true }
                     if (menu) ActionSheet(onDismiss = { menu = false }, actions = buildList {
-                        if (!video) add(SheetAction(Glyphs.Download, "Save image") {
+                        if (!video) add(SheetAction(Glyphs.Download, tr("Save image")) {
                             if (ImageSaver.needsPermission) storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else save()
                         })
-                        add(SheetAction(Glyphs.OpenInBrowser, "Open in browser") { uriHandler.openUri(current) })
-                        add(SheetAction(Glyphs.Link, "Copy link") {
+                        add(SheetAction(Glyphs.OpenInBrowser, tr("Open in browser")) { uriHandler.openUri(current) })
+                        add(SheetAction(Glyphs.Link, tr("Copy link")) {
                             (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
                                 .setPrimaryClip(android.content.ClipData.newPlainText("link", current))
                         })
@@ -220,12 +220,12 @@ fun ImageViewer(
                     }
                     if (!isMe) {
                         Text(
-                            if (following) "Following" else "Follow",
+                            if (following) tr("Following") else tr("Follow"),
                             color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
                                 .background(ButtonFill)
-                                .clickable(onClickLabel = if (following) "Unfollow" else "Follow") { actions.follow(note.pubkey, !following) }
+                                .clickable(onClickLabel = if (following) tr("Unfollow") else tr("Follow")) { actions.follow(note.pubkey, !following) }
                                 .padding(horizontal = 18.dp, vertical = 9.dp)
                         )
                     }
@@ -235,7 +235,7 @@ fun ImageViewer(
                         caption, color = OnDark, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .padding(top = 10.dp)
-                            .clickable(onClickLabel = "Open post") { onDismiss(); actions.openNote(note) }
+                            .clickable(onClickLabel = tr("Open post")) { onDismiss(); actions.openNote(note) }
                     )
                 }
                 // While replying, as on X: the photo, author and text stay; the buttons make way.
@@ -314,7 +314,7 @@ private fun ZoomableImage(url: String, blurhash: String?, onZoom: (Boolean) -> U
     AsyncImage(
         model = url,
         placeholder = blur,
-        contentDescription = "Image",
+        contentDescription = tr("Image"),
         contentScale = ContentScale.Fit,
         modifier = Modifier
             .fillMaxSize()

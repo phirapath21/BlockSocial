@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.main
 
+import com.example.btcwidget.ui.social.tr
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,17 +50,17 @@ fun AlertsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp)
     ) {
-        HeaderSection(title = "ALERTS", subtitle = "Get notified on a crossing")
+        HeaderSection(title = tr("ALERTS"), subtitle = tr("Get notified on a crossing"))
 
         if (data != null) {
-            EInkPanel(title = "Now") {
+            EInkPanel(title = tr("Now")) {
                 NowLine("BTC", PriceAlerts.formatPrice(PriceAlerts.price(data, currencySetting), currencySetting))
                 NowLine("Fastest fee", "${data.feeFastest} sat/vB")
             }
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        EInkPanel(title = "Price") {
+        EInkPanel(title = tr("Price")) {
             alerts.filter { it.kind == AlertKind.PRICE_ABOVE || it.kind == AlertKind.PRICE_BELOW }.forEach { rule ->
                 AlertRow(rule = rule, currency = currencySetting, onChange = onAlertChange)
             }
@@ -67,7 +68,7 @@ fun AlertsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        EInkPanel(title = "Fees") {
+        EInkPanel(title = tr("Fees")) {
             alerts.filter { it.kind == AlertKind.FEE_AT_OR_BELOW }.forEach { rule ->
                 AlertRow(rule = rule, currency = currencySetting, onChange = onAlertChange)
             }
@@ -75,7 +76,7 @@ fun AlertsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        EInkPanel(title = "Network events") {
+        EInkPanel(title = tr("Network events")) {
             alerts.filter { it.kind.isNetworkEvent }.forEach { rule ->
                 NetworkEventRow(rule = rule, data = data, onChange = onAlertChange)
             }
@@ -84,10 +85,10 @@ fun AlertsScreen(
         val blocked = alerts.any { it.enabled } && !notificationsAllowed
         Text(
             text = if (blocked) {
-                "Notifications are off for Block. Allow them in system settings to get alerts."
+                tr("Notifications are off for Block. Allow them in system settings to get alerts.")
             } else {
-                "Checked with each background refresh (every $refreshInterval min). " +
-                    "One notification each time a line is crossed."
+                tr("Checked with each background refresh (every {0} min). ", refreshInterval) +
+                    tr("One notification each time a line is crossed.")
             },
             color = if (blocked) EInk.Alert else EInk.Caption,
             fontSize = 10.sp,
@@ -153,7 +154,7 @@ private fun AlertRow(rule: AlertRule, currency: String, onChange: (AlertRule) ->
                 singleLine = true,
                 placeholder = { Text(if (isFee) "e.g. 5" else "e.g. 100000", fontFamily = FontFamily.Monospace) },
                 prefix = if (isFee) null else ({ Text(if (ruleCurrency == "THB") "฿" else "$", fontFamily = FontFamily.Monospace) }),
-                suffix = if (isFee) ({ Text("sat/vB", fontFamily = FontFamily.Monospace) }) else null,
+                suffix = if (isFee) ({ Text(tr("sat/vB"), fontFamily = FontFamily.Monospace) }) else null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = EInk.Value),
                 colors = OutlinedTextFieldDefaults.colors(

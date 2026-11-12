@@ -34,6 +34,7 @@ object AppPrefs {
     private const val LANDING_DONE = "landing_done"
     private const val LINKS_IN_APP = "links_in_app"
     private const val PRIVATE_LISTS = "private_lists"
+    private const val LANGUAGE = "language"
     private fun modeEnabled(mode: Int) = "mode_enabled_$mode"
     private fun widgetMode(id: Int) = "mode_$id"
     private fun halvingMode(id: Int) = "halving_mode_$id"
@@ -73,6 +74,12 @@ object AppPrefs {
     /** Default video quality: a [com.example.btcwidget.ui.social.VideoQuality] name. */
     fun videoQuality(context: Context): String? = prefs(context).getString(VIDEO_QUALITY, null)
     fun setVideoQuality(context: Context, value: String) = edit(context) { putString(VIDEO_QUALITY, value) }
+
+    /** The app's language: a [com.example.btcwidget.ui.social.Lang.Choice] name (the phone's by default). */
+    fun language(context: Context): com.example.btcwidget.ui.social.Lang.Choice =
+        com.example.btcwidget.ui.social.Lang.Choice.entries.firstOrNull { it.name == prefs(context).getString(LANGUAGE, null) }
+            ?: com.example.btcwidget.ui.social.Lang.Choice.SYSTEM
+    fun setLanguage(context: Context, value: com.example.btcwidget.ui.social.Lang.Choice) = edit(context) { putString(LANGUAGE, value.name) }
 
     fun currency(context: Context): String = prefs(context).getString(CURRENCY, "USD") ?: "USD"
     fun setCurrency(context: Context, value: String) = edit(context) { putString(CURRENCY, value) }

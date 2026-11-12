@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.main
 
+import com.example.btcwidget.ui.social.tr
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -57,12 +58,12 @@ fun DashboardContent(
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item(key = "header") { HeaderSection(title = "BLOCK", subtitle = "Bitcoin at a glance") }
+        item(key = "header") { HeaderSection(title = "BLOCK", subtitle = tr("Bitcoin at a glance")) }
 
         if (!data.lastFetchSuccessful) {
             item(key = "offline") {
                 Text(
-                    text = "OFFLINE · SHOWING CACHED DATA",
+                    text = tr("OFFLINE · SHOWING CACHED DATA"),
                     color = EInk.Alert,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
@@ -90,7 +91,7 @@ fun DashboardContent(
         if (hero in ShareText.SHAREABLE) {
             item(key = "share") {
                 Text(
-                    text = "SHARE ›",
+                    text = tr("SHARE ›"),
                     color = EInk.Value,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
@@ -99,7 +100,7 @@ fun DashboardContent(
                     textAlign = TextAlign.End,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(onClickLabel = "Share ${BlockclockMetrics.MODE_NAMES.getOrElse(BlockclockMetrics.MODE_KEYS.indexOf(hero)) { hero }}") { onShare(hero) }
+                        .clickable(onClickLabel = tr("Share {0}", BlockclockMetrics.MODE_NAMES.getOrElse(BlockclockMetrics.MODE_KEYS.indexOf(hero)) { hero })) { onShare(hero) }
                         .padding(vertical = 6.dp, horizontal = 4.dp)
                 )
             }
@@ -135,7 +136,7 @@ fun DashboardContent(
         item(key = "updated") {
             val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
             Text(
-                text = "LAST UPDATED ${formatter.format(Date(data.timestamp))}",
+                text = tr("LAST UPDATED {0}", formatter.format(Date(data.timestamp))),
                 color = EInk.Caption,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,

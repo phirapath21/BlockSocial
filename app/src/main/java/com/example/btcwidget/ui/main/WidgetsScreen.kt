@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.main
 
+import com.example.btcwidget.ui.social.tr
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
@@ -91,10 +92,10 @@ fun WidgetsScreen(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        fullWidth("header") { HeaderSection(title = "WIDGETS", subtitle = "On your home screen") }
+        fullWidth("header") { HeaderSection(title = tr("WIDGETS"), subtitle = tr("On your home screen")) }
 
         fullWidth("how_to") {
-            EInkPanel(title = "Add a widget") {
+            EInkPanel(title = tr("Add a widget")) {
                 Step(1, "Long-press an empty spot on your home screen.")
                 Step(2, "Open Widgets and find Block.")
                 Step(3, "Drag Bitcoin metrics, Price chart, Halving countdown or Bitcoin quotes onto the screen.")
@@ -110,9 +111,9 @@ fun WidgetsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f).padding(start = 4.dp, end = 8.dp)) {
-                    SectionLabel("On the widget · $onCount of ${visibleKeys.size}")
+                    SectionLabel(tr("On the widget · {0} of {1}", onCount, visibleKeys.size))
                     Text(
-                        text = "Switch metrics on or off. Hold and drag to set the order taps cycle through.",
+                        text = tr("Switch metrics on or off. Hold and drag to set the order taps cycle through."),
                         color = EInk.Caption,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
@@ -139,7 +140,7 @@ fun WidgetsScreen(
         if (data == null) {
             fullWidth("no_data") {
                 Text(
-                    text = "Metrics appear after the first refresh.",
+                    text = tr("Metrics appear after the first refresh."),
                     color = EInk.Label,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
@@ -156,7 +157,7 @@ fun WidgetsScreen(
 
             fullWidth("section_${category.name}") {
                 CategoryHeader(
-                    title = category.title,
+                    title = tr(category.title),
                     count = keys.size,
                     collapsed = collapsed,
                     onClick = { onToggleCategory(category) }
@@ -235,7 +236,7 @@ private fun WidgetToggle(on: Boolean, onToggle: (Boolean) -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (on) "ON WIDGET" else "OFF WIDGET",
+            text = if (on) tr("ON WIDGET") else tr("OFF WIDGET"),
             color = if (on) EInk.Label else EInk.Caption,
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,

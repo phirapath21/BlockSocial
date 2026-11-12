@@ -186,9 +186,9 @@ fun SocialScaffold(
     }
     deleteTarget?.let { note ->
         ConfirmDialog(
-            title = "Delete post?",
-            text = "Relays are asked to delete it, and it's removed from your profile and timelines. Copies others already saved may remain.",
-            confirmLabel = "Delete",
+            title = tr("Delete post?"),
+            text = tr("Relays are asked to delete it, and it's removed from your profile and timelines. Copies others already saved may remain."),
+            confirmLabel = tr("Delete"),
             onConfirm = { deleteTarget = null; vm.delete(note) },
             onDismiss = { deleteTarget = null }
         )
@@ -202,8 +202,8 @@ private fun ZapDialog(recipientName: String, inApp: Boolean, onDismiss: () -> Un
     val sats = amount.toLongOrNull()?.takeIf { it > 0 }
     BlockDialog(
         onDismiss = onDismiss,
-        title = "Zap $recipientName",
-        confirmLabel = sats?.let { "Zap ${"%,d".format(it)} sats" } ?: "Zap",
+        title = tr("Zap {0}", recipientName),
+        confirmLabel = sats?.let { "Zap ${"%,d".format(it)} sats" } ?: tr("Zap"),
         confirmEnabled = sats != null,
         onConfirm = { sats?.let { onZap(it, comment) } }
     ) {
@@ -221,7 +221,7 @@ private fun ZapDialog(recipientName: String, inApp: Boolean, onDismiss: () -> Un
         OutlinedTextField(
             value = amount,
             onValueChange = { v -> amount = v.filter { it.isDigit() }.take(9) },
-            label = { Text("Sats") },
+            label = { Text(tr("Sats")) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
@@ -229,12 +229,12 @@ private fun ZapDialog(recipientName: String, inApp: Boolean, onDismiss: () -> Un
         OutlinedTextField(
             value = comment,
             onValueChange = { comment = it.take(140) },
-            label = { Text("Comment (optional)") },
+            label = { Text(tr("Comment (optional)")) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
         Text(
-            if (inApp) "Pays from your connected wallet (NWC)." else "Opens your Lightning wallet to pay. Connect a wallet in Settings › Nostr to zap in one tap.",
+            if (inApp) tr("Pays from your connected wallet (NWC).") else tr("Opens your Lightning wallet to pay. Connect a wallet in Settings › Nostr to zap in one tap."),
             color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)
         )
     }
@@ -248,10 +248,10 @@ private fun ReportDialog(onDismiss: () -> Unit, onReport: (String) -> Unit) {
     val reasons = listOf("spam" to "Spam", "nudity" to "Nudity", "profanity" to "Hateful or abusive", "illegal" to "Illegal", "impersonation" to "Impersonation", "other" to "Other")
     BlockDialog(
         onDismiss = onDismiss,
-        title = "Report post",
-        text = "Why are you reporting it? The report is public and goes to your relays (NIP-56)."
+        title = tr("Report post"),
+        text = tr("Why are you reporting it? The report is public and goes to your relays (NIP-56).")
     ) {
-        reasons.forEach { (code, label) -> ChoiceRow(label) { onReport(code) } }
+        reasons.forEach { (code, label) -> ChoiceRow(tr(label)) { onReport(code) } }
     }
 }
 
@@ -263,7 +263,7 @@ fun payInvoice(context: Context, invoice: String) {
     } else {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("Lightning invoice", invoice))
-        Toast.makeText(context, "No Lightning wallet found. Invoice copied.", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, tr("No Lightning wallet found. Invoice copied."), Toast.LENGTH_LONG).show()
     }
 }
 

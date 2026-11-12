@@ -41,6 +41,8 @@ class MainActivity : ComponentActivity() {
     SignerBridge.launch = { signerLauncher.launch(it) }
     intent?.getStringExtra(com.example.btcwidget.nostr.NostrBackground.EXTRA_OPEN_TAB)?.let { OpenTabRequest.tab.value = it }
     EInk.theme = AppPrefs.theme(this)
+    // Again here: the phone's language may have changed since the app started.
+    com.example.btcwidget.ui.social.Lang.load(this)
     // PiP: the stream's own PiP button, and the PiP window's play/pause and mute buttons.
     if (hasPip()) {
       com.example.btcwidget.ui.social.PipVideo.requestPip = {

@@ -98,7 +98,7 @@ fun LiveMiniPlayer(onOpen: (address: String) -> Unit, modifier: Modifier = Modif
                             scope.launch { y.snapTo((y.value + drag.y).coerceIn(0f, constraints.maxHeight - heightPx)) }
                         }
                     }
-                    .clickable(onClickLabel = "Back to the stream") { onOpen(l.address) }
+                    .clickable(onClickLabel = tr("Back to the stream")) { onOpen(l.address) }
             ) {
                 Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)) {
                     // A TextureView: it moves and clips with the window, unlike a SurfaceView.

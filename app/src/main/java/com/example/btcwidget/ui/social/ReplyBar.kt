@@ -103,7 +103,7 @@ fun ReplyBar(
                 if (me != null) Avatar(profiles[me], me, size = 32) else Box(Modifier.size(32.dp).clip(CircleShape).background(hint))
             }
             Box(Modifier.weight(1f).padding(start = 10.dp, end = 4.dp, top = if (active) 9.dp else 0.dp)) {
-                if (text.isEmpty()) Text("Post your reply", color = hint, fontSize = 16.sp)
+                if (text.isEmpty()) Text(tr("Post your reply"), color = hint, fontSize = 16.sp)
                 BasicTextField(
                     value = text,
                     onValueChange = { text = it },
@@ -117,7 +117,7 @@ fun ReplyBar(
                         .onFocusChanged { focused = it.isFocused }
                 )
                 // Logged out: tapping the field goes to log in instead.
-                if (me == null) Box(Modifier.matchParentSize().clickable(onClickLabel = "Log in to reply", onClick = onLogin))
+                if (me == null) Box(Modifier.matchParentSize().clickable(onClickLabel = tr("Log in to reply"), onClick = onLogin))
             }
             IconCell(Glyphs.Expand, "Open full reply editor", ink, iconSize = 20) { if (me == null) onLogin() else onExpand() }
         }
@@ -132,7 +132,7 @@ fun ReplyBar(
                         Text(
                             "✕", color = Color.White, fontSize = 11.sp,
                             modifier = Modifier.align(Alignment.TopEnd).clip(CircleShape).background(Color(0x99000000))
-                                .clickable(onClickLabel = "Remove image") { images = images - img }.padding(horizontal = 5.dp)
+                                .clickable(onClickLabel = tr("Remove image")) { images = images - img }.padding(horizontal = 5.dp)
                         )
                     }
                 }
@@ -151,7 +151,7 @@ fun ReplyBar(
                 }
                 Box(Modifier.weight(1f))
                 Text(
-                    if (sending) "Replying…" else "Reply",
+                    if (sending) tr("Replying…") else tr("Reply"),
                     color = if (canSend) Color.Black else hint,
                     fontSize = 15.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier
@@ -159,7 +159,7 @@ fun ReplyBar(
                         .clip(RoundedCornerShape(50))
                         // Block's accent where X uses its blue.
                         .background(if (canSend) Color(0xFFF7931A) else hint.copy(alpha = 0.25f))
-                        .clickable(enabled = canSend, onClickLabel = "Send reply") {
+                        .clickable(enabled = canSend, onClickLabel = tr("Send reply")) {
                             sending = true
                             vm.send(text.trim(), target, null, images) { ok ->
                                 sending = false

@@ -47,7 +47,7 @@ private val VerifiedMark: ImageVector by lazy {
 fun VerifiedBadge(size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
     Image(
         VerifiedMark, contentDescription = null,
-        modifier = modifier.size(size).semantics { contentDescription = "Verified" }
+        modifier = modifier.size(size).semantics { contentDescription = tr("Verified") }
     )
 }
 

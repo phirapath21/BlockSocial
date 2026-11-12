@@ -73,12 +73,12 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val me = account?.pubkey
     if (me == null) {
         Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Private messages", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(tr("Private messages"), color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(
-                "End-to-end encrypted (NIP-17): relays can't see who you talk to or what you say.",
+                tr("End-to-end encrypted (NIP-17): relays can't see who you talk to or what you say."),
                 color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
             )
-            PillButton("Log in") { navigate(LoginKey) }
+            PillButton(tr("Log in")) { navigate(LoginKey) }
         }
         return
     }
@@ -95,10 +95,10 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
             if (requests.isNotEmpty() || showRequests) item(key = "tabs") {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     com.example.btcwidget.ui.main.EInkChip(text = "CHATS", selected = !showRequests, onClick = { showRequests = false })
-                    com.example.btcwidget.ui.main.EInkChip(text = "REQUESTS ${requests.size}", selected = showRequests, onClick = { showRequests = true })
+                    com.example.btcwidget.ui.main.EInkChip(text = tr("REQUESTS {0}", requests.size), selected = showRequests, onClick = { showRequests = true })
                 }
                 if (showRequests) Text(
-                    "From people you don't follow. Replying moves a chat to Chats. Links and photos here can come from strangers.",
+                    tr("From people you don't follow. Replying moves a chat to Chats. Links and photos here can come from strangers."),
                     color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
                 )
                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
@@ -114,7 +114,7 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
             }
             if (shown.isEmpty()) item(key = "empty") {
                 if (loading) Spinner(Modifier.padding(top = 40.dp))
-                else EmptyNote(if (showRequests) "No message requests." else "No messages yet. Start one with ✉, or from someone's profile.")
+                else EmptyNote(if (showRequests) tr("No message requests.") else tr("No messages yet. Start one with ✉, or from someone's profile."))
             }
             items(shown, key = { it.key }) { c ->
                 ConversationRow(c, me, profiles, unread = c.key in unread, onClick = { navigate(ChatKey(c.key)) })
@@ -184,8 +184,8 @@ private fun NewMessageDialog(vm: SocialViewModel, onDismiss: () -> Unit, onOpen:
     var busy by remember { mutableStateOf(false) }
     BlockDialog(
         onDismiss = onDismiss,
-        title = "New message",
-        confirmLabel = if (busy) "Looking…" else "Open chat",
+        title = tr("New message"),
+        confirmLabel = if (busy) tr("Looking…") else tr("Open chat"),
         confirmEnabled = !busy && input.isNotBlank(),
         onConfirm = {
             busy = true
@@ -193,22 +193,22 @@ private fun NewMessageDialog(vm: SocialViewModel, onDismiss: () -> Unit, onOpen:
                 val target = vm.resolve(input)
                 busy = false
                 if (target is NostrRepository.Direct.ProfileTarget) onOpen(target.pubkey)
-                else error = "Couldn't find that person. Try their npub."
+                else error = tr("Couldn't find that person. Try their npub.")
             }
         }
     ) {
         OutlinedTextField(
             value = input, onValueChange = { input = it; error = null },
-            label = { Text("npub or name@domain") }, singleLine = true, isError = error != null,
+            label = { Text(tr("npub or name@domain")) }, singleLine = true, isError = error != null,
             modifier = Modifier.fillMaxWidth()
         )
         Text(
-            error ?: "Or open someone's profile and tap ✉.",
+            error ?: tr("Or open someone's profile and tap ✉."),
             color = if (error != null) EInk.Alert else EInk.Caption, fontSize = 13.sp,
             modifier = Modifier.padding(top = 6.dp)
         )
         Text(
-            "New group chat ›", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+            tr("New group chat ›"), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(top = 10.dp).clickable(onClick = onNewGroup).padding(vertical = 6.dp)
         )
     }
@@ -231,12 +231,12 @@ private fun NewGroupDialog(vm: SocialViewModel, onDismiss: () -> Unit, onStart: 
     }
     BlockDialog(
         onDismiss = onDismiss,
-        title = "New group chat",
-        confirmLabel = if (picked.size >= 2) "Start with ${picked.size} people" else "Pick at least 2 people",
+        title = tr("New group chat"),
+        confirmLabel = if (picked.size >= 2) tr("Start with {0} people", picked.size) else tr("Pick at least 2 people"),
         confirmEnabled = picked.size >= 2,
         onConfirm = { onStart(picked) }
     ) {
-        OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search follows or paste an npub") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text(tr("Search follows or paste an npub")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
         if (picked.isNotEmpty()) Text(
             picked.joinToString(", ") { profiles[it]?.bestName ?: Profile.shortNpub(it) },
             color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)
@@ -258,7 +258,7 @@ private fun NewGroupDialog(vm: SocialViewModel, onDismiss: () -> Unit, onStart: 
                 }
             }
         }
-        Text("Everyone in the group sees each other and every message. Up to $MAX_GROUP people.", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+        Text(tr("Everyone in the group sees each other and every message. Up to {0} people.", MAX_GROUP), color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -323,9 +323,9 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                         ) {
                             Avatar(profiles[peers.first()], peers.first(), size = 56)
                             Text(title, color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                            Text("🔒 End-to-end encrypted (NIP-17)", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                            Text(tr("🔒 End-to-end encrypted (NIP-17)"), color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                             if (messages.any { it.isLegacy }) Text(
-                                "Older messages marked \"old format\" use NIP-04: relays could see who talked and when.",
+                                tr("Older messages marked \"old format\" use NIP-04: relays could see who talked and when."),
                                 color = EInk.Caption, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp, start = 20.dp, end = 20.dp)
                             )
                         }
@@ -357,7 +357,7 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                                     if (file != null) EncryptedPhoto(vm, file)
                                     else Text(m.content, color = fg, fontSize = 15.sp)
                                     Text(
-                                        relativeTime(m.createdAt) + if (m.isLegacy) " · old format" else "", fontSize = 11.sp,
+                                        relativeTime(m.createdAt) + if (m.isLegacy) tr(" · old format") else "", fontSize = 11.sp,
                                         color = if (mine) EInk.Background.copy(alpha = 0.7f) else EInk.Caption,
                                         modifier = Modifier.padding(top = 2.dp)
                                     )
@@ -365,8 +365,8 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                                 if (menuFor == m.id) ActionSheet(
                                     onDismiss = { menuFor = null },
                                     actions = buildList {
-                                        add(SheetAction(Glyphs.Reply, "Reply") { replyTo = m })
-                                        if (m.kind != com.example.btcwidget.nostr.core.Nip17.FILE) add(SheetAction(Glyphs.Copy, "Copy text") {
+                                        add(SheetAction(Glyphs.Reply, tr("Reply")) { replyTo = m })
+                                        if (m.kind != com.example.btcwidget.nostr.core.Nip17.FILE) add(SheetAction(Glyphs.Copy, tr("Copy text")) {
                                             (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
                                                 .setPrimaryClip(android.content.ClipData.newPlainText("message", m.content))
                                         })
@@ -378,7 +378,7 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                                             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly
                                         ) {
                                             DM_REACTIONS.forEach { e ->
-                                                Text(e, fontSize = 26.sp, modifier = Modifier.clip(CircleShape).clickable(onClickLabel = "React $e") { menuFor = null; vm.reactDm(peers, m, e) }.padding(6.dp))
+                                                Text(e, fontSize = 26.sp, modifier = Modifier.clip(CircleShape).clickable(onClickLabel = tr("React {0}", e)) { menuFor = null; vm.reactDm(peers, m, e) }.padding(6.dp))
                                             }
                                         }
                                         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(vertical = 4.dp))
@@ -399,23 +399,23 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                 replyTo?.let { r ->
                     Row(Modifier.fillMaxWidth().background(EInk.Body).padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Replying to " + (if (r.sender == me) "yourself" else profiles[r.sender]?.bestName ?: Profile.shortNpub(r.sender)) + ": " +
+                            tr("Replying to ") + (if (r.sender == me) "yourself" else profiles[r.sender]?.bestName ?: Profile.shortNpub(r.sender)) + ": " +
                                 (if (r.kind == com.example.btcwidget.nostr.core.Nip17.FILE) "📷 Photo" else r.content.replace('\n', ' ')),
                             color = EInk.Label, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
                         )
-                        Text("✕", color = EInk.Value, fontSize = 14.sp, modifier = Modifier.clickable(onClickLabel = "Cancel reply") { replyTo = null }.padding(6.dp))
+                        Text("✕", color = EInk.Value, fontSize = 14.sp, modifier = Modifier.clickable(onClickLabel = tr("Cancel reply")) { replyTo = null }.padding(6.dp))
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         if (photoSending) "…" else "🖼", fontSize = 22.sp, color = EInk.Value,
-                        modifier = Modifier.clip(CircleShape).clickable(enabled = !photoSending, onClickLabel = "Send a photo") {
+                        modifier = Modifier.clip(CircleShape).clickable(enabled = !photoSending, onClickLabel = tr("Send a photo")) {
                             photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
                         }.padding(6.dp)
                     )
                     OutlinedTextField(
                         value = text, onValueChange = { text = it },
-                        placeholder = { Text("Message") },
+                        placeholder = { Text(tr("Message")) },
                         shape = RoundedCornerShape(24.dp),
                         maxLines = 5,
                         colors = OutlinedTextFieldDefaults.colors(
@@ -426,7 +426,7 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(8.dp))
-                    PillButton(if (sending) "…" else "Send", filled = text.isNotBlank() && !sending) {
+                    PillButton(if (sending) "…" else tr("Send"), filled = text.isNotBlank() && !sending) {
                         if (text.isBlank() || sending || me == null) return@PillButton
                         sending = true
                         val outgoing = text
@@ -460,7 +460,7 @@ private fun EncryptedPhoto(vm: SocialViewModel, info: com.example.btcwidget.nost
         contentAlignment = Alignment.Center
     ) {
         val b = bitmap
-        if (b != null) androidx.compose.foundation.Image(b, contentDescription = "Photo", contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        else Text("🔒 Photo", color = EInk.Caption, fontSize = 13.sp)
+        if (b != null) androidx.compose.foundation.Image(b, contentDescription = tr("Photo"), contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        else Text(tr("🔒 Photo"), color = EInk.Caption, fontSize = 13.sp)
     }
 }

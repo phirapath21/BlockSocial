@@ -46,7 +46,7 @@ fun RelaysScreen(vm: SocialViewModel, onBack: () -> Unit) {
     var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
     var info by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar("Relays", onBack)
+        SocialTopBar(tr("Relays"), onBack)
         androidx.compose.foundation.layout.Row(
             Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
@@ -81,17 +81,17 @@ private fun RelayStatusTab(vm: SocialViewModel, onInfo: (String) -> Unit) {
             item(key = "summary") {
                 val up = mine.count { it.state == RelayStatus.State.CONNECTED }
                 Column(Modifier.padding(16.dp)) {
-                    Text("$up of ${mine.size} connected", color = EInk.Value, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("{0} of {1} connected", up, mine.size), color = EInk.Value, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text(
                         when {
-                            mine.isEmpty() -> "No relays set."
-                            up == 0 -> "Block can't reach any of your relays. Check your connection."
-                            up < mine.size -> "Some relays are down; the rest keep things working."
-                            else -> "All your relays are working."
+                            mine.isEmpty() -> tr("No relays set.")
+                            up == 0 -> tr("Block can't reach any of your relays. Check your connection.")
+                            up < mine.size -> tr("Some relays are down; the rest keep things working.")
+                            else -> tr("All your relays are working.")
                         },
                         color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp)
                     )
-                    Text("Tap a relay to see what it says about itself.", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+                    Text(tr("Tap a relay to see what it says about itself."), color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
                 }
                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
             }
@@ -102,8 +102,8 @@ private fun RelayStatusTab(vm: SocialViewModel, onInfo: (String) -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Other relays (${others.count { it.state == RelayStatus.State.CONNECTED }}/${others.size})", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                        Text("Opened to read people who post on their own relays", color = EInk.Caption, fontSize = 13.sp)
+                        Text(tr("Other relays ({0}/{1})", others.count { it.state == RelayStatus.State.CONNECTED }, others.size), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("Opened to read people who post on their own relays"), color = EInk.Caption, fontSize = 13.sp)
                     }
                     Text(if (showOthers) "⌃" else "⌄", color = EInk.Value, fontSize = 18.sp)
                 }
@@ -124,7 +124,7 @@ private fun RelayRow(s: RelayStatus, onInfo: () -> Unit, onRetry: () -> Unit) {
     }
     val canRetry = s.state == RelayStatus.State.RETRYING || (s.state == RelayStatus.State.FAILED && s.failures > 0)
     Row(
-        Modifier.fillMaxWidth().clickable(onClickLabel = "About this relay", onClick = onInfo).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clickable(onClickLabel = tr("About this relay"), onClick = onInfo).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(color))
@@ -139,7 +139,7 @@ private fun RelayRow(s: RelayStatus, onInfo: () -> Unit, onRetry: () -> Unit) {
             }
         }
         if (canRetry) Text(
-            "Retry", color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+            tr("Retry"), color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.clip(RoundedCornerShape(50)).background(EInk.Track).clickable(onClick = onRetry).padding(horizontal = 12.dp, vertical = 6.dp)
         )
     }
