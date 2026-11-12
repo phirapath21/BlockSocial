@@ -25,7 +25,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -61,7 +60,7 @@ private fun RoundControl(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 @Composable
 internal fun LiveList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val profiles by vm.profiles.collectAsState()
-    val list by produceState<List<LiveStreams.Live>?>(null) { value = vm.liveStreams() }
+    val list by produceKept<List<LiveStreams.Live>?>(null) { value = vm.liveStreams() }
     when (val l = list) {
         null -> Spinner(Modifier.padding(top = 30.dp))
         else -> if (l.isEmpty()) EmptyNote(tr("Nobody is streaming on your relays right now.")) else LazyColumn(Modifier.fillMaxSize()) {
@@ -104,9 +103,9 @@ internal fun LiveBadge(modifier: Modifier = Modifier) {
 @Composable
 fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
     val profiles by vm.profiles.collectAsState()
-    val loaded by produceState<Any?>(Unit, address) { value = vm.liveStream(address) }
+    val loaded by produceKept<Any?>(Unit, address) { value = vm.liveStream(address) }
     val live = loaded as? LiveStreams.Live
-    var messages by remember { mutableStateOf<List<Event>?>(null) }
+    var messages by rememberKeptState<List<Event>?> { null }
     if (live != null) DisposableEffect(live.address) {
         val stop = vm.spaces.watchLiveChat(live) { messages = it }
         onDispose { stop() }

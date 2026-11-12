@@ -29,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,7 +64,7 @@ fun ArticleScreen(vm: SocialViewModel, naddr: String, navigate: (NavKey) -> Unit
     val address = remember(naddr) { Nip19.decode(naddr) as? Nip19.Address }
     val stats by vm.stats.collectAsState()
     // Unit until loaded, then the article or null if no relay had it.
-    val loaded by produceState<Any?>(Unit, address) { value = address?.let { vm.article(it) } }
+    val loaded by produceKept<Any?>(Unit, address) { value = address?.let { vm.article(it) } }
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar(tr("Article"), onBack)
         SocialScaffold(vm, navigate) { actions ->
@@ -86,8 +85,8 @@ private fun ArticleBody(vm: SocialViewModel, article: Article, stats: NoteStats,
     val account by vm.account.collectAsState()
     val profiles by vm.profiles.collectAsState()
     // Highlights (NIP-84) by anyone; reloaded after the user adds one.
-    var reload by remember { mutableStateOf(0) }
-    val highlights by produceState(emptyList<com.example.btcwidget.nostr.core.Highlights.Highlight>(), article.event.id, reload) { value = vm.highlightsOf(article) }
+    var reload by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
+    val highlights by produceKept(emptyList<com.example.btcwidget.nostr.core.Highlights.Highlight>(), article.event.id, reload) { value = vm.highlightsOf(article) }
     var menuFor by remember { mutableStateOf<String?>(null) }
     var commentFor by remember { mutableStateOf<String?>(null) }
     fun highlightNow(text: String, comment: String?) {

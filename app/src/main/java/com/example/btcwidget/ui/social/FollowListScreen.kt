@@ -11,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,7 +26,7 @@ fun FollowListScreen(vm: SocialViewModel, pubkey: String, followers: Boolean, na
     val profiles by vm.profiles.collectAsState()
     val following by vm.following.collectAsState()
     val account by vm.account.collectAsState()
-    val people by produceState<List<String>?>(null, pubkey, followers) {
+    val people by produceKept<List<String>?>(null, pubkey, followers) {
         value = if (followers) vm.followersOf(pubkey) else vm.followingOf(pubkey).toList()
     }
     // Names and pictures fill in as they load.

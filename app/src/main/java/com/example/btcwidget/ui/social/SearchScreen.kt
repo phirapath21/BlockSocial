@@ -70,18 +70,20 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
     val keyboard = LocalSoftwareKeyboardController.current
     var query by rememberSaveable { mutableStateOf("") }
     var tab by rememberSaveable { mutableStateOf("all") }
-    var searched by remember { mutableStateOf<String?>(null) }
+    // Results are kept across Back: open a post or a profile from them and come back to the same list.
+    var searched by rememberKeptState<String?> { null }
     var loading by remember { mutableStateOf(false) }
     var notesLoading by remember { mutableStateOf(false) }
-    var people by remember { mutableStateOf<List<Profile>>(emptyList()) }
-    var notes by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
-    var articles by remember { mutableStateOf<List<com.example.btcwidget.nostr.core.Article>>(emptyList()) }
+    var people by rememberKeptState<List<Profile>> { emptyList() }
+    var notes by rememberKeptState<List<FeedItem>> { emptyList() }
+    var articles by rememberKeptState<List<com.example.btcwidget.nostr.core.Article>> { emptyList() }
     var articlesLoading by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
     val focus = remember { FocusRequester() }
     val scanQr = rememberQrScan(vm, navigate)
     // Opened as its own screen: start typing. As a tab, don't pop the keyboard on every visit.
-    LaunchedEffect(Unit) { if (onBack != null) runCatching { focus.requestFocus() } }
+    // Coming Back to results, leave the keyboard down.
+    LaunchedEffect(Unit) { if (onBack != null && query.isEmpty()) runCatching { focus.requestFocus() } }
 
     val profiles by vm.profiles.collectAsState()
 
@@ -353,7 +355,7 @@ private fun ArticleList(list: List<com.example.btcwidget.nostr.core.Article>, ac
 private fun RecentArticles(vm: SocialViewModel, actions: NoteActions) {
     val account by vm.account.collectAsState()
     var following by rememberSaveable { mutableStateOf(account != null) }
-    val list by androidx.compose.runtime.produceState<List<com.example.btcwidget.nostr.core.Article>?>(null, following) {
+    val list by produceKept<List<com.example.btcwidget.nostr.core.Article>?>(null, following) {
         value = null; value = vm.recentArticles(following)
     }
     Column(Modifier.fillMaxSize()) {
@@ -373,9 +375,9 @@ private fun RecentArticles(vm: SocialViewModel, actions: NoteActions) {
 @Composable
 private fun DvmFeeds(vm: SocialViewModel, actions: NoteActions) {
     val stats by vm.stats.collectAsState()
-    val services by androidx.compose.runtime.produceState<List<com.example.btcwidget.nostr.core.Dvm.Service>?>(null) { value = vm.feedServices() }
+    val services by produceKept<List<com.example.btcwidget.nostr.core.Dvm.Service>?>(null) { value = vm.feedServices() }
     var chosen by remember { mutableStateOf<com.example.btcwidget.nostr.core.Dvm.Service?>(null) }
-    var reload by remember { mutableStateOf(0) }
+    var reload by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
     val c = chosen
     if (c == null) {
         when (val l = services) {
@@ -407,7 +409,7 @@ private fun DvmFeeds(vm: SocialViewModel, actions: NoteActions) {
         }
         return
     }
-    val result by androidx.compose.runtime.produceState<Result<List<FeedItem>>?>(null, c, reload) { value = null; value = vm.dvmFeed(c) }
+    val result by produceKept<Result<List<FeedItem>>?>(null, c, reload) { value = null; value = vm.dvmFeed(c) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             EInkChip(text = tr("‹ FEEDS"), selected = false, onClick = { chosen = null })
@@ -431,7 +433,7 @@ private fun DvmFeeds(vm: SocialViewModel, actions: NoteActions) {
 @Composable
 private fun WhoToFollow(vm: SocialViewModel, actions: NoteActions) {
     val following by vm.following.collectAsState()
-    val list by androidx.compose.runtime.produceState<List<Pair<Profile, Int>>?>(null) { value = vm.followSuggestions() }
+    val list by produceKept<List<Pair<Profile, Int>>?>(null) { value = vm.followSuggestions() }
     when (val l = list) {
         null -> Spinner(Modifier.padding(top = 30.dp))
         else -> if (l.isEmpty()) EmptyNote(tr("No suggestions yet. Follow a few people first.")) else LazyColumn(Modifier.fillMaxSize()) {

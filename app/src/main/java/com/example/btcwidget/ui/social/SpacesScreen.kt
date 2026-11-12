@@ -30,7 +30,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -79,7 +78,7 @@ fun SpacesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
 @Composable
 private fun CommunityList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val joined by vm.spaces.joined.collectAsState()
-    val list by produceState<List<Communities.Community>?>(null) { value = vm.communities() }
+    val list by produceKept<List<Communities.Community>?>(null) { value = vm.communities() }
     when (val l = list) {
         null -> Spinner(Modifier.padding(top = 30.dp))
         else -> if (l.isEmpty()) EmptyNote(tr("No communities found on your relays.")) else LazyColumn(Modifier.fillMaxSize()) {
@@ -92,7 +91,7 @@ private fun CommunityList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
 
 @Composable
 private fun ChannelList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
-    val list by produceState<List<PublicChat.Channel>?>(null) { value = vm.channels() }
+    val list by produceKept<List<PublicChat.Channel>?>(null) { value = vm.channels() }
     Column {
         Text(
             tr("Public chats: anyone can read and write. Messages are public and permanent."),
@@ -170,10 +169,10 @@ fun CommunityScreen(vm: SocialViewModel, coordinate: String, navigate: (NavKey) 
     val stats by vm.stats.collectAsState()
     val account by vm.account.collectAsState()
     val joined by vm.spaces.joined.collectAsState()
-    val community by produceState<Communities.Community?>(null, coordinate) { value = vm.community(coordinate) }
+    val community by produceKept<Communities.Community?>(null, coordinate) { value = vm.community(coordinate) }
     var pending by rememberSaveable { mutableStateOf(false) }
-    var reload by remember { mutableStateOf(0) }
-    val posts by produceState<List<FeedItem>?>(null, community, pending, reload) {
+    var reload by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
+    val posts by produceKept<List<FeedItem>?>(null, community, pending, reload) {
         value = null
         value = community?.let { vm.communityPosts(it, pending) } ?: emptyList()
     }
@@ -227,8 +226,8 @@ fun CommunityScreen(vm: SocialViewModel, coordinate: String, navigate: (NavKey) 
 /** A public chat channel (NIP-28). */
 @Composable
 fun ChannelScreen(vm: SocialViewModel, id: String, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
-    val channel by produceState<PublicChat.Channel?>(null, id) { value = vm.channel(id) }
-    var messages by remember { mutableStateOf<List<Event>?>(null) }
+    val channel by produceKept<PublicChat.Channel?>(null, id) { value = vm.channel(id) }
+    var messages by rememberKeptState<List<Event>?> { null }
     val ch = channel
     if (ch != null) DisposableEffect(ch.id) {
         val stop = vm.spaces.watchChannel(ch) { messages = it }
@@ -248,8 +247,8 @@ fun ChannelScreen(vm: SocialViewModel, id: String, navigate: (NavKey) -> Unit, o
 fun GroupScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
     val a = remember(address) { RelayGroups.parse(address) }
     if (a == null) { SocialTopBar(tr("Group"), onBack); EmptyNote(tr("That isn't a group address.")); return }
-    val group by produceState<RelayGroups.Group?>(null, a) { value = vm.group(a) }
-    var messages by remember { mutableStateOf<List<Event>?>(null) }
+    val group by produceKept<RelayGroups.Group?>(null, a) { value = vm.group(a) }
+    var messages by rememberKeptState<List<Event>?> { null }
     DisposableEffect(a) {
         val stop = vm.spaces.watchGroup(a) { messages = it }
         onDispose { stop() }
