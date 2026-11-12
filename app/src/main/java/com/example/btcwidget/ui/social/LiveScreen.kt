@@ -94,7 +94,7 @@ internal fun LiveRow(live: LiveStreams.Live, host: Profile?, onClick: () -> Unit
 private fun statusLine(live: LiveStreams.Live): String = when (live.status) {
     LiveStreams.Status.LIVE -> "● LIVE" + (live.viewers?.let { " · $it watching" } ?: "")
     LiveStreams.Status.PLANNED -> "Starts " + (live.starts?.let { fullTimestamp(it) } ?: "soon")
-    LiveStreams.Status.ENDED -> "Ended"
+    LiveStreams.Status.ENDED -> if (live.recording != null) "Ended · Replay" else "Ended"
 }
 
 @Composable
@@ -169,15 +169,34 @@ private fun LivePlayer(live: LiveStreams.Live, host: Profile?, onHost: () -> Uni
                     player.addListener(l)
                     onDispose { player.removeListener(l) }
                 }
-                if (!PipVideo.inPip) VideoSurface(player, Modifier.fillMaxSize().clickable(onClickLabel = if (playing) tr("Pause") else tr("Play")) { PipVideo.togglePlay() })
+                if (!PipVideo.inPip) {
+                    VideoSurface(player, Modifier.fillMaxSize())
+                    // Tap for YouTube-style controls: ±10 s, play/pause, LIVE, and the time bar.
+                    StreamControls(player, live = true, onTogglePlay = { PipVideo.togglePlay(catchUp = false) }) {
+                        PipVideo.requestPip?.let { pip -> RoundControl(Glyphs.Pip, "Picture-in-picture", pip) }
+                        Spacer(Modifier.width(8.dp))
+                        RoundControl(if (PipVideo.muted) Glyphs.SoundOff else Glyphs.SoundOn, if (PipVideo.muted) "Sound on" else "Mute") { PipVideo.mute(!PipVideo.muted) }
+                    }
+                }
                 LiveBadge(Modifier.align(Alignment.TopStart).padding(10.dp))
-                if (!playing) Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
-                    Icon(Glyphs.Play, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+            } else if (!live.isLive && live.recording != null) {
+                // Ended, with a recording: watch it again, with the whole time bar to drag.
+                val rec = live.recording
+                val player = remember(rec) {
+                    newPlayer(context, rec, fullScreen = true) {}.apply { repeatMode = androidx.media3.common.Player.REPEAT_MODE_OFF; playWhenReady = true }
                 }
-                Row(Modifier.align(Alignment.BottomEnd).padding(8.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-                    PipVideo.requestPip?.let { pip -> RoundControl(Glyphs.Pip, "Picture-in-picture", pip) }
-                    RoundControl(if (PipVideo.muted) Glyphs.SoundOff else Glyphs.SoundOn, if (PipVideo.muted) "Sound on" else "Mute") { PipVideo.mute(!PipVideo.muted) }
+                var soundOff by remember(player) { mutableStateOf(false) }
+                DisposableEffect(player) { onDispose { player.release() } }
+                VideoSurface(player, Modifier.fillMaxSize())
+                StreamControls(player, live = false) {
+                    RoundControl(if (soundOff) Glyphs.SoundOff else Glyphs.SoundOn, if (soundOff) "Sound on" else "Mute") {
+                        soundOff = !soundOff; player.volume = if (soundOff) 0f else 1f
+                    }
                 }
+                Text(
+                    tr("REPLAY"), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.TopStart).padding(10.dp).clip(RoundedCornerShape(4.dp)).background(Color(0x99000000)).padding(horizontal = 5.dp, vertical = 1.dp)
+                )
             } else {
                 live.image?.let { AsyncImage(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                 Text(

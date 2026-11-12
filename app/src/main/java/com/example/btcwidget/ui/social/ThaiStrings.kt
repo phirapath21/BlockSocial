@@ -819,4 +819,11 @@ internal val THAI: Map<String, String> = hashMapOf(
     "{0} people · {1} posts" to "{0} คน · {1} โพสต์",
     "{0} · Trending" to "{0} · มาแรง",
     "Video position" to "ตำแหน่งวิดีโอ",
+    "Hide controls" to "ซ่อนตัวควบคุม",
+    "Show controls" to "แสดงตัวควบคุม",
+    "Back 10 seconds" to "ย้อนกลับ 10 วินาที",
+    "Forward 10 seconds" to "ข้ามไป 10 วินาที",
+    "Go to live" to "ไปที่ไลฟ์สด",
+    "LIVE" to "สด",
+    "REPLAY" to "ย้อนหลัง",
 )

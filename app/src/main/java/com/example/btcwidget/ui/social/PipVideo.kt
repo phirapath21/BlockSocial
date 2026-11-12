@@ -43,13 +43,14 @@ object PipVideo {
 
     /**
      * Play or pause. A live stream picks up at the live edge again rather than where it was
-     * paused (it would otherwise run behind the chat).
+     * paused (it would otherwise run behind the chat), unless [catchUp] is false: the stream's
+     * own controls resume where you paused, with LIVE to catch up.
      */
-    fun togglePlay() {
+    fun togglePlay(catchUp: Boolean = true) {
         val p = player ?: return
         if (p.isPlaying) p.pause()
         else {
-            if (live != null) p.seekToDefaultPosition()
+            if (live != null && catchUp) p.seekToDefaultPosition()
             p.play()
         }
     }
