@@ -128,7 +128,7 @@ fun NoteCard(
     ) {
         if (repostedBy != null) {
             Text(
-                text = "⟲ ${actions.profileOf(repostedBy)?.bestName ?: Profile.shortNpub(repostedBy)} reposted",
+                text = tr("⟲ {0} reposted", actions.profileOf(repostedBy)?.bestName ?: Profile.shortNpub(repostedBy)),
                 color = EInk.Caption,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
@@ -166,7 +166,7 @@ fun NoteCard(
                     val parentAuthor = note.tagValues("p").firstOrNull()
                     if (parentAuthor != null) {
                         Text(
-                            text = "Replying to @" + (actions.profileOf(parentAuthor)?.bestName ?: Profile.shortNpub(parentAuthor)),
+                            text = tr("Replying to @") + (actions.profileOf(parentAuthor)?.bestName ?: Profile.shortNpub(parentAuthor)),
                             color = EInk.Caption,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(top = 1.dp)
@@ -187,7 +187,7 @@ private fun ReplyingTo(note: Event, actions: NoteActions, modifier: Modifier = M
     if (ThreadRef.of(note).parent == null) return
     val parentAuthor = note.tagValues("p").firstOrNull() ?: return
     Text(
-        text = "Replying to @" + (actions.profileOf(parentAuthor)?.bestName ?: Profile.shortNpub(parentAuthor)),
+        text = tr("Replying to @") + (actions.profileOf(parentAuthor)?.bestName ?: Profile.shortNpub(parentAuthor)),
         color = EInk.Caption, fontSize = 13.sp, modifier = modifier
     )
 }
@@ -220,7 +220,7 @@ private fun AuthorLine(note: Event, author: Profile?, actions: NoteActions, larg
         )
         Box {
             Box(
-                Modifier.padding(start = 2.dp).size(if (small) 28.dp else 32.dp).clip(CircleShape).clickable(onClickLabel = "More options") { menu = true },
+                Modifier.padding(start = 2.dp).size(if (small) 28.dp else 32.dp).clip(CircleShape).clickable(onClickLabel = tr("More options")) { menu = true },
                 contentAlignment = Alignment.Center
             ) { Icon(Glyphs.More, contentDescription = null, tint = EInk.Caption, modifier = Modifier.size(if (small) 16.dp else 18.dp)) }
             if (menu) NoteMenu(note, actions, onDismiss = { menu = false })
@@ -234,16 +234,16 @@ private fun NoteMenu(note: Event, actions: NoteActions, onDismiss: () -> Unit) {
     val mine = note.pubkey == actions.me
     val name = actions.profileOf(note.pubkey)?.bestName ?: Profile.shortNpub(note.pubkey)
     val items = buildList {
-        add(SheetAction(if (actions.isBookmarked(note.id)) Glyphs.Bookmarked else Glyphs.Bookmark, if (actions.isBookmarked(note.id)) "Remove bookmark" else "Bookmark") { actions.bookmark(note) })
-        add(SheetAction(Glyphs.Stats, "Reposts, likes and zaps") { actions.openEngagement(note, 1) })
-        add(SheetAction(Glyphs.Share, "Share post") { actions.share(note) })
+        add(SheetAction(if (actions.isBookmarked(note.id)) Glyphs.Bookmarked else Glyphs.Bookmark, if (actions.isBookmarked(note.id)) tr("Remove bookmark") else tr("Bookmark")) { actions.bookmark(note) })
+        add(SheetAction(Glyphs.Stats, tr("Reposts, likes and zaps")) { actions.openEngagement(note, 1) })
+        add(SheetAction(Glyphs.Share, tr("Share post")) { actions.share(note) })
         if (mine) {
-            add(SheetAction(Glyphs.Pin, if (actions.isPinned(note.id)) "Unpin from profile" else "Pin to profile") { actions.pin(note) })
-            add(SheetAction(Glyphs.Delete, "Delete post", destructive = true) { actions.delete(note) })
+            add(SheetAction(Glyphs.Pin, if (actions.isPinned(note.id)) tr("Unpin from profile") else tr("Pin to profile")) { actions.pin(note) })
+            add(SheetAction(Glyphs.Delete, tr("Delete post"), destructive = true) { actions.delete(note) })
         } else {
-            add(SheetAction(Glyphs.SoundOff, "Mute $name") { actions.mute(note.pubkey) })
-            add(SheetAction(Glyphs.MuteThread, "Mute this conversation") { actions.muteThread(note) })
-            add(SheetAction(Glyphs.Flag, "Report post", destructive = true) { actions.report(note) })
+            add(SheetAction(Glyphs.SoundOff, tr("Mute {0}", name)) { actions.mute(note.pubkey) })
+            add(SheetAction(Glyphs.MuteThread, tr("Mute this conversation")) { actions.muteThread(note) })
+            add(SheetAction(Glyphs.Flag, tr("Report post"), destructive = true) { actions.report(note) })
         }
     }
     ActionSheet(onDismiss, items)
@@ -266,12 +266,12 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
                 .padding(12.dp)
         ) {
             Column(Modifier.weight(1f)) {
-                Text("⚠ Sensitive content", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(tr("⚠ Sensitive content"), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 warning.getOrNull(1)?.takeIf { it.isNotBlank() }?.let { Text(it, color = EInk.Label, fontSize = 13.sp) }
             }
             Text(
-                "Show", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable(onClickLabel = "Show sensitive content") { revealed = true }.padding(8.dp)
+                tr("Show"), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable(onClickLabel = tr("Show sensitive content")) { revealed = true }.padding(8.dp)
             )
         }
         return
@@ -368,11 +368,11 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
             .take(1).forEach { ref ->
                 Row(
                     Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
-                        .clickable(onClickLabel = "Watch the stream") { actions.openArticle(ref.address) }.padding(12.dp),
+                        .clickable(onClickLabel = tr("Watch the stream")) { actions.openArticle(ref.address) }.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("● LIVE", color = androidx.compose.ui.graphics.Color(0xFFE5534B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Text("  Live stream · tap to watch", color = EInk.Value, fontSize = 14.sp)
+                    Text(tr("● LIVE"), color = androidx.compose.ui.graphics.Color(0xFFE5534B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("  Live stream · tap to watch"), color = EInk.Value, fontSize = 14.sp)
                 }
             }
     }
@@ -389,7 +389,7 @@ private fun LinkCard(url: String, note: Event, actions: NoteActions) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(14.dp))
-            .clickable(onClickLabel = "Open link") { actions.openLink(url, note) }
+            .clickable(onClickLabel = tr("Open link")) { actions.openLink(url, note) }
     ) {
         p.image?.let {
             AsyncImage(
@@ -428,8 +428,8 @@ private const val QUOTE_LINES = 5
 @Composable
 private fun ReadMore(note: Event, actions: NoteActions) {
     Text(
-        "Read more…", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 4.dp).clickable(onClickLabel = "Read the whole post") { actions.openNote(note) }.padding(vertical = 2.dp)
+        tr("Read more…"), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 4.dp).clickable(onClickLabel = tr("Read the whole post")) { actions.openNote(note) }.padding(vertical = 2.dp)
     )
 }
 
@@ -454,7 +454,7 @@ private fun HighlightBody(note: Event, actions: NoteActions, fontSize: Int) {
     when {
         address != null -> ArticleCard(address, actions)
         h.url != null -> Text(
-            "From " + h.url.substringAfter("://").substringBefore('/'), color = EInk.Caption, fontSize = 13.sp,
+            tr("From ") + h.url.substringAfter("://").substringBefore('/'), color = EInk.Caption, fontSize = 13.sp,
             modifier = Modifier.padding(top = 6.dp).clickable { actions.openLink(h.url, note) }
         )
     }
@@ -485,7 +485,7 @@ private fun NoteImage(note: Event, url: String, actions: NoteActions) {
     val blur = rememberBlurhashPainter(remember(note.id, url) { com.example.btcwidget.nostr.core.Imeta.blurhash(note, url) })
     AsyncImage(
         model = url,
-        contentDescription = "Image",
+        contentDescription = tr("Image"),
         contentScale = ContentScale.Crop,
         placeholder = blur,
         onSuccess = { state ->
@@ -499,7 +499,7 @@ private fun NoteImage(note: Event, url: String, actions: NoteActions) {
             .clip(shape)
             .background(EInk.Body)
             .border(0.5.dp, EInk.BodyStroke, shape)
-            .clickable(onClickLabel = "View image") { actions.openImage(url, note) }
+            .clickable(onClickLabel = tr("View image")) { actions.openImage(url, note) }
     )
 }
 
@@ -527,8 +527,8 @@ private fun ArticleCard(address: com.example.btcwidget.nostr.core.Nip19.Address,
             )
         }
         Column(Modifier.padding(10.dp)) {
-            Text("ARTICLE", color = EInk.Caption, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text(a?.title ?: "Loading article…", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(tr("ARTICLE"), color = EInk.Caption, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(a?.title ?: tr("Loading article…"), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             a?.summary?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
         }
     }
@@ -549,7 +549,7 @@ private fun QuotedNote(id: String, actions: NoteActions) {
     ) {
         val q = quoted
         if (q == null) {
-            Text("Loading quoted note…", color = EInk.Caption, fontSize = 13.sp)
+            Text(tr("Loading quoted note…"), color = EInk.Caption, fontSize = 13.sp)
         } else {
             val author = actions.profileOf(q.pubkey)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -645,8 +645,8 @@ private fun ActionButton(
 @Composable
 internal fun RepostSheet(note: Event, stats: NoteStats, actions: NoteActions, onDismiss: () -> Unit, beforeQuote: () -> Unit = {}) {
     ActionSheet(onDismiss, listOf(
-        SheetAction(Glyphs.Repost, if (stats.repostedByMe) "Reposted" else "Repost", enabled = !stats.repostedByMe) { actions.repost(note) },
-        SheetAction(Glyphs.Quote, "Quote") { beforeQuote(); actions.quote(note) }
+        SheetAction(Glyphs.Repost, if (stats.repostedByMe) tr("Reposted") else tr("Repost"), enabled = !stats.repostedByMe) { actions.repost(note) },
+        SheetAction(Glyphs.Quote, tr("Quote")) { beforeQuote(); actions.quote(note) }
     ))
 }
 
@@ -662,13 +662,13 @@ private fun ReactionMenu(expanded: Boolean, note: Event, actions: NoteActions, o
                 QUICK_REACTIONS.forEach { emoji ->
                     Text(
                         emoji, fontSize = 22.sp,
-                        modifier = Modifier.clip(CircleShape).clickable(onClickLabel = "React $emoji") { onDismiss(); actions.react(note, emoji, null) }.padding(6.dp)
+                        modifier = Modifier.clip(CircleShape).clickable(onClickLabel = tr("React {0}", emoji)) { onDismiss(); actions.react(note, emoji, null) }.padding(6.dp)
                     )
                 }
                 custom.entries.take(30).forEach { (code, url) ->
                     AsyncImage(
                         model = url, contentDescription = ":$code:",
-                        modifier = Modifier.size(34.dp).clip(CircleShape).clickable(onClickLabel = "React :$code:") { onDismiss(); actions.react(note, ":$code:", url) }.padding(6.dp)
+                        modifier = Modifier.size(34.dp).clip(CircleShape).clickable(onClickLabel = tr("React :{0}:", code)) { onDismiss(); actions.react(note, ":$code:", url) }.padding(6.dp)
                     )
                 }
             }
@@ -683,7 +683,7 @@ fun Avatar(profile: Profile?, pubkey: String, size: Int, onClick: (() -> Unit)? 
         .size(size.dp)
         .clip(CircleShape)
         .background(EInk.Track)
-        .let { if (onClick != null) it.clickable(onClickLabel = "Open profile", onClick = onClick) else it }
+        .let { if (onClick != null) it.clickable(onClickLabel = tr("Open profile"), onClick = onClick) else it }
     val picture = profile?.picture
     if (picture != null) {
         AsyncImage(model = picture, contentDescription = null, contentScale = ContentScale.Crop, modifier = base)

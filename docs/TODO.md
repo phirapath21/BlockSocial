@@ -38,7 +38,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Export nsec, with a warning, for accounts using an nsec or created in the app
 - [x] Settings for media servers (Blossom list) and DM inbox relays
 - [x] Notification settings by type (e.g. turn off likes)
-- [ ] Thai translation of the UI
+- [x] Thai translation of the UI (follows the phone, or Settings › Display › Language)
 
 ### Direct messages
 - [x] Photos in DMs

@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.main
 
+import com.example.btcwidget.ui.social.tr
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,16 +76,16 @@ internal fun StackSetupCard(onSetUp: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
-            SectionLabel("Your stack")
+            SectionLabel(tr("Your stack"))
             Text(
-                text = "See what your bitcoin is worth here and on the widget.",
+                text = tr("See what your bitcoin is worth here and on the widget."),
                 color = EInk.Label,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
-        EInkChip(text = "SET UP", selected = true, onClick = onSetUp)
+        EInkChip(text = tr("SET UP"), selected = true, onClick = onSetUp)
     }
 }
 
@@ -97,7 +98,7 @@ internal fun CategoryHeader(title: String, count: Int, collapsed: Boolean, onCli
             .fillMaxWidth()
             .padding(top = 12.dp)
             .clip(EInk.ChipShape)
-            .clickable(onClickLabel = if (collapsed) "Expand" else "Collapse", onClick = onClick)
+            .clickable(onClickLabel = if (collapsed) tr("Expand") else tr("Collapse"), onClick = onClick)
             .semantics { stateDescription = if (collapsed) "Collapsed" else "Expanded" }
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically

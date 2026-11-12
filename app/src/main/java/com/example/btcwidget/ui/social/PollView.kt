@@ -108,7 +108,7 @@ fun PollView(poll: Poll, actions: NoteActions) {
             Text(parts.joinToString(" · "), color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.weight(1f))
             if (!showResults && poll.multipleChoice && picked.isNotEmpty()) {
                 Text(
-                    if (sending) "Voting…" else "Vote", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    if (sending) tr("Voting…") else tr("Vote"), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.clickable(enabled = !sending) { send(poll.options.map { it.id }.filter { it in picked }) }.padding(6.dp)
                 )
             }

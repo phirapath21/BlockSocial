@@ -82,7 +82,7 @@ private fun CommunityList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val list by produceState<List<Communities.Community>?>(null) { value = vm.communities() }
     when (val l = list) {
         null -> Spinner(Modifier.padding(top = 30.dp))
-        else -> if (l.isEmpty()) EmptyNote("No communities found on your relays.") else LazyColumn(Modifier.fillMaxSize()) {
+        else -> if (l.isEmpty()) EmptyNote(tr("No communities found on your relays.")) else LazyColumn(Modifier.fillMaxSize()) {
             items(l, key = { it.coordinate }) { c ->
                 SpaceRow(c.image, c.name, c.description, if (c.coordinate in joined) "Joined" else null) { navigate(CommunityKey(c.coordinate)) }
             }
@@ -95,12 +95,12 @@ private fun ChannelList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val list by produceState<List<PublicChat.Channel>?>(null) { value = vm.channels() }
     Column {
         Text(
-            "Public chats: anyone can read and write. Messages are public and permanent.",
+            tr("Public chats: anyone can read and write. Messages are public and permanent."),
             color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
         )
         when (val l = list) {
             null -> Spinner(Modifier.padding(top = 30.dp))
-            else -> if (l.isEmpty()) EmptyNote("No public chats found on your relays.") else LazyColumn(Modifier.fillMaxSize()) {
+            else -> if (l.isEmpty()) EmptyNote(tr("No public chats found on your relays.")) else LazyColumn(Modifier.fillMaxSize()) {
                 items(l, key = { it.id }) { ch -> SpaceRow(ch.picture, ch.name, ch.about, null) { navigate(ChannelKey(ch.id)) } }
             }
         }
@@ -114,20 +114,20 @@ private fun GroupList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     var saved by remember { mutableStateOf(vm.spaces.savedGroups()) }
     Column(Modifier.fillMaxSize()) {
         Text(
-            "Groups live on one relay, which decides who can join and post. Paste a group address such as groups.0xchat.com'abc.",
+            tr("Groups live on one relay, which decides who can join and post. Paste a group address such as groups.0xchat.com'abc."),
             color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
         )
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = input, onValueChange = { input = it.trim(); error = null },
-                placeholder = { Text("host'group-id") }, singleLine = true, isError = error != null,
+                placeholder = { Text(tr("host'group-id")) }, singleLine = true, isError = error != null,
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EInk.Value, unfocusedBorderColor = EInk.BodyStroke, focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = EInk.Value),
                 modifier = Modifier.weight(1f)
             )
             Spacer(Modifier.width(8.dp))
             EInkChip(text = "OPEN", selected = input.isNotEmpty(), onClick = {
                 val a = RelayGroups.parse(input)
-                if (a == null) error = "That isn't a group address" else {
+                if (a == null) error = tr("That isn't a group address") else {
                     vm.spaces.rememberGroup(a); saved = vm.spaces.savedGroups(); input = ""
                     navigate(GroupKey(a.toString()))
                 }
@@ -138,7 +138,7 @@ private fun GroupList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
             items(saved, key = { it.toString() }) { a ->
                 Row(Modifier.fillMaxWidth().clickable { navigate(GroupKey(a.toString())) }.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(a.toString(), color = EInk.Value, fontSize = 15.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("✕", color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.clickable(onClickLabel = "Remove") { vm.spaces.forgetGroup(a); saved = vm.spaces.savedGroups() }.padding(6.dp))
+                    Text("✕", color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.clickable(onClickLabel = tr("Remove")) { vm.spaces.forgetGroup(a); saved = vm.spaces.savedGroups() }.padding(6.dp))
                 }
                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
             }
@@ -180,7 +180,7 @@ fun CommunityScreen(vm: SocialViewModel, coordinate: String, navigate: (NavKey) 
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar(community?.name ?: "Community", onBack)
+        SocialTopBar(community?.name ?: tr("Community"), onBack)
         SocialScaffold(vm, navigate) { actions ->
             val c = community
             if (c == null) { Spinner(Modifier.padding(top = 40.dp)); return@SocialScaffold }
@@ -191,22 +191,22 @@ fun CommunityScreen(vm: SocialViewModel, coordinate: String, navigate: (NavKey) 
                         c.image?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().widthIn(max = 600.dp).clip(RoundedCornerShape(12.dp))) }
                         Text(c.name, color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                         c.description?.let { Text(it, color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp)) }
-                        Text("Moderated by ${(c.moderators + c.owner).size} people. Posts appear once a moderator approves them.", color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                        Text(tr("Moderated by {0} people. Posts appear once a moderator approves them.", (c.moderators + c.owner).size), color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                         Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             val isJoined = c.coordinate in joined
-                            EInkChip(text = if (isJoined) "JOINED ✓" else "JOIN", selected = !isJoined, onClick = {
+                            EInkChip(text = if (isJoined) tr("JOINED ✓") else "JOIN", selected = !isJoined, onClick = {
                                 if (account == null) navigate(LoginKey) else vm.setCommunityJoined(c, !isJoined)
                             })
-                            EInkChip(text = if (pending) "ALL POSTS" else "APPROVED", selected = pending, onClick = { pending = !pending })
+                            EInkChip(text = if (pending) tr("ALL POSTS") else tr("APPROVED"), selected = pending, onClick = { pending = !pending })
                         }
                         if (account != null) Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(
-                                value = text, onValueChange = { text = it }, placeholder = { Text("Post to ${c.name}") }, maxLines = 4,
+                                value = text, onValueChange = { text = it }, placeholder = { Text(tr("Post to {0}", c.name)) }, maxLines = 4,
                                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EInk.Value, unfocusedBorderColor = EInk.BodyStroke, focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = EInk.Value),
                                 modifier = Modifier.weight(1f)
                             )
                             Spacer(Modifier.width(8.dp))
-                            PillButton(if (sending) "…" else "Post", filled = text.isNotBlank() && !sending) {
+                            PillButton(if (sending) "…" else tr("Post"), filled = text.isNotBlank() && !sending) {
                                 if (text.isBlank() || sending) return@PillButton
                                 sending = true
                                 vm.postToCommunity(c, text) { ok -> sending = false; if (ok) { text = ""; reload++ } }
@@ -216,7 +216,7 @@ fun CommunityScreen(vm: SocialViewModel, coordinate: String, navigate: (NavKey) 
                     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
                     when {
                         posts == null -> Spinner()
-                        posts!!.isEmpty() -> EmptyNote(if (pending) "No posts yet." else "No approved posts yet. Try ALL POSTS.")
+                        posts!!.isEmpty() -> EmptyNote(if (pending) tr("No posts yet.") else tr("No approved posts yet. Try ALL POSTS."))
                     }
                 }
             )
@@ -236,10 +236,10 @@ fun ChannelScreen(vm: SocialViewModel, id: String, navigate: (NavKey) -> Unit, o
     }
     SpaceChat(
         vm, navigate, onBack,
-        title = ch?.name ?: "Public chat",
-        note = "Public chat: everyone can read this, and messages can't be deleted from every relay.",
+        title = ch?.name ?: tr("Public chat"),
+        note = tr("Public chat: everyone can read this, and messages can't be deleted from every relay."),
         messages = messages,
-        onSend = { text, done -> ch?.let { vm.sendToChannel(it, text) { ok -> done(if (ok) null else "Couldn't send") } } ?: done("Still loading") }
+        onSend = { text, done -> ch?.let { vm.sendToChannel(it, text) { ok -> done(if (ok) null else tr("Couldn't send")) } } ?: done(tr("Still loading")) }
     )
 }
 
@@ -247,7 +247,7 @@ fun ChannelScreen(vm: SocialViewModel, id: String, navigate: (NavKey) -> Unit, o
 @Composable
 fun GroupScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
     val a = remember(address) { RelayGroups.parse(address) }
-    if (a == null) { SocialTopBar("Group", onBack); EmptyNote("That isn't a group address."); return }
+    if (a == null) { SocialTopBar(tr("Group"), onBack); EmptyNote(tr("That isn't a group address.")); return }
     val group by produceState<RelayGroups.Group?>(null, a) { value = vm.group(a) }
     var messages by remember { mutableStateOf<List<Event>?>(null) }
     DisposableEffect(a) {
@@ -257,7 +257,7 @@ fun GroupScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit
     SpaceChat(
         vm, navigate, onBack,
         title = group?.name ?: a.id,
-        note = (group?.about?.let { "$it\n" } ?: "") + "Group on ${a.relay.removePrefix("wss://")}. The relay sees your key when you join or post." +
+        note = (group?.about?.let { "$it\n" } ?: "") + tr("Group on {0}. The relay sees your key when you join or post.", a.relay.removePrefix("wss://")) +
             if (group?.closed == true) " Joining needs approval." else "",
         messages = messages,
         action = "JOIN" to { vm.joinGroup(a) },
@@ -301,14 +301,14 @@ internal fun SpaceChat(
                         }
                     }
                     if (messages == null) item(key = "loading") { Spinner(Modifier.padding(top = 20.dp)) }
-                    else if (messages.isEmpty()) item(key = "empty") { EmptyNote("No messages yet.") }
+                    else if (messages.isEmpty()) item(key = "empty") { EmptyNote(tr("No messages yet.")) }
                     else items(messages, key = { it.id }) { m ->
                         val mine = m.pubkey == account?.pubkey
                         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
                             Avatar(profiles[m.pubkey], m.pubkey, size = 30, onClick = { navigate(com.example.btcwidget.ProfileKey(m.pubkey)) })
                             Column(Modifier.padding(start = 8.dp)) {
                                 Row {
-                                    Text(if (mine) "You" else profiles[m.pubkey]?.bestName ?: Profile.shortNpub(m.pubkey), color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    Text(if (mine) tr("You") else profiles[m.pubkey]?.bestName ?: Profile.shortNpub(m.pubkey), color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                     Text("  " + relativeTime(m.createdAt), color = EInk.Caption, fontSize = 12.sp)
                                 }
                                 Text(m.content, color = EInk.Value, fontSize = 15.sp)
@@ -319,16 +319,16 @@ internal fun SpaceChat(
                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
                 error?.let { Text(it, color = EInk.Alert, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
                 if (account == null) {
-                    Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.Center) { PillButton("Log in to chat") { navigate(LoginKey) } }
+                    Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.Center) { PillButton(tr("Log in to chat")) { navigate(LoginKey) } }
                 } else Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
-                        value = text, onValueChange = { text = it; error = null }, placeholder = { Text("Message") },
+                        value = text, onValueChange = { text = it; error = null }, placeholder = { Text(tr("Message")) },
                         shape = RoundedCornerShape(24.dp), maxLines = 4,
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EInk.Value, unfocusedBorderColor = EInk.BodyStroke, focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = EInk.Value),
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(8.dp))
-                    PillButton(if (sending) "…" else "Send", filled = text.isNotBlank() && !sending) {
+                    PillButton(if (sending) "…" else tr("Send"), filled = text.isNotBlank() && !sending) {
                         if (text.isBlank() || sending) return@PillButton
                         sending = true
                         val outgoing = text

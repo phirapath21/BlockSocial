@@ -69,7 +69,7 @@ fun WebViewer(url: String, note: Event?, stats: NoteStats, actions: NoteActions,
             Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 BarButton("✕", "Close", onDismiss)
                 Column(Modifier.weight(1f).padding(horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(page.title.ifBlank { "Loading…" }, color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(page.title.ifBlank { tr("Loading…") }, color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         (if ((page.url.ifBlank { url }).startsWith("https://")) "🔒 " else "") + hostOf(page.url.ifBlank { url }),
                         color = EInk.Caption, fontSize = 12.sp, maxLines = 1
@@ -79,9 +79,9 @@ fun WebViewer(url: String, note: Event?, stats: NoteStats, actions: NoteActions,
                 Box {
                     BarButton("⋮", "More options") { menu = true }
                     BlockDropdown(expanded = menu, onDismiss = { menu = false }) {
-                        BlockDropdownItem("Open in browser", Glyphs.OpenInBrowser) { menu = false; openExternally(context, page.url.ifBlank { url }) }
-                        BlockDropdownItem("Copy link", Glyphs.Link) { menu = false; copyLink(context, page.url.ifBlank { url }) }
-                        BlockDropdownItem("Share link", Glyphs.Share) { menu = false; shareLink(context, page.url.ifBlank { url }) }
+                        BlockDropdownItem(tr("Open in browser"), Glyphs.OpenInBrowser) { menu = false; openExternally(context, page.url.ifBlank { url }) }
+                        BlockDropdownItem(tr("Copy link"), Glyphs.Link) { menu = false; copyLink(context, page.url.ifBlank { url }) }
+                        BlockDropdownItem(tr("Share link"), Glyphs.Share) { menu = false; shareLink(context, page.url.ifBlank { url }) }
                     }
                 }
             }
@@ -122,7 +122,7 @@ private fun PostSheet(note: Event, stats: NoteStats, actions: NoteActions, level
             .padding(horizontal = 14.dp)
     ) {
         Box(
-            Modifier.fillMaxWidth().clickable(onClickLabel = "Show more or less of the post") { onSheet(if (level == 2) 0 else level + 1) }.padding(vertical = 8.dp),
+            Modifier.fillMaxWidth().clickable(onClickLabel = tr("Show more or less of the post")) { onSheet(if (level == 2) 0 else level + 1) }.padding(vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) { Box(Modifier.size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(50)).background(EInk.Caption)) }
         if (level >= 1) {
@@ -133,7 +133,7 @@ private fun PostSheet(note: Event, stats: NoteStats, actions: NoteActions, level
                     Text(handleText(author, note.pubkey), color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (note.pubkey != actions.me) Text(
-                    if (following) "Following" else "Follow",
+                    if (following) tr("Following") else tr("Follow"),
                     color = if (following) EInk.Value else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.clip(RoundedCornerShape(50)).background(if (following) EInk.Track else EInk.Value)
                         .clickable { actions.follow(note.pubkey, !following) }.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -141,7 +141,7 @@ private fun PostSheet(note: Event, stats: NoteStats, actions: NoteActions, level
             }
             if (level >= 2) Text(
                 plainText(note, actions), color = EInk.Value, fontSize = 15.sp, maxLines = 8, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp).clickable(onClickLabel = "Open post") { onLeave(); actions.openNote(note) }
+                modifier = Modifier.padding(top = 8.dp).clickable(onClickLabel = tr("Open post")) { onLeave(); actions.openNote(note) }
             )
             ActionRow(note, stats, actions)
             Spacer(Modifier.height(6.dp))
@@ -160,7 +160,7 @@ private fun hostOf(url: String): String = url.substringAfter("://").substringBef
 
 private fun copyLink(context: Context, url: String) {
     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("link", url))
-    Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, tr("Link copied"), Toast.LENGTH_SHORT).show()
 }
 
 private fun shareLink(context: Context, url: String) {

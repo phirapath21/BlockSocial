@@ -49,8 +49,8 @@ fun CommunityRulesScreen(onBack: () -> Unit) {
         SocialTopBar(CommunityRules.TITLE, onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
             Text(CommunityRules.INTRO, color = EInk.Label, fontSize = 15.sp)
-            Section("Not allowed", CommunityRules.RULES)
-            Section("Your tools", CommunityRules.TOOLS)
+            Section(tr("Not allowed"), CommunityRules.RULES)
+            Section(tr("Your tools"), CommunityRules.TOOLS)
             Text(CommunityRules.OUTRO, color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 18.dp))
         }
     }

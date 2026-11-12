@@ -128,7 +128,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun saveProfile(name: String, about: String, picture: String?, onDone: (Boolean) -> Unit) {
         val me = repo.pubkey ?: return onDone(false)
         var ok = false
-        tracked("Saving your profile", "Profile saved", "Couldn't save your profile", finally = { onDone(ok) }) {
+        tracked(tr("Saving your profile"), tr("Profile saved"), tr("Couldn't save your profile"), finally = { onDone(ok) }) {
             val current = repo.profiles.value[me] ?: Profile(me)
             repo.updateProfile(current.copy(name = name.trim().ifEmpty { current.name }, about = about.trim().ifEmpty { current.about }, picture = picture ?: current.picture))
             ok = true
@@ -232,7 +232,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     // ---- Account ----
 
-    fun loginWithAmber(onDone: () -> Unit) = act("Couldn't connect to the signer") {
+    fun loginWithAmber(onDone: () -> Unit) = act(tr("Couldn't connect to the signer")) {
         repo.loginWithAmber()
         afterLogin(); onDone()
     }
@@ -276,12 +276,12 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
             Log.w("SocialViewModel", "create account failed", e)
-            say("Couldn't create the account on this phone: ${e.javaClass.simpleName}")
+            say(tr("Couldn't create the account on this phone: {0}", e.javaClass.simpleName))
             return null
         }
         afterLogin()
         val me = repo.pubkey
-        if (name.isNotBlank() && me != null) act("Couldn't publish your profile") {
+        if (name.isNotBlank() && me != null) act(tr("Couldn't publish your profile")) {
             repo.updateProfile(Profile(me, name = name.trim()))
         }
         return nsec
@@ -321,9 +321,9 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     val mutes get() = repo.mutes
 
     fun muteEntry(type: String, value: String, mute: Boolean) =
-        act("Couldn't update mutes") { repo.setMuteEntry(type, value, mute); if (mute) say("Muted") }
+        act(tr("Couldn't update mutes")) { repo.setMuteEntry(type, value, mute); if (mute) say(tr("Muted")) }
 
-    fun unmuteAllThreads() = act("Couldn't update mutes") { repo.unmuteAllThreads() }
+    fun unmuteAllThreads() = act(tr("Couldn't update mutes")) { repo.unmuteAllThreads() }
 
     /** Mutes the conversation [note] belongs to (its root note). */
     fun muteThread(note: Event) = muteEntry("e", com.example.btcwidget.nostr.core.ThreadRef.of(note).root ?: note.id, true)
@@ -334,7 +334,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun setWotFilter(on: Boolean) {
         repo.setWotFilter(on)
         _wot.value = on
-        if (on) act("Couldn't load your network") { repo.loadTrust(); say("Showing replies and mentions from your network only") }
+        if (on) act(tr("Couldn't load your network")) { repo.loadTrust(); say(tr("Showing replies and mentions from your network only")) }
     }
 
     // ---- Communities, public chats, groups ----
@@ -348,25 +348,25 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     fun postToCommunity(c: com.example.btcwidget.nostr.core.Communities.Community, text: String, onResult: (Boolean) -> Unit) {
         var ok = false
-        act("Couldn't post", finally = { onResult(ok) }) { repo.spaces.post(c, text); ok = true; say("Posted. It shows here once a moderator approves it.") }
+        act(tr("Couldn't post"), finally = { onResult(ok) }) { repo.spaces.post(c, text); ok = true; say(tr("Posted. It shows here once a moderator approves it.")) }
     }
 
     fun setCommunityJoined(c: com.example.btcwidget.nostr.core.Communities.Community, join: Boolean) =
-        act(if (join) "Couldn't join" else "Couldn't leave") { repo.spaces.setJoined(c, join) }
+        act(if (join) tr("Couldn't join") else tr("Couldn't leave")) { repo.spaces.setJoined(c, join) }
 
     suspend fun channels() = runCatching { repo.spaces.channels() }.getOrDefault(emptyList())
     suspend fun channel(id: String) = runCatching { repo.spaces.channel(id) }.getOrNull()
 
     fun sendToChannel(channel: com.example.btcwidget.nostr.core.PublicChat.Channel, text: String, onResult: (Boolean) -> Unit) {
         var ok = false
-        act("Couldn't send", finally = { onResult(ok) }) { repo.spaces.sendToChannel(channel, text); ok = true }
+        act(tr("Couldn't send"), finally = { onResult(ok) }) { repo.spaces.sendToChannel(channel, text); ok = true }
     }
 
     suspend fun liveStreams() = runCatching { repo.spaces.liveStreams() }.getOrDefault(emptyList())
     suspend fun liveStream(address: String) = runCatching { repo.spaces.liveStream(address) }.getOrNull()
     fun sendLiveChat(live: com.example.btcwidget.nostr.core.LiveStreams.Live, text: String, onResult: (Boolean) -> Unit) {
         var ok = false
-        act("Couldn't send", finally = { onResult(ok) }) { repo.spaces.sendLiveChat(live, text); ok = true }
+        act(tr("Couldn't send"), finally = { onResult(ok) }) { repo.spaces.sendLiveChat(live, text); ok = true }
     }
 
     suspend fun group(address: com.example.btcwidget.nostr.core.RelayGroups.Address) = runCatching { repo.spaces.group(address) }.getOrNull()
@@ -374,11 +374,11 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     /** [onResult] gets null when sent, or the relay's reason. */
     fun sendToGroup(address: com.example.btcwidget.nostr.core.RelayGroups.Address, text: String, onResult: (String?) -> Unit) {
         var error: String? = "Couldn't send"
-        act("Couldn't send", finally = { onResult(error) }) { error = repo.spaces.sendToGroup(address, text) }
+        act(tr("Couldn't send"), finally = { onResult(error) }) { error = repo.spaces.sendToGroup(address, text) }
     }
 
     fun joinGroup(address: com.example.btcwidget.nostr.core.RelayGroups.Address) =
-        act("Couldn't ask to join") { val e = repo.spaces.joinGroup(address); say(e ?: "Asked to join") }
+        act(tr("Couldn't ask to join")) { val e = repo.spaces.joinGroup(address); say(e ?: tr("Asked to join")) }
 
     suspend fun feedServices() = runCatching { repo.feedServices() }.getOrDefault(emptyList())
     /** The feed, or the reason it couldn't load. */
@@ -424,10 +424,10 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     fun mediaServers(): List<String> = repo.mediaServerUrls()
     fun setMediaServers(urls: List<String>, onDone: () -> Unit) =
-        act("Couldn't save media servers") { repo.setMediaServers(urls); say("Media servers saved"); onDone() }
+        act(tr("Couldn't save media servers")) { repo.setMediaServers(urls); say(tr("Media servers saved")); onDone() }
 
     fun setDmInbox(urls: List<String>, onDone: () -> Unit) =
-        act("Couldn't save inbox relays") { repo.dms.setUpInbox(urls); say("Inbox relays saved"); onDone() }
+        act(tr("Couldn't save inbox relays")) { repo.dms.setUpInbox(urls); say(tr("Inbox relays saved")); onDone() }
 
     /** Notifications newer than the last time the tab was open. */
     val unreadNotifications: StateFlow<Int> = combine(_notifications, _notifSeen) { n, seen ->
@@ -502,11 +502,11 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
             repo.switchAccount(pubkey)
             afterLogin()
             repo.pubkey?.let { me -> viewModelScope.launch { runCatching { repo.refreshProfile(me) } } }
-            say("Switched account")
+            say(tr("Switched account"))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Log.w("SocialViewModel", "switch failed", e)
-            say("Couldn't switch account")
+            say(tr("Couldn't switch account"))
         }
     }
 
@@ -561,7 +561,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     /** Uploads a picked video as-is (up to 100 MB). */
     fun uploadVideo(uri: android.net.Uri, onResult: (Attachment?) -> Unit) {
         var result: Attachment? = null
-        act("Couldn't upload the video", finally = { onResult(result) }) {
+        act(tr("Couldn't upload the video"), finally = { onResult(result) }) {
             val prepared = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 com.example.btcwidget.nostr.VideoPrep.prepare(getApplication(), uri)
             }
@@ -573,7 +573,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     /** Prepares (strips metadata) and uploads a picked image; [onResult] gets it, or null on failure. */
     fun uploadImage(uri: android.net.Uri, onResult: (Attachment?) -> Unit) {
         var result: Attachment? = null
-        act("Couldn't upload the image", finally = { onResult(result) }) {
+        act(tr("Couldn't upload the image"), finally = { onResult(result) }) {
             val prepared = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                 com.example.btcwidget.nostr.ImagePrep.prepare(getApplication(), uri)
             }
@@ -595,16 +595,16 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     /** Sends a private message; [onResult] gets whether it was delivered. */
     fun sendDm(peers: List<String>, text: String, replyTo: String? = null, onResult: (Boolean) -> Unit) {
         var ok = false
-        act("Couldn't send the message", finally = { onResult(ok) }) { repo.dms.send(peers, text, replyTo); ok = true }
+        act(tr("Couldn't send the message"), finally = { onResult(ok) }) { repo.dms.send(peers, text, replyTo); ok = true }
     }
 
     fun reactDm(peers: List<String>, target: com.example.btcwidget.nostr.core.Nip17.Message, emoji: String) =
-        act("Couldn't react") { repo.dms.react(peers, target, emoji) }
+        act(tr("Couldn't react")) { repo.dms.react(peers, target, emoji) }
 
     /** Sends a photo, encrypted on the phone (location data removed first). */
     fun sendDmImage(peers: List<String>, uri: android.net.Uri, onResult: (Boolean) -> Unit) {
         var ok = false
-        act("Couldn't send the photo", finally = { onResult(ok) }) {
+        act(tr("Couldn't send the photo"), finally = { onResult(ok) }) {
             val prepared = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                 com.example.btcwidget.nostr.ImagePrep.prepare(getApplication(), uri)
             }
@@ -616,8 +616,8 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun openDmFile(info: com.example.btcwidget.nostr.core.DmFile.Info): ByteArray? =
         runCatching { repo.dms.openFile(info) }.getOrNull()
 
-    fun unlockDms() = act("Couldn't open messages") { repo.dms.unlock() }
-    fun setUpDmInbox() = act("Couldn't set up your inbox") { repo.dms.setUpInbox(); say("Inbox ready: people can message you") }
+    fun unlockDms() = act(tr("Couldn't open messages")) { repo.dms.unlock() }
+    fun setUpDmInbox() = act(tr("Couldn't set up your inbox")) { repo.dms.setUpInbox(); say(tr("Inbox ready: people can message you")) }
 
     suspend fun linkPreview(url: String) = repo.linkPreview(url)
 
@@ -640,23 +640,23 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     // ---- Actions ----
 
-    fun like(note: Event) = act("Couldn't like") { repo.like(note) }
-    fun react(note: Event, content: String, emojiUrl: String?) = act("Couldn't react") { repo.react(note, content, emojiUrl) }
+    fun like(note: Event) = act(tr("Couldn't like")) { repo.like(note) }
+    fun react(note: Event, content: String, emojiUrl: String?) = act(tr("Couldn't react")) { repo.react(note, content, emojiUrl) }
     val emojis get() = repo.emojis
-    fun repost(note: Event) = tracked("Reposting", "Reposted", "Couldn't repost") { repo.repost(note) }
-    fun follow(pubkey: String, follow: Boolean) = act(if (follow) "Couldn't follow" else "Couldn't unfollow") { repo.setFollowing(pubkey, follow) }
-    fun mute(pubkey: String, mute: Boolean) = act("Couldn't update mutes") {
+    fun repost(note: Event) = tracked(tr("Reposting"), tr("Reposted"), tr("Couldn't repost")) { repo.repost(note) }
+    fun follow(pubkey: String, follow: Boolean) = act(if (follow) tr("Couldn't follow") else tr("Couldn't unfollow")) { repo.setFollowing(pubkey, follow) }
+    fun mute(pubkey: String, mute: Boolean) = act(tr("Couldn't update mutes")) {
         repo.setMuted(pubkey, mute)
         if (mute) _home.update { s -> s.copy(items = s.items.filter { it.note.pubkey != pubkey && it.repostedBy != pubkey }) }
-        say(if (mute) "Muted" else "Unmuted")
+        say(if (mute) tr("Muted") else tr("Unmuted"))
     }
-    fun report(note: Event, reason: String) = act("Couldn't send the report") { repo.report(note, reason); say("Reported") }
-    fun delete(note: Event) = act("Couldn't delete") {
+    fun report(note: Event, reason: String) = act(tr("Couldn't send the report")) { repo.report(note, reason); say(tr("Reported")) }
+    fun delete(note: Event) = act(tr("Couldn't delete")) {
         repo.delete(note)
         _home.update { s -> s.copy(items = s.items.filter { it.note.id != note.id }) }
-        say("Deletion requested")
+        say(tr("Deletion requested"))
     }
-    fun updateProfile(profile: Profile, onDone: () -> Unit) = act("Couldn't save your profile") { repo.updateProfile(profile); onDone() }
+    fun updateProfile(profile: Profile, onDone: () -> Unit) = act(tr("Couldn't save your profile")) { repo.updateProfile(profile); onDone() }
 
     /** Posts a note, reply or quote with any uploaded images; [onResult] gets whether it was published. */
     fun send(
@@ -673,7 +673,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
             quote != null -> "Quoting" to "Quoted"
             else -> "Posting" to "Posted"
         }
-        tracked(working, done, "Couldn't post", finally = { onResult(ok) }) {
+        tracked(working, done, tr("Couldn't post"), finally = { onResult(ok) }) {
             // Image URLs go in the text (so every client shows them) with imeta tags (NIP-92).
             val body = (listOf(text.trim()) + images.map { it.url }).filter { it.isNotEmpty() }.joinToString("\n")
             val tags = images.map { com.example.btcwidget.nostr.core.Imeta.tag(it.url, it.mime, it.sha256, it.width, it.height, it.blurhash) } +
@@ -707,7 +707,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
             listOfNotNull(contentWarning?.let { listOf("content-warning", it) })
         com.example.btcwidget.nostr.ScheduledPosts.schedule(getApplication(), me, at, body, tags)
         refreshScheduled()
-        say("Scheduled for " + java.text.SimpleDateFormat("EEE, MMM d - h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(at * 1000)))
+        say(tr("Scheduled for ") + java.text.SimpleDateFormat("EEE, MMM d - h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(at * 1000)))
         return true
     }
 
@@ -717,12 +717,12 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /** Publishes a scheduled post right away (e.g. one the signer couldn't approve in the background). */
-    fun postScheduledNow(post: com.example.btcwidget.nostr.ScheduledPosts.Post) = act("Couldn't post") {
+    fun postScheduledNow(post: com.example.btcwidget.nostr.ScheduledPosts.Post) = act(tr("Couldn't post")) {
         val event = repo.publish(com.example.btcwidget.nostr.core.Events.note(post.pubkey, post.content, post.tags))
         com.example.btcwidget.nostr.ScheduledPosts.cancel(getApplication(), post.id)
         _home.update { it.copy(items = listOf(FeedItem(event)) + it.items) }
         refreshScheduled()
-        say("Posted")
+        say(tr("Posted"))
     }
 
     // ---- New posts while reading (the "↑ N new posts" pill) ----
@@ -764,9 +764,9 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     fun toggleBookmark(note: Event) {
         val on = note.id !in repo.bookmarks.value
-        act(if (on) "Couldn't bookmark" else "Couldn't remove the bookmark") {
+        act(if (on) tr("Couldn't bookmark") else tr("Couldn't remove the bookmark")) {
             repo.setBookmarked(note, on)
-            say(if (on) "Bookmarked" else "Bookmark removed")
+            say(if (on) tr("Bookmarked") else tr("Bookmark removed"))
         }
     }
 
@@ -776,18 +776,18 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun followPacks() = runCatching { repo.followPacks() }.getOrDefault(emptyList())
     suspend fun followPack(address: String) = runCatching { repo.followPack(address) }.getOrNull()
-    fun followAll(pubkeys: Collection<String>) = act("Couldn't follow them") {
+    fun followAll(pubkeys: Collection<String>) = act(tr("Couldn't follow them")) {
         repo.followAll(pubkeys)
-        say("Following ${pubkeys.size} people")
+        say(tr("Following {0} people", pubkeys.size))
     }
 
     suspend fun highlightsOf(article: com.example.btcwidget.nostr.core.Article) = runCatching { repo.highlightsOf(article) }.getOrDefault(emptyList())
     fun highlight(article: com.example.btcwidget.nostr.core.Article, text: String, comment: String?, onDone: () -> Unit) =
-        tracked("Highlighting", "Highlighted", "Couldn't highlight", finally = onDone) { repo.highlight(article, text, comment) }
+        tracked(tr("Highlighting"), tr("Highlighted"), tr("Couldn't highlight"), finally = onDone) { repo.highlight(article, text, comment) }
 
     val followedTags get() = repo.followedTags
     fun followHashtag(tag: String, follow: Boolean) =
-        act(if (follow) "Couldn't follow #$tag" else "Couldn't unfollow #$tag") { repo.setHashtagFollowed(tag, follow) }
+        act(if (follow) tr("Couldn't follow #{0}", tag) else tr("Couldn't unfollow #{0}", tag)) { repo.setHashtagFollowed(tag, follow) }
 
     val lists get() = repo.lists
     fun loadLists() { viewModelScope.launch { repo.pubkey?.let { runCatching { repo.peopleLists(it) } } } }
@@ -800,25 +800,25 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun createList(title: String, firstMember: String? = null, onDone: (com.example.btcwidget.nostr.core.PeopleList) -> Unit = {}) {
         val me = repo.pubkey ?: return
         val name = title.trim().ifBlank { return }
-        act("Couldn't create the list") {
+        act(tr("Couldn't create the list")) {
             var list = com.example.btcwidget.nostr.core.PeopleList.create(me, name)
             if (firstMember != null) list = list.with(firstMember)
             val saved = repo.updateList(list)
-            say("List created")
+            say(tr("List created"))
             onDone(saved)
         }
     }
 
     fun setInList(list: com.example.btcwidget.nostr.core.PeopleList, pubkey: String, inList: Boolean) {
-        act("Couldn't update the list") {
+        act(tr("Couldn't update the list")) {
             repo.updateList(list) { if (inList) it.with(pubkey) else it.without(pubkey) }
-            say(if (inList) "Added to ${list.title}" else "Removed from ${list.title}")
+            say(if (inList) tr("Added to {0}", list.title) else tr("Removed from {0}", list.title))
         }
     }
 
     fun renameList(list: com.example.btcwidget.nostr.core.PeopleList, title: String, description: String?) {
         val name = title.trim().ifBlank { return }
-        act("Couldn't rename the list") { repo.updateList(list) { it.copy(title = name.take(80), description = description?.trim()?.ifBlank { null }) } }
+        act(tr("Couldn't rename the list")) { repo.updateList(list) { it.copy(title = name.take(80), description = description?.trim()?.ifBlank { null }) } }
         // Its Home feed carries the name too.
         val renamed = { f: com.example.btcwidget.nostr.core.HomeFeed ->
             if (f is com.example.btcwidget.nostr.core.HomeFeed.People && f.owner == list.owner && f.d == list.d) f.copy(name = name.take(80)) else f
@@ -833,7 +833,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun deleteList(list: com.example.btcwidget.nostr.core.PeopleList) {
         // Out of the Home feed menu too.
         _homeFeeds.value.filter { it is com.example.btcwidget.nostr.core.HomeFeed.People && it.owner == list.owner && it.d == list.d }.forEach { removeFeed(it) }
-        act("Couldn't delete the list") { repo.deleteList(list); say("List deleted") }
+        act(tr("Couldn't delete the list")) { repo.deleteList(list); say(tr("List deleted")) }
     }
 
     /** Adds the list to Home's feed menu and switches to it. */
@@ -847,11 +847,11 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     val blockedRelays get() = repo.blockedRelays
     suspend fun relayInfo(url: String) = repo.relayInfo(url)
     fun saveRelayList(entries: List<com.example.btcwidget.nostr.core.RelayLists.Entry>) =
-        tracked("Saving your relays", "Relays saved", "Couldn't save your relays") { repo.saveRelayList(entries) }
+        tracked(tr("Saving your relays"), tr("Relays saved"), tr("Couldn't save your relays")) { repo.saveRelayList(entries) }
     fun saveSearchRelays(urls: List<String>) =
-        tracked("Saving search relays", "Search relays saved", "Couldn't save search relays") { repo.saveSearchRelays(urls) }
+        tracked(tr("Saving search relays"), tr("Search relays saved"), tr("Couldn't save search relays")) { repo.saveSearchRelays(urls) }
     fun saveBlockedRelays(urls: List<String>) =
-        tracked("Saving blocked relays", "Blocked relays saved", "Couldn't save blocked relays") { repo.saveBlockedRelays(urls) }
+        tracked(tr("Saving blocked relays"), tr("Blocked relays saved"), tr("Couldn't save blocked relays")) { repo.saveBlockedRelays(urls) }
 
     // ---- Relay status ----
 
@@ -864,12 +864,12 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     fun vote(poll: com.example.btcwidget.nostr.core.Poll, optionIds: List<String>, onResult: (Boolean) -> Unit) {
         var ok = false
-        act("Couldn't vote", finally = { onResult(ok) }) { repo.vote(poll, optionIds); ok = true }
+        act(tr("Couldn't vote"), finally = { onResult(ok) }) { repo.vote(poll, optionIds); ok = true }
     }
 
     fun createPoll(question: String, options: List<String>, multipleChoice: Boolean, durationSeconds: Long?, onResult: (Boolean) -> Unit) {
         var ok = false
-        act("Couldn't post the poll", finally = { onResult(ok) }) {
+        act(tr("Couldn't post the poll"), finally = { onResult(ok) }) {
             val endsAt = durationSeconds?.let { System.currentTimeMillis() / 1000 + it }
             val event = repo.createPoll(question, options, multipleChoice, endsAt)
             _home.update { it.copy(items = listOf(FeedItem(event)) + it.items) }
@@ -879,7 +879,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     fun togglePin(note: Event) {
         val on = note.id !in repo.pinned.value
-        act(if (on) "Couldn't pin" else "Couldn't unpin") { repo.setPinned(note, on); say(if (on) "Pinned to your profile" else "Unpinned") }
+        act(if (on) tr("Couldn't pin") else tr("Couldn't unpin")) { repo.setPinned(note, on); say(if (on) tr("Pinned to your profile") else tr("Unpinned")) }
     }
 
     suspend fun pinnedNoteOf(pubkey: String) = runCatching { repo.pinnedNoteOf(pubkey) }.getOrNull()
@@ -893,12 +893,12 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
      * invoice goes to [onInvoice], which opens a wallet app.
      */
     fun zap(recipient: String, amountSat: Long, note: Event?, comment: String, onInvoice: (String) -> Unit) =
-        act("Couldn't zap") {
+        act(tr("Couldn't zap")) {
             val invoice = repo.zapInvoice(recipient, amountSat, note, comment)
             if (repo.nwc.value != null) {
-                say("⚡ Paying $amountSat sats…")
+                say(tr("⚡ Paying {0} sats…", amountSat))
                 repo.payWithNwc(invoice)
-                say("⚡ Zapped $amountSat sats")
+                say(tr("⚡ Zapped {0} sats", amountSat))
                 note?.let { n -> runCatching { repo.loadStats(listOf(n.id)) } }
             } else {
                 onInvoice(invoice)
@@ -907,12 +907,12 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Returns an error message, or null when connected. */
     fun connectNwc(uri: String): String? = try {
-        repo.connectNwc(uri); say("Wallet connected"); null
+        repo.connectNwc(uri); say(tr("Wallet connected")); null
     } catch (e: Exception) {
         e.message ?: "Couldn't connect the wallet"
     }
 
-    fun disconnectNwc() { repo.disconnectNwc(); say("Wallet disconnected") }
+    fun disconnectNwc() { repo.disconnectNwc(); say(tr("Wallet disconnected")) }
 
     private fun say(message: String) { _messages.tryEmit(message) }
 
@@ -1002,7 +1002,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SignerRejected) {
-                say("Cancelled in the signer")
+                say(tr("Cancelled in the signer"))
             } catch (e: Exception) {
                 Log.d("SocialViewModel", failure, e)
                 say(e.message?.let { "$failure: $it" } ?: failure)

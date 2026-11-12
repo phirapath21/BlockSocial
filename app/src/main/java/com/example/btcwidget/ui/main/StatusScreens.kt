@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.main
 
+import com.example.btcwidget.ui.social.tr
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -33,7 +34,7 @@ fun LoadingScreen() {
             modifier = Modifier.size(32.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
-        SectionLabel("Syncing blocks…")
+        SectionLabel(tr("Syncing blocks…"))
     }
 }
 
@@ -46,10 +47,10 @@ fun ErrorScreen(error: Throwable, onRefresh: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        SectionLabel("No signal")
+        SectionLabel(tr("No signal"))
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = error.message ?: "An unexpected error occurred",
+            text = error.message ?: tr("An unexpected error occurred"),
             color = EInk.Value,
             fontSize = 13.sp,
             fontFamily = FontFamily.Monospace,

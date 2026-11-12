@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.main
 
+import com.example.btcwidget.ui.social.tr
 import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -304,7 +305,7 @@ fun MainScreenContent(
             .statusBarsPadding()
     ) {
         TopBar(
-            title = selectedTab.title,
+            title = tr(selectedTab.title),
             menuIcon = menuButtonIcon,
             onMenu = { scope.launch { drawerState.open() } }
         )
@@ -358,7 +359,7 @@ fun MainScreenContent(
                                     .verticalScroll(rememberScrollState())
                                     .padding(horizontal = 12.dp)
                             ) {
-                                HeaderSection(title = "BLOCK", subtitle = "Bitcoin at a glance")
+                                HeaderSection(title = "BLOCK", subtitle = tr("Bitcoin at a glance"))
                                 if (currentState is MainScreenUiState.Error) {
                                     ErrorScreen(error = currentState.throwable, onRefresh = onRefresh)
                                 } else {
@@ -427,7 +428,7 @@ fun MainScreenContent(
                         BadgedBox(badge = {
                             if (count > 0) Badge(containerColor = EInk.Alert) { Text(if (count > 99) "99+" else "$count") }
                         }) {
-                            Icon(tab.icon, contentDescription = if (count > 0) "${tab.label}, $count unread" else tab.label)
+                            Icon(tab.icon, contentDescription = if (count > 0) tr("{0}, {1} unread", tr(tab.label), count) else tr(tab.label))
                         }
                     },
                     alwaysShowLabel = false,
@@ -456,8 +457,8 @@ private fun TopBar(title: String, menuIcon: @Composable () -> Unit, onMenu: () -
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .clickable(onClickLabel = "Open menu", onClick = onMenu)
-                .semantics { contentDescription = "Open menu" }
+                .clickable(onClickLabel = tr("Open menu"), onClick = onMenu)
+                .semantics { contentDescription = tr("Open menu") }
         ) { menuIcon() }
         Text(
             text = title,
@@ -487,13 +488,13 @@ private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClickLabel = "Open ${tab.title}") { onOpen(tab) }
+                    .clickable(onClickLabel = tr("Open {0}", tr(tab.title))) { onOpen(tab) }
                     .background(if (selected) EInk.Body else Color.Transparent)
                     .padding(horizontal = 20.dp, vertical = 14.dp)
             ) {
                 Icon(tab.icon, contentDescription = null, tint = if (selected) EInk.Value else EInk.Label, modifier = Modifier.size(24.dp))
                 Text(
-                    text = tab.title,
+                    text = tr(tab.title),
                     color = EInk.Value,
                     fontSize = 18.sp,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,

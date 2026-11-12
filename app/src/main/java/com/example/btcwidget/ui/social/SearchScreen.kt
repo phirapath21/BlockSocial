@@ -150,13 +150,13 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
             if (onBack != null) {
                 Text(
                     "←", color = EInk.Value, fontSize = 22.sp,
-                    modifier = Modifier.clickable(onClickLabel = "Back", onClick = onBack).padding(horizontal = 14.dp, vertical = 8.dp)
+                    modifier = Modifier.clickable(onClickLabel = tr("Back"), onClick = onBack).padding(horizontal = 14.dp, vertical = 8.dp)
                 )
             }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Search people, posts, #tags, npub…") },
+                placeholder = { Text(tr("Search people, posts, #tags, npub…")) },
                 singleLine = true,
                 shape = RoundedCornerShape(50),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
@@ -172,7 +172,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
             // Scan someone's QR code (a profile, post or article) instead of typing.
             Text(
                 "▣", color = EInk.Value, fontSize = 22.sp,
-                modifier = Modifier.padding(start = 6.dp).clickable(onClickLabel = "Scan a QR code", onClick = scanQr).padding(8.dp)
+                modifier = Modifier.padding(start = 6.dp).clickable(onClickLabel = tr("Scan a QR code"), onClick = scanQr).padding(8.dp)
             )
         }
         Row(
@@ -195,14 +195,14 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                     val q = searched.orEmpty()
                     val stillLoading = loading || notesLoading || articlesLoading
                     if (!stillLoading && people.isEmpty() && notes.isEmpty() && articles.isEmpty() && !q.startsWith("#")) {
-                        EmptyNote("Nothing found for \"$q\".")
+                        EmptyNote(tr("Nothing found for \"{0}\".", q))
                     } else NoteList(
                         notes, stats, actions,
                         header = {
                             // A bit of everything: top people and articles, then notes.
                             com.example.btcwidget.nostr.core.HomeFeed.cleanTag(q)?.takeIf { q.startsWith("#") }?.let { tag ->
                                 Text(
-                                    "Open #$tag ›", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                                    tr("Open #{0} ›", tag), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.fillMaxWidth().clickable { navigate(HashtagKey(tag)) }.padding(horizontal = 14.dp, vertical = 14.dp)
                                 )
                                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
@@ -220,19 +220,19 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                             SectionTitle("Notes", null) {}
                             when {
                                 notesLoading && notes.isEmpty() -> Spinner(Modifier.padding(top = 20.dp))
-                                notes.isEmpty() -> EmptyNote("No notes found for \"$q\".")
+                                notes.isEmpty() -> EmptyNote(tr("No notes found for \"{0}\".", q))
                             }
                         }
                     )
                 }
                 // Before searching: Explore, recent notes from everyone or from one relay.
                 searched == null -> ExploreFeed(vm, actions, navigate)
-                tab == "people" -> if (people.isEmpty() && searched?.startsWith("#") != true) EmptyNote("No people found for \"$searched\".") else {
+                tab == "people" -> if (people.isEmpty() && searched?.startsWith("#") != true) EmptyNote(tr("No people found for \"{0}\".", searched)) else {
                     LazyColumn(Modifier.fillMaxSize()) {
                         com.example.btcwidget.nostr.core.HomeFeed.cleanTag(searched.orEmpty())?.takeIf { searched?.startsWith("#") == true }?.let { tag ->
                             item(key = "tag") {
                                 Text(
-                                    "Open #$tag ›", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                                    tr("Open #{0} ›", tag), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.fillMaxWidth().clickable { navigate(HashtagKey(tag)) }.padding(horizontal = 14.dp, vertical = 14.dp)
                                 )
                                 HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
@@ -245,11 +245,11 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                 }
                 tab == "articles" -> when {
                     articlesLoading && articles.isEmpty() -> Spinner(Modifier.padding(top = 30.dp))
-                    articles.isEmpty() -> EmptyNote("No articles found for \"$searched\".")
+                    articles.isEmpty() -> EmptyNote(tr("No articles found for \"{0}\".", searched))
                     else -> ArticleList(articles, actions)
                 }
                 notesLoading && notes.isEmpty() -> Spinner(Modifier.padding(top = 30.dp))
-                else -> if (notes.isEmpty()) EmptyNote("No notes found for \"$searched\".") else NoteList(notes, stats, actions)
+                else -> if (notes.isEmpty()) EmptyNote(tr("No notes found for \"{0}\".", searched)) else NoteList(notes, stats, actions)
             }
         }
     }
@@ -293,11 +293,11 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions, navigate: (Na
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            EInkChip(text = "ARTICLES", selected = reads, onClick = { reads = true; feeds = false; suggestions = false; packs = false })
+            EInkChip(text = tr("ARTICLES"), selected = reads, onClick = { reads = true; feeds = false; suggestions = false; packs = false })
             EInkChip(text = "FEEDS", selected = feeds, onClick = { feeds = true; suggestions = false; reads = false; packs = false })
-            EInkChip(text = "FOLLOW PACKS", selected = packs, onClick = { packs = true; suggestions = false; feeds = false; reads = false })
-            if (account != null) EInkChip(text = "WHO TO FOLLOW", selected = suggestions, onClick = { suggestions = true; feeds = false; reads = false; packs = false })
-            EInkChip(text = "GLOBAL", selected = !suggestions && !feeds && !reads && !packs && relay == null, onClick = { suggestions = false; feeds = false; reads = false; packs = false; relay = null })
+            EInkChip(text = tr("FOLLOW PACKS"), selected = packs, onClick = { packs = true; suggestions = false; feeds = false; reads = false })
+            if (account != null) EInkChip(text = tr("WHO TO FOLLOW"), selected = suggestions, onClick = { suggestions = true; feeds = false; reads = false; packs = false })
+            EInkChip(text = tr("GLOBAL"), selected = !suggestions && !feeds && !reads && !packs && relay == null, onClick = { suggestions = false; feeds = false; reads = false; packs = false; relay = null })
             vm.relays.forEach { url ->
                 EInkChip(text = url.removePrefix("wss://").removePrefix("ws://").uppercase(), selected = !suggestions && !feeds && !reads && !packs && relay == url, onClick = { suggestions = false; feeds = false; reads = false; packs = false; relay = url })
             }
@@ -309,7 +309,7 @@ private fun ExploreFeed(vm: SocialViewModel, actions: NoteActions, navigate: (Na
         if (reads) { RecentArticles(vm, actions); return@Column }
         when (val list = items) {
             null -> Spinner(Modifier.padding(top = 30.dp))
-            else -> if (list.isEmpty()) EmptyNote("Nothing here right now.") else NoteList(
+            else -> if (list.isEmpty()) EmptyNote(tr("Nothing here right now.")) else NoteList(
                 list, stats, actions,
                 loadingMore = loadingMore,
                 onLoadMore = {
@@ -358,12 +358,12 @@ private fun RecentArticles(vm: SocialViewModel, actions: NoteActions) {
     }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (account != null) EInkChip(text = "FOLLOWING", selected = following, onClick = { following = true })
-            EInkChip(text = "EVERYONE", selected = !following, onClick = { following = false })
+            if (account != null) EInkChip(text = tr("FOLLOWING"), selected = following, onClick = { following = true })
+            EInkChip(text = tr("EVERYONE"), selected = !following, onClick = { following = false })
         }
         when (val l = list) {
             null -> Spinner(Modifier.padding(top = 30.dp))
-            else -> if (l.isEmpty()) EmptyNote(if (following) "No articles from people you follow yet. Try EVERYONE." else "No articles found on your relays.")
+            else -> if (l.isEmpty()) EmptyNote(if (following) tr("No articles from people you follow yet. Try EVERYONE.") else tr("No articles found on your relays."))
             else ArticleList(l, actions)
         }
     }
@@ -380,10 +380,10 @@ private fun DvmFeeds(vm: SocialViewModel, actions: NoteActions) {
     if (c == null) {
         when (val l = services) {
             null -> Spinner(Modifier.padding(top = 30.dp))
-            else -> if (l.isEmpty()) EmptyNote("No feeds found on your relays.") else LazyColumn(Modifier.fillMaxSize()) {
+            else -> if (l.isEmpty()) EmptyNote(tr("No feeds found on your relays.")) else LazyColumn(Modifier.fillMaxSize()) {
                 item(key = "note") {
                     Text(
-                        "Feeds from Data Vending Machines: services that pick notes for you. Asking one doesn't reveal who you are, except feeds marked personalized.",
+                        tr("Feeds from Data Vending Machines: services that pick notes for you. Asking one doesn't reveal who you are, except feeds marked personalized."),
                         color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                 }
@@ -397,7 +397,7 @@ private fun DvmFeeds(vm: SocialViewModel, actions: NoteActions) {
                             else Text("✦", color = EInk.Value, fontSize = 18.sp)
                         }
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                            Text(svc.name + if (svc.personalized) "  · personalized" else "", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(svc.name + if (svc.personalized) tr("  · personalized") else "", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             svc.about?.let { Text(it, color = EInk.Label, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                         }
                     }
@@ -410,18 +410,18 @@ private fun DvmFeeds(vm: SocialViewModel, actions: NoteActions) {
     val result by androidx.compose.runtime.produceState<Result<List<FeedItem>>?>(null, c, reload) { value = null; value = vm.dvmFeed(c) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            EInkChip(text = "‹ FEEDS", selected = false, onClick = { chosen = null })
+            EInkChip(text = tr("‹ FEEDS"), selected = false, onClick = { chosen = null })
             Text(c.name, color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
             EInkChip(text = "↻", selected = false, onClick = { reload++ })
         }
         when (val r = result) {
             null -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Spinner(Modifier.padding(top = 30.dp))
-                Text("Asking ${c.name}…", color = EInk.Caption, fontSize = 12.sp)
+                Text(tr("Asking {0}…", c.name), color = EInk.Caption, fontSize = 12.sp)
             }
             else -> r.fold(
-                onSuccess = { items -> if (items.isEmpty()) EmptyNote("This feed has nothing right now.") else NoteList(items, stats, actions) },
-                onFailure = { EmptyNote(it.message ?: "Couldn't load this feed.") }
+                onSuccess = { items -> if (items.isEmpty()) EmptyNote(tr("This feed has nothing right now.")) else NoteList(items, stats, actions) },
+                onFailure = { EmptyNote(it.message ?: tr("Couldn't load this feed.")) }
             )
         }
     }
@@ -434,16 +434,16 @@ private fun WhoToFollow(vm: SocialViewModel, actions: NoteActions) {
     val list by androidx.compose.runtime.produceState<List<Pair<Profile, Int>>?>(null) { value = vm.followSuggestions() }
     when (val l = list) {
         null -> Spinner(Modifier.padding(top = 30.dp))
-        else -> if (l.isEmpty()) EmptyNote("No suggestions yet. Follow a few people first.") else LazyColumn(Modifier.fillMaxSize()) {
+        else -> if (l.isEmpty()) EmptyNote(tr("No suggestions yet. Follow a few people first.")) else LazyColumn(Modifier.fillMaxSize()) {
             items(l, key = { it.first.pubkey }) { (p, shared) ->
                 val on = p.pubkey in following
                 Column {
                     Text(
-                        "Followed by $shared people you follow", color = EInk.Caption, fontSize = 12.sp,
+                        tr("Followed by {0} people you follow", shared), color = EInk.Caption, fontSize = 12.sp,
                         modifier = Modifier.padding(start = 68.dp, top = 8.dp)
                     )
                     PersonRow(p, isFollowing = on, onClick = { actions.openProfile(p.pubkey) }) {
-                        EInkChip(text = if (on) "FOLLOWING" else "FOLLOW", selected = !on, onClick = { actions.follow(p.pubkey, !on) })
+                        EInkChip(text = if (on) tr("FOLLOWING") else tr("FOLLOW"), selected = !on, onClick = { actions.follow(p.pubkey, !on) })
                     }
                 }
             }
@@ -462,7 +462,7 @@ internal fun PersonRow(profile: Profile, isFollowing: Boolean, onClick: () -> Un
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 DisplayName(profile, profile.pubkey, EInk.Value, 15.sp, Modifier.weight(1f, fill = false))
-                if (isFollowing) Text("  · Following", color = EInk.Caption, fontSize = 12.sp)
+                if (isFollowing) Text(tr("  · Following"), color = EInk.Caption, fontSize = 12.sp)
             }
             Text(handleText(profile, profile.pubkey), color = EInk.Caption, fontSize = 13.sp, maxLines = 1)
             profile.about?.let {

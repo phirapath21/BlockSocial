@@ -79,29 +79,29 @@ fun LandingScreen(
         Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(Orange), contentAlignment = Alignment.Center) {
             Text("₿", color = Color.Black, fontSize = 36.sp, fontWeight = FontWeight.Bold)
         }
-        Text("Block", color = EInk.Value, fontSize = 40.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
-        Text("Bitcoin people, on Nostr.", color = EInk.Value, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+        Text(tr("Block"), color = EInk.Value, fontSize = 40.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
+        Text(tr("Bitcoin people, on Nostr."), color = EInk.Value, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
         Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Point("An open network: no company owns your account or your followers.")
-            Point("Your account is a key you hold. Take it to any Nostr app.")
-            Point("Zap sats to posts you love, and keep the Bitcoin price at a glance.")
+            Point(tr("An open network: no company owns your account or your followers."))
+            Point(tr("Your account is a key you hold. Take it to any Nostr app."))
+            Point(tr("Zap sats to posts you love, and keep the Bitcoin price at a glance."))
         }
         Spacer(Modifier.weight(1f))
         Spacer(Modifier.height(32.dp))
 
-        BigButton("Create account", filled = true, onClick = onCreate)
+        BigButton(tr("Create account"), filled = true, onClick = onCreate)
         Spacer(Modifier.height(10.dp))
-        BigButton(if (hasSigner) "Log in with signer app (Amber)" else "Get a signer app (Amber)", filled = false) {
+        BigButton(if (hasSigner) tr("Log in with signer app (Amber)") else tr("Get a signer app (Amber)"), filled = false) {
             if (hasSigner) vm.loginWithAmber(onLoggedIn) else uriHandler.openUri("https://github.com/greenart7c3/Amber")
         }
         Spacer(Modifier.height(10.dp))
-        BigButton("Log in with nsec", filled = false, onClick = onNsec)
+        BigButton(tr("Log in with nsec"), filled = false, onClick = onNsec)
         Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Remote signer (bunker)", color = EInk.Label, fontSize = 14.sp, modifier = Modifier.clickable(onClick = onBunker).padding(vertical = 8.dp))
-            Text("Look around first ›", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onBrowse).padding(vertical = 8.dp))
+            Text(tr("Remote signer (bunker)"), color = EInk.Label, fontSize = 14.sp, modifier = Modifier.clickable(onClick = onBunker).padding(vertical = 8.dp))
+            Text(tr("Look around first ›"), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onBrowse).padding(vertical = 8.dp))
         }
         Text(
-            "By creating an account or posting you agree to the Community rules ›",
+            tr("By creating an account or posting you agree to the Community rules ›"),
             color = EInk.Caption, fontSize = 12.sp,
             modifier = Modifier.padding(top = 8.dp).clickable(onClick = onOpenRules).padding(vertical = 6.dp)
         )
@@ -142,14 +142,14 @@ fun OnboardingScreen(vm: SocialViewModel, onFinish: () -> Unit) {
     Column(Modifier.fillMaxSize().background(EInk.Background).statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             if (step > 0) Text(
-                "← Back", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable(onClickLabel = "Previous step") { step-- }.padding(8.dp)
+                tr("← Back"), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable(onClickLabel = tr("Previous step")) { step-- }.padding(8.dp)
             )
             Text(
-                "Step ${step + 1} of 4", color = EInk.Caption, fontSize = 13.sp,
+                tr("Step {0} of 4", step + 1), color = EInk.Caption, fontSize = 13.sp,
                 modifier = Modifier.weight(1f).padding(start = if (step > 0) 4.dp else 8.dp)
             )
-            Text("Skip", color = EInk.Label, fontSize = 15.sp, modifier = Modifier.clickable { if (step < 3) step++ else onFinish() }.padding(8.dp))
+            Text(tr("Skip"), color = EInk.Label, fontSize = 15.sp, modifier = Modifier.clickable { if (step < 3) step++ else onFinish() }.padding(8.dp))
         }
         // Where you are in the four steps, in the accent colour.
         androidx.compose.material3.LinearProgressIndicator(
@@ -195,7 +195,7 @@ private fun ProfileStep(vm: SocialViewModel, onNext: () -> Unit) {
         if (uri != null) { uploading = true; vm.uploadImage(uri) { a -> uploading = false; if (a != null) picture = a.url } }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
-        StepTitle("Make it yours", "A name and a picture help people you know find and trust you. Both are public.")
+        StepTitle(tr("Make it yours"), tr("A name and a picture help people you know find and trust you. Both are public."))
         Box(
             Modifier.size(96.dp).clip(CircleShape).background(EInk.Body).clickable {
                 picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -205,19 +205,19 @@ private fun ProfileStep(vm: SocialViewModel, onNext: () -> Unit) {
             when {
                 uploading -> CircularProgressIndicator(color = EInk.Value, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 picture != null -> AsyncImage(picture, "Profile picture", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                else -> Text("+ Photo", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                else -> Text(tr("+ Photo"), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         }
         OutlinedTextField(
-            value = name, onValueChange = { name = it.take(50) }, label = { Text("Name") }, singleLine = true,
+            value = name, onValueChange = { name = it.take(50) }, label = { Text(tr("Name")) }, singleLine = true,
             colors = fieldColors(), modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
         )
         OutlinedTextField(
-            value = about, onValueChange = { about = it.take(280) }, label = { Text("About you (optional)") }, maxLines = 4,
+            value = about, onValueChange = { about = it.take(280) }, label = { Text(tr("About you (optional)")) }, maxLines = 4,
             colors = fieldColors(), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
         Spacer(Modifier.height(24.dp))
-        BigButton(if (saving) "Saving…" else if (uploading) "Uploading photo…" else "Next", filled = true) {
+        BigButton(if (saving) tr("Saving…") else if (uploading) tr("Uploading photo…") else tr("Next"), filled = true) {
             if (saving || uploading) return@BigButton
             if (name.isBlank() && about.isBlank() && picture == null) { onNext(); return@BigButton }
             saving = true
@@ -234,7 +234,7 @@ private fun ProfileStep(vm: SocialViewModel, onNext: () -> Unit) {
                     progress = { progress }, color = OnboardOrange, trackColor = EInk.Track, drawStopIndicator = {}, gapSize = 0.dp,
                     modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(50))
                 )
-                Text(a?.status ?: "Preparing…", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                Text(a?.status ?: tr("Preparing…"), color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -250,7 +250,7 @@ private val TOPICS = listOf(
 @Composable
 private fun TopicsStep(selected: Set<String>, onChange: (Set<String>) -> Unit, onNext: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
-        StepTitle("What are you into?", "Pick a few. Each becomes a feed in Home's menu, and we'll find people posting about them.")
+        StepTitle(tr("What are you into?"), tr("Pick a few. Each becomes a feed in Home's menu, and we'll find people posting about them."))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             TOPICS.forEach { t ->
                 val on = t in selected
@@ -258,7 +258,7 @@ private fun TopicsStep(selected: Set<String>, onChange: (Set<String>) -> Unit, o
             }
         }
         Spacer(Modifier.height(24.dp))
-        BigButton("Next", filled = true, onClick = onNext)
+        BigButton(tr("Next"), filled = true, onClick = onNext)
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -273,7 +273,7 @@ private fun PeopleStep(vm: SocialViewModel, topics: List<String>, onNext: () -> 
     val shownTopical = topical.orEmpty().filter { p -> starters.orEmpty().none { it.pubkey == p.pubkey } }
     val everyone = starters.orEmpty() + shownTopical
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
-        StepTitle("Follow a few people", "Your Home fills with what they post. You can change this any time.")
+        StepTitle(tr("Follow a few people"), tr("Your Home fills with what they post. You can change this any time."))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 PeopleSection("Well known in Bitcoin and Nostr", starters, "Looking them up…", following, vm)
@@ -282,7 +282,7 @@ private fun PeopleStep(vm: SocialViewModel, topics: List<String>, onNext: () -> 
                     "Finding people posting about " + tags.take(3).joinToString(", ") { "#$it" } + "…", following, vm
                 )
                 if (starters?.isEmpty() == true && topical?.isEmpty() == true) {
-                    Text("Couldn't find anyone right now. You can follow people later from Search.", color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp))
+                    Text(tr("Couldn't find anyone right now. You can follow people later from Search."), color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp))
                 }
             }
         }
@@ -290,11 +290,11 @@ private fun PeopleStep(vm: SocialViewModel, topics: List<String>, onNext: () -> 
             val notYet = everyone.filter { it.pubkey !in following }
             if (everyone.isNotEmpty()) Box(Modifier.weight(1f)) {
                 // One update of your follow list, not one per person.
-                BigButton(if (notYet.isEmpty()) "✓ All followed" else "Follow all (${notYet.size})", filled = false) {
+                BigButton(if (notYet.isEmpty()) tr("✓ All followed") else tr("Follow all ({0})", notYet.size), filled = false) {
                     if (notYet.isNotEmpty()) vm.followAll(notYet.map { it.pubkey })
                 }
             }
-            Box(Modifier.weight(1f)) { BigButton("Next", filled = true, onClick = onNext) }
+            Box(Modifier.weight(1f)) { BigButton(tr("Next"), filled = true, onClick = onNext) }
         }
     }
 }
@@ -310,11 +310,11 @@ private fun PeopleSection(title: String, people: List<Profile>?, loading: String
             )
             Text(loading, color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
         }
-        people.isEmpty() -> Text("No one found here.", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+        people.isEmpty() -> Text(tr("No one found here."), color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
         else -> people.forEach { p ->
             val on = p.pubkey in following
             PersonRow(p, isFollowing = on, onClick = { vm.follow(p.pubkey, !on) }) {
-                EInkChip(text = if (on) "FOLLOWING" else "FOLLOW", selected = !on, onClick = { vm.follow(p.pubkey, !on) })
+                EInkChip(text = if (on) tr("FOLLOWING") else tr("FOLLOW"), selected = !on, onClick = { vm.follow(p.pubkey, !on) })
             }
         }
     }
@@ -327,14 +327,14 @@ private fun InboxStep(vm: SocialViewModel, onFinish: () -> Unit) {
     var done by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
         StepTitle(
-            "Let people message you",
-            "Private messages are end-to-end encrypted. This publishes which relays receive your messages (public), so other apps know where to send them."
+            tr("Let people message you"),
+            tr("Private messages are end-to-end encrypted. This publishes which relays receive your messages (public), so other apps know where to send them.")
         )
-        BigButton(if (done) "✓ Inbox ready" else "Set up my inbox", filled = !done) {
+        BigButton(if (done) tr("✓ Inbox ready") else tr("Set up my inbox"), filled = !done) {
             if (!done) { vm.setUpDmInbox(); done = true }
         }
         Spacer(Modifier.height(10.dp))
-        BigButton("Start using Block", filled = done, onClick = onFinish)
+        BigButton(tr("Start using Block"), filled = done, onClick = onFinish)
         Spacer(Modifier.height(24.dp))
     }
 }

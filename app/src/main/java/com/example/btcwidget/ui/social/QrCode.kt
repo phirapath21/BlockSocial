@@ -70,9 +70,9 @@ fun ProfileQrDialog(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> U
     BlockDialog(
         onDismiss = onDismiss,
         title = profile?.bestName ?: Profile.shortNpub(pubkey),
-        confirmLabel = "Scan a code",
+        confirmLabel = tr("Scan a code"),
         onConfirm = scan,
-        dismissLabel = "Close"
+        dismissLabel = tr("Close")
     ) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             // White quiet zone around the code, so every scanner reads it on the dark dialog.
@@ -83,7 +83,7 @@ fun ProfileQrDialog(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> U
                 npub.take(16) + "…" + npub.takeLast(8), color = EInk.Caption, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp)
             )
-            Text("Scan with any Nostr app to follow.", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(tr("Scan with any Nostr app to follow."), color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
             Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SmallPill("Copy npub") { copyText(context, npub) }
                 SmallPill("Share") { shareText(context, "nostr:$npub") }
@@ -119,7 +119,7 @@ fun rememberQrScan(vm: SocialViewModel, navigate: (NavKey) -> Unit, onOpened: ()
                     is NostrRepository.Direct.ArticleTarget -> target.address.let { ArticleKey(Nip19.naddr(it.kind, it.pubkey, it.identifier, it.relays)) }
                     null -> null
                 }
-                if (key == null) Toast.makeText(context, "That QR code isn't a Nostr profile or post", Toast.LENGTH_SHORT).show()
+                if (key == null) Toast.makeText(context, tr("That QR code isn't a Nostr profile or post"), Toast.LENGTH_SHORT).show()
                 else { onOpened(); navigate(key) }
             }
         }
@@ -129,7 +129,7 @@ fun rememberQrScan(vm: SocialViewModel, navigate: (NavKey) -> Unit, onOpened: ()
 private fun copyText(context: Context, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     cm.setPrimaryClip(android.content.ClipData.newPlainText("npub", text))
-    Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, tr("Copied"), Toast.LENGTH_SHORT).show()
 }
 
 private fun shareText(context: Context, text: String) {
@@ -143,5 +143,5 @@ internal fun QrButton(label: String, onClick: () -> Unit) {
     Box(
         Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = label, onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
-    ) { Text("▣ QR", color = com.example.btcwidget.ui.main.EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+    ) { Text(tr("▣ QR"), color = com.example.btcwidget.ui.main.EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
 }

@@ -40,13 +40,13 @@ fun EngagementScreen(vm: SocialViewModel, noteId: String, initialTab: Int, navig
     val data by produceState<NostrRepository.Engagement?>(null, noteId) { value = vm.engagement(noteId) }
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar("Post engagement", onBack)
+        SocialTopBar(tr("Post engagement"), onBack)
         val d = data
         FeedTabs(
             listOf(
-                "Reposts" + (d?.reposts?.size?.let { " $it" } ?: ""),
-                "Likes" + (d?.likes?.size?.let { " $it" } ?: ""),
-                "Zaps" + (d?.zaps?.size?.let { " $it" } ?: "")
+                tr("Reposts") + (d?.reposts?.size?.let { " $it" } ?: ""),
+                tr("Likes") + (d?.likes?.size?.let { " $it" } ?: ""),
+                tr("Zaps") + (d?.zaps?.size?.let { " $it" } ?: "")
             ),
             selected = tab
         ) { tab = it }

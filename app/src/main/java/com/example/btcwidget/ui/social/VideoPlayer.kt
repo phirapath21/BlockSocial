@@ -223,14 +223,14 @@ fun VideoPlayer(url: String, note: Event, actions: NoteActions) {
                 val shown = c.boundsInWindow().height
                 onScreen = c.size.height > 0 && shown / c.size.height >= 0.6f
             }
-            .clickable(onClickLabel = "Open video") { actions.openVideo(url, note) },
+            .clickable(onClickLabel = tr("Open video")) { actions.openVideo(url, note) },
         contentAlignment = Alignment.Center
     ) {
         val p = player
         if (p != null) VideoSurface(p, Modifier.fillMaxSize(), inFeed = true)
         if (p == null || !play) {
             Box(Modifier.size(56.dp).clip(CircleShape).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
-                Icon(Glyphs.Play, contentDescription = "Play video", tint = Color.White, modifier = Modifier.size(34.dp))
+                Icon(Glyphs.Play, contentDescription = tr("Play video"), tint = Color.White, modifier = Modifier.size(34.dp))
             }
         }
         if (p != null && play) {
@@ -299,7 +299,7 @@ internal fun VideoControls(player: ExoPlayer, url: String, landscape: Boolean, o
             QualityButton(player)
             Text(
                 SPEED_LABELS[speedIndex], color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClickLabel = "Playback speed") {
+                modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClickLabel = tr("Playback speed")) {
                     speedIndex = (speedIndex + 1) % SPEEDS.size
                     player.setPlaybackSpeed(SPEEDS[speedIndex])
                 }.padding(horizontal = 12.dp, vertical = 8.dp)
@@ -326,14 +326,14 @@ private fun QualityButton(player: ExoPlayer) {
     LaunchedEffect(player) { while (true) { options = player.qualityOptions(); delay(1_000) } }
     if (options.size < 2) return
     val manual = player.trackSelectionParameters.overrides.values.any { it.type == C.TRACK_TYPE_VIDEO }
-    val label = if (manual) (player.videoSize.height.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto") else "Auto"
+    val label = if (manual) (player.videoSize.height.takeIf { it > 0 }?.let { "${it}p" } ?: tr("Auto")) else tr("Auto")
     Box {
         Text(
             "$label ▾", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClickLabel = "Video quality") { open = true }.padding(horizontal = 10.dp, vertical = 8.dp)
+            modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClickLabel = tr("Video quality")) { open = true }.padding(horizontal = 10.dp, vertical = 8.dp)
         )
         BlockDropdown(expanded = open, onDismiss = { open = false }) {
-            BlockDropdownItem("Auto", selected = !manual) { open = false; player.chooseQuality(null, context) }
+            BlockDropdownItem(tr("Auto"), selected = !manual) { open = false; player.chooseQuality(null, context) }
             options.forEach { o ->
                 BlockDropdownItem(o.label, selected = manual && player.videoSize.height == o.height) { open = false; player.chooseQuality(o, context) }
             }

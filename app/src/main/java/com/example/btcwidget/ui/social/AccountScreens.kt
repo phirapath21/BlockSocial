@@ -109,22 +109,22 @@ fun LoginScreen(
     if (mode == "nsec" || mode == "backup") SecureScreen()
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar(if (mode == "backup") "Save your key" else "Nostr account", onBack = { if (mode == "choose" || mode == "backup") { if (mode == "backup") onCreated() else onBack() } else if (startMode != "choose") onBack() else mode = "choose" })
+        SocialTopBar(if (mode == "backup") tr("Save your key") else tr("Nostr account"), onBack = { if (mode == "choose" || mode == "backup") { if (mode == "backup") onCreated() else onBack() } else if (startMode != "choose") onBack() else mode = "choose" })
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(20.dp)
         ) {
             when (mode) {
                 "choose" -> {
-                    Text("Join the conversation", color = EInk.Value, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Join the conversation"), color = EInk.Value, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Your Nostr account is a key pair. Keep the private key (nsec) safe: whoever has it can post as you, and it can't be reset.",
+                        tr("Your Nostr account is a key pair. Keep the private key (nsec) safe: whoever has it can post as you, and it can't be reset."),
                         color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
                     )
                     // Accounts already on this phone (after Add account, or a logout of one of several).
                     val saved by vm.savedAccounts.collectAsState()
                     val profiles by vm.profiles.collectAsState()
                     if (saved.isNotEmpty()) {
-                        Text("On this phone", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("On this phone"), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         saved.forEach { a ->
                             AccountRow(profiles[a.pubkey], a.pubkey, when (a.type) { com.example.btcwidget.nostr.SignerType.AMBER -> "Signer app"; com.example.btcwidget.nostr.SignerType.BUNKER -> "Remote signer"; else -> "Key on this phone" }) {
                                 com.example.btcwidget.ui.main.EInkChip(text = "USE", selected = true, onClick = { vm.switchAccount(a.pubkey); onDone() })
@@ -133,41 +133,41 @@ fun LoginScreen(
                         Spacer(Modifier.height(16.dp))
                     }
                     Option(
-                        title = "Connect a signer app",
-                        body = if (hasSigner) "Recommended. Your key stays in the signer (such as Amber); Block never sees it."
-                               else "Recommended. Install a signer such as Amber, which keeps your key and approves each post.",
-                        button = if (hasSigner) "Connect" else "Get Amber",
+                        title = tr("Connect a signer app"),
+                        body = if (hasSigner) tr("Recommended. Your key stays in the signer (such as Amber); Block never sees it.")
+                               else tr("Recommended. Install a signer such as Amber, which keeps your key and approves each post."),
+                        button = if (hasSigner) tr("Connect") else tr("Get Amber"),
                         filled = true
                     ) {
                         if (hasSigner) vm.loginWithAmber(onDone) else uriHandler.openUri("https://github.com/greenart7c3/Amber")
                     }
-                    Option("Remote signer (bunker)", "Use a NIP-46 signer such as nsec.app: paste its bunker:// link. Your key stays with that signer.", "Use bunker", false) {
+                    Option(tr("Remote signer (bunker)"), tr("Use a NIP-46 signer such as nsec.app: paste its bunker:// link. Your key stays with that signer."), tr("Use bunker"), false) {
                         mode = "bunker"; error = null; input = ""
                     }
-                    Option("Log in with nsec", "Paste your private key. It's encrypted with this phone's secure hardware and never backed up or sent anywhere.", "Use nsec", false) {
+                    Option(tr("Log in with nsec"), tr("Paste your private key. It's encrypted with this phone's secure hardware and never backed up or sent anywhere."), tr("Use nsec"), false) {
                         mode = "nsec"; error = null
                     }
-                    Option("New to Nostr?", "Create a new account in seconds. You'll be shown your private key once to save.", "Create account", false) {
+                    Option(tr("New to Nostr?"), tr("Create a new account in seconds. You'll be shown your private key once to save."), tr("Create account"), false) {
                         mode = "create"; error = null
                     }
                     Text(
-                        "By posting you agree to the Community rules ›",
+                        tr("By posting you agree to the Community rules ›"),
                         color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 16.dp).clickable(onClickLabel = "Open community rules", onClick = onOpenRules).padding(vertical = 6.dp)
+                        modifier = Modifier.padding(top = 16.dp).clickable(onClickLabel = tr("Open community rules"), onClick = onOpenRules).padding(vertical = 6.dp)
                     )
                 }
                 "bunker" -> {
                     var connecting by remember { mutableStateOf(false) }
-                    Text("Remote signer", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Remote signer"), color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "In your signer (nsec.app, nsecBunker…) create a connection for Block and paste its bunker:// link. " +
-                            "You may need to approve the connection there.",
+                        tr("In your signer (nsec.app, nsecBunker…) create a connection for Block and paste its bunker:// link. ") +
+                            tr("You may need to approve the connection there."),
                         color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
                     )
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it.trim(); error = null },
-                        label = { Text("bunker://…") },
+                        label = { Text(tr("bunker://…")) },
                         singleLine = true,
                         isError = error != null,
                         colors = fieldColors(),
@@ -175,7 +175,7 @@ fun LoginScreen(
                     )
                     error?.let { Text(it, color = EInk.Alert, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
                     Spacer(Modifier.height(14.dp))
-                    PillButton(if (connecting) "Waiting for the signer…" else "Connect", filled = input.startsWith("bunker://") && !connecting) {
+                    PillButton(if (connecting) tr("Waiting for the signer…") else tr("Connect"), filled = input.startsWith("bunker://") && !connecting) {
                         if (!input.startsWith("bunker://") || connecting) return@PillButton
                         connecting = true
                         vm.loginWithBunker(input) { e ->
@@ -187,12 +187,12 @@ fun LoginScreen(
                 "nsec" -> {
                     val focus = remember { FocusRequester() }
                     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-                    Text("Log in with nsec", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("Starts with nsec1…", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+                    Text(tr("Log in with nsec"), color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Starts with nsec1…"), color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it.trim(); error = null },
-                        label = { Text("Private key") },
+                        label = { Text(tr("Private key")) },
                         singleLine = true,
                         isError = error != null,
                         visualTransformation = PasswordVisualTransformation(),
@@ -202,28 +202,28 @@ fun LoginScreen(
                     )
                     error?.let { Text(it, color = EInk.Alert, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
                     Spacer(Modifier.height(16.dp))
-                    PillButton("Log in") {
+                    PillButton(tr("Log in")) {
                         val e = vm.loginWithSecret(input)
                         if (e == null) { input = ""; onDone() } else error = e
                     }
                 }
                 "create" -> {
-                    Text("Create account", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Create account"), color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     OutlinedTextField(
                         value = name, onValueChange = { name = it.take(50) },
-                        label = { Text("Name (optional)") }, singleLine = true, colors = fieldColors(),
+                        label = { Text(tr("Name (optional)")) }, singleLine = true, colors = fieldColors(),
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
                     )
                     Spacer(Modifier.height(16.dp))
-                    PillButton("Create") {
+                    PillButton(tr("Create")) {
                         vm.createAccount(name)?.let { newNsec = it; mode = "backup" }
                     }
                 }
                 "backup" -> {
                     val nsec = newNsec.orEmpty()
-                    Text("This is your private key", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("This is your private key"), color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Save it in a password manager now. It's the only way to log in on another app or phone, and nobody can recover it for you. Never share it.",
+                        tr("Save it in a password manager now. It's the only way to log in on another app or phone, and nobody can recover it for you. Never share it."),
                         color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp, bottom = 14.dp)
                     )
                     Text(
@@ -231,8 +231,8 @@ fun LoginScreen(
                         modifier = Modifier.fillMaxWidth().background(EInk.Body).padding(12.dp)
                     )
                     Row(Modifier.padding(top = 14.dp)) {
-                        PillButton("Copy", filled = false, modifier = Modifier.padding(end = 8.dp)) { copySecret(context, nsec) }
-                        PillButton("I saved it") { newNsec = null; onCreated() }
+                        PillButton(tr("Copy"), filled = false, modifier = Modifier.padding(end = 8.dp)) { copySecret(context, nsec) }
+                        PillButton(tr("I saved it")) { newNsec = null; onCreated() }
                     }
                 }
             }
@@ -320,9 +320,9 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar(
             when {
-                replyTo != null -> "Reply"
-                quote != null -> "Quote"
-                else -> "New post"
+                replyTo != null -> tr("Reply")
+                quote != null -> tr("Quote")
+                else -> tr("New post")
             },
             onBack
         )
@@ -330,7 +330,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
             if (replyTo != null) {
                 target?.let { t ->
                     Text(
-                        "Replying to @" + (profiles[t.pubkey]?.bestName ?: Profile.shortNpub(t.pubkey)),
+                        tr("Replying to @") + (profiles[t.pubkey]?.bestName ?: Profile.shortNpub(t.pubkey)),
                         color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp)
                     )
                     Text(t.content.take(280), color = EInk.Label, fontSize = 14.sp, maxLines = 4, modifier = Modifier.padding(bottom = 10.dp))
@@ -341,7 +341,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    placeholder = { Text(if (replyTo != null) "Post your reply" else "What's happening?") },
+                    placeholder = { Text(if (replyTo != null) tr("Post your reply") else tr("What's happening?")) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = EInk.Background, unfocusedBorderColor = EInk.Background,
                         focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = EInk.Value,
@@ -357,7 +357,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(onClickLabel = "Mention ${p.bestName}") {
+                        .clickable(onClickLabel = tr("Mention {0}", p.bestName)) {
                             text = text.replace(MENTION_AT_END, "\$1@" + Regex.escapeReplacement(handle) + " ")
                             mentions = mentions + (handle to p.pubkey)
                         }
@@ -394,14 +394,14 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                         OutlinedTextField(
                             value = value,
                             onValueChange = { v -> pollOptions = pollOptions.toMutableList().also { it[i] = v.take(25) } },
-                            placeholder = { Text("Choice ${i + 1}" + if (i >= 2) " (optional)" else "") },
+                            placeholder = { Text(tr("Choice {0}", i + 1) + if (i >= 2) tr(" (optional)") else "") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState())) {
-                        if (pollOptions.size < 4) com.example.btcwidget.ui.main.EInkChip(text = "+ CHOICE", selected = false, onClick = { pollOptions = pollOptions + "" })
-                        com.example.btcwidget.ui.main.EInkChip(text = if (pollMulti) "MULTIPLE" else "ONE CHOICE", selected = pollMulti, onClick = { pollMulti = !pollMulti })
+                        if (pollOptions.size < 4) com.example.btcwidget.ui.main.EInkChip(text = tr("+ CHOICE"), selected = false, onClick = { pollOptions = pollOptions + "" })
+                        com.example.btcwidget.ui.main.EInkChip(text = if (pollMulti) tr("MULTIPLE") else tr("ONE CHOICE"), selected = pollMulti, onClick = { pollMulti = !pollMulti })
                         listOf(1, 3, 7).forEach { d ->
                             com.example.btcwidget.ui.main.EInkChip(text = "${d}D", selected = pollDays == d, onClick = { pollDays = d })
                         }
@@ -417,10 +417,10 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                         Box {
                             if (img.isVideo) {
                                 Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body), contentAlignment = Alignment.Center) {
-                                    Text("▶ Video", color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text(tr("▶ Video"), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
                             } else AsyncImage(
-                                model = img.url, contentDescription = "Attached image", contentScale = ContentScale.Crop,
+                                model = img.url, contentDescription = tr("Attached image"), contentScale = ContentScale.Crop,
                                 modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body)
                             )
                             Text(
@@ -430,7 +430,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                                     .padding(4.dp)
                                     .clip(CircleShape)
                                     .background(EInk.Background.copy(alpha = 0.7f))
-                                    .clickable(onClickLabel = "Remove image") { images = images - img }
+                                    .clickable(onClickLabel = tr("Remove image")) { images = images - img }
                                     .padding(horizontal = 7.dp, vertical = 2.dp)
                             )
                         }
@@ -449,7 +449,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     color = EInk.Value, fontSize = 22.sp,
                     modifier = Modifier
                         .clip(CircleShape)
-                        .clickable(enabled = !poll && images.size + uploading < 4, onClickLabel = "Add photo or video") {
+                        .clickable(enabled = !poll && images.size + uploading < 4, onClickLabel = tr("Add photo or video")) {
                             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                         }
                         .padding(8.dp)
@@ -469,7 +469,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     modifier = Modifier
                         .clip(CircleShape)
                         .background(if (scheduleAt != null) EInk.Body else EInk.Background)
-                        .clickable(enabled = !poll, onClickLabel = "Schedule") { schedulePicker = true }
+                        .clickable(enabled = !poll, onClickLabel = tr("Schedule")) { schedulePicker = true }
                         .padding(8.dp)
                 )
                 Text(
@@ -477,20 +477,20 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                     color = if (sensitive) EInk.Alert else EInk.Caption, fontSize = 20.sp,
                     modifier = Modifier
                         .clip(CircleShape)
-                        .clickable(onClickLabel = if (sensitive) "Unmark sensitive" else "Mark as sensitive") { sensitive = !sensitive }
+                        .clickable(onClickLabel = if (sensitive) tr("Unmark sensitive") else tr("Mark as sensitive")) { sensitive = !sensitive }
                         .padding(8.dp)
                 )
                 Text(
-                    if (scheduleAt != null) "Posts " + java.text.SimpleDateFormat("EEE, MMM d - h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(scheduleAt!! * 1000)) + ", if your phone is on and online."
-                    else if (sensitive) "Marked sensitive: shown behind a warning."
-                    else if (images.any { it.isVideo }) "Videos are posted as they are: any location saved in the file is not removed."
-                    else "Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed.",
+                    if (scheduleAt != null) tr("Posts ") + java.text.SimpleDateFormat("EEE, MMM d - h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(scheduleAt!! * 1000)) + tr(", if your phone is on and online.")
+                    else if (sensitive) tr("Marked sensitive: shown behind a warning.")
+                    else if (images.any { it.isVideo }) tr("Videos are posted as they are: any location saved in the file is not removed.")
+                    else tr("Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed."),
                     color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
                 )
                 val canSend = !sending && uploading == 0 && (text.isNotBlank() || images.isNotEmpty() || quote != null) &&
                     (replyTo == null && quote == null || target != null) &&
                     (!poll || text.isNotBlank() && pollOptions.count { it.isNotBlank() } >= 2)
-                PillButton(if (sending) "Posting…" else if (replyTo != null) "Reply" else if (scheduleAt != null) "Schedule" else "Post", filled = canSend) {
+                PillButton(if (sending) tr("Posting…") else if (replyTo != null) tr("Reply") else if (scheduleAt != null) tr("Schedule") else tr("Post"), filled = canSend) {
                     if (!canSend) return@PillButton
                     sending = true
                     // "@handle" → nostr:npub… so it links and notifies them (and gets a "p" tag).
@@ -534,8 +534,8 @@ internal fun ScheduleDialog(initial: Long?, onDismiss: () -> Unit, onClear: () -
     val valid = chosen() > now.timeInMillis / 1000 + 60
     BlockDialog(
         onDismiss = onDismiss,
-        title = "Schedule post",
-        confirmLabel = if (initial != null) "Update" else "Schedule",
+        title = tr("Schedule post"),
+        confirmLabel = if (initial != null) tr("Update") else tr("Schedule"),
         confirmEnabled = valid,
         onConfirm = { onPick(chosen()) }
     ) {
@@ -550,12 +550,12 @@ internal fun ScheduleDialog(initial: Long?, onDismiss: () -> Unit, onClear: () -
         }
         androidx.compose.material3.TimeInput(state = time, modifier = Modifier.padding(top = 14.dp))
         Text(
-            if (valid) "It's signed and sent at that time. Your phone must be on and online; a signer app may ask you to approve then."
-            else "Pick a time in the future.",
+            if (valid) tr("It's signed and sent at that time. Your phone must be on and online; a signer app may ask you to approve then.")
+            else tr("Pick a time in the future."),
             color = if (valid) EInk.Caption else EInk.Alert, fontSize = 13.sp
         )
         if (initial != null) Text(
-            "Post now instead", color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+            tr("Post now instead"), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(top = 12.dp).clickable(onClick = onClear).padding(vertical = 6.dp)
         )
     }
@@ -617,7 +617,7 @@ fun EditProfileScreen(vm: SocialViewModel, onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar("Edit profile", onBack)
+        SocialTopBar(tr("Edit profile"), onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(16.dp)) {
             @Composable fun field(label: String, value: String, set: (String) -> Unit, singleLine: Boolean = true) =
                 OutlinedTextField(value, set, label = { Text(label) }, singleLine = singleLine, colors = fieldColors(),
@@ -626,7 +626,7 @@ fun EditProfileScreen(vm: SocialViewModel, onBack: () -> Unit) {
             Box(Modifier.fillMaxWidth().padding(bottom = 44.dp)) {
                 Box(
                     Modifier.fillMaxWidth().aspectRatio(3f).clip(RoundedCornerShape(12.dp)).background(EInk.Track)
-                        .clickable(enabled = uploadingFor == null, onClickLabel = "Change banner") { pick("banner") },
+                        .clickable(enabled = uploadingFor == null, onClickLabel = tr("Change banner")) { pick("banner") },
                     contentAlignment = Alignment.Center
                 ) {
                     if (banner.isNotBlank()) AsyncImage(banner, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -635,7 +635,7 @@ fun EditProfileScreen(vm: SocialViewModel, onBack: () -> Unit) {
                 Box(
                     Modifier.align(Alignment.BottomStart).offset(x = 14.dp, y = 36.dp).size(80.dp).clip(CircleShape)
                         .background(EInk.Body).border(3.dp, EInk.Background, CircleShape)
-                        .clickable(enabled = uploadingFor == null, onClickLabel = "Change profile picture") { pick("picture") },
+                        .clickable(enabled = uploadingFor == null, onClickLabel = tr("Change profile picture")) { pick("picture") },
                     contentAlignment = Alignment.Center
                 ) {
                     if (picture.isNotBlank()) AsyncImage(picture, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -643,19 +643,19 @@ fun EditProfileScreen(vm: SocialViewModel, onBack: () -> Unit) {
                 }
             }
             Text(
-                "Tap the picture or banner to upload from your phone (location data is removed).",
+                tr("Tap the picture or banner to upload from your phone (location data is removed)."),
                 color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp)
             )
-            field("Display name", displayName, { displayName = it.take(60) })
-            field("Username", name, { name = it.take(40) })
-            field("Bio", about, { about = it.take(500) }, singleLine = false)
-            field("Picture URL", picture, { picture = it.trim() })
-            field("Banner URL", banner, { banner = it.trim() })
-            field("Website", website, { website = it.trim() })
-            field("Nostr address (NIP-05)", nip05, { nip05 = it.trim() })
-            field("Lightning address (for zaps)", lud16, { lud16 = it.trim() })
+            field(tr("Display name"), displayName, { displayName = it.take(60) })
+            field(tr("Username"), name, { name = it.take(40) })
+            field(tr("Bio"), about, { about = it.take(500) }, singleLine = false)
+            field(tr("Picture URL"), picture, { picture = it.trim() })
+            field(tr("Banner URL"), banner, { banner = it.trim() })
+            field(tr("Website"), website, { website = it.trim() })
+            field(tr("Nostr address (NIP-05)"), nip05, { nip05 = it.trim() })
+            field(tr("Lightning address (for zaps)"), lud16, { lud16 = it.trim() })
             Spacer(Modifier.height(8.dp))
-            PillButton(if (uploadingFor != null) "Uploading…" else "Save", filled = uploadingFor == null) {
+            PillButton(if (uploadingFor != null) tr("Uploading…") else tr("Save"), filled = uploadingFor == null) {
                 if (uploadingFor != null) return@PillButton
                 vm.updateProfile(
                     current.copy(name = name, displayName = displayName, about = about, picture = picture,
