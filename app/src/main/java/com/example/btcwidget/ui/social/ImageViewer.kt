@@ -71,11 +71,14 @@ import kotlinx.coroutines.launch
 private val Scrim = Color(0xCC000000)
 private val Accent = Color(0xFFF7931A)
 /** The panel under the picture: the app's own background, nearly opaque, rounded at the top. */
-private val PanelShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+/** Behind the panel: clear at the top, darker toward the bottom. */
+private val PanelShade = listOf(Color.Transparent, Color(0x99000000), Color(0xD9000000))
+/** Secondary text over a picture. */
+private val OnPhotoCaption = Color.White.copy(alpha = 0.72f)
 
 /**
  * Full-screen image or ([video]) video in Block's style: back and ⋮ (Save image, Open in browser)
- * on top; underneath, on a rounded panel in the app's colours with a handle to drag it taller, the
+ * on top; underneath, over the picture on a see-through shade, with a handle to drag it taller, the
  * author with Follow, the note's text (Show more, or the handle, opens the rest to scroll), Reply ·
  * Repost · Like · Zap · Bookmark · Share, the reply box, and last the video controls. Pinch or double-tap to zoom, drag to pan.
  */
@@ -216,9 +219,9 @@ fun ImageViewer(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .clip(PanelShape)
-                    .background(EInk.Background.copy(alpha = 0.94f))
-                    .border(0.5.dp, EInk.BodyStroke, PanelShape)
+                    // See-through: the picture shows behind, with a shade that deepens toward the
+                    // bottom so the white text stays readable on any picture.
+                    .background(Brush.verticalGradient(PanelShade))
                     .safeDrawingPadding()
                     .imePadding()
                     .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp)
@@ -245,22 +248,22 @@ fun ImageViewer(
                         }
                         .padding(bottom = 8.dp),
                     contentAlignment = Alignment.Center
-                ) { Box(Modifier.size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(EInk.Track)) }
+                ) { Box(Modifier.size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.5f))) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Avatar(author, note.pubkey, size = 44, onClick = { onDismiss(); actions.openProfile(note.pubkey) })
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                        DisplayName(author, note.pubkey, EInk.Value, 16.sp)
+                        DisplayName(author, note.pubkey, Color.White, 16.sp)
                         val handle = handleText(author, note.pubkey)
-                        Text(handle, color = EInk.Caption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(handle, color = OnPhotoCaption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (!isMe) {
                         // Follow in the accent colour; Following as an outline.
                         Text(
                             if (following) tr("Following") else tr("Follow"),
-                            color = if (following) EInk.Value else Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            color = if (following) Color.White else Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
-                                .then(if (following) Modifier.border(1.dp, EInk.BodyStroke, RoundedCornerShape(50)) else Modifier.background(Accent))
+                                .then(if (following) Modifier.border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(50)) else Modifier.background(Accent))
                                 .clickable(onClickLabel = if (following) tr("Unfollow") else tr("Follow")) { actions.follow(note.pubkey, !following) }
                                 .padding(horizontal = 18.dp, vertical = 8.dp)
                         )
@@ -274,14 +277,14 @@ fun ImageViewer(
                             Modifier.padding(top = 10.dp).fillMaxWidth()
                                 .heightIn(max = with(density) { textPx.toDp() })
                                 .verticalScroll(rememberScrollState())
-                        ) { Text(caption, color = EInk.Value, fontSize = 15.sp, lineHeight = 21.sp) }
+                        ) { Text(caption, color = Color.White, fontSize = 15.sp, lineHeight = 21.sp) }
                         Text(
                             tr("Show less"), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium,
                             modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { expanded = false }.padding(vertical = 4.dp)
                         )
                     } else {
                         Text(
-                            caption, color = EInk.Value, fontSize = 15.sp, lineHeight = 20.sp,
+                            caption, color = Color.White, fontSize = 15.sp, lineHeight = 20.sp,
                             maxLines = 2, overflow = TextOverflow.Ellipsis,
                             onTextLayout = { cut = it.hasVisualOverflow },
                             modifier = Modifier
@@ -319,7 +322,7 @@ fun ImageViewer(
                 }
                 // The video's controls at the very bottom, under everything else, within thumb's reach.
                 if (player != null && !replying) {
-                    androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+                    androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = Color.White.copy(alpha = 0.2f), modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
                     VideoControls(player, url, landscape = rotated, onRotate = rotate)
                 }
             }
@@ -352,10 +355,10 @@ private fun ViewerAction(icon: ImageVector, count: Int?, label: String, modifier
             .clip(RoundedCornerShape(50))
             .clickable(onClickLabel = tr(label), role = Role.Button, onClick = onClick)
     ) {
-        Icon(icon, contentDescription = tr(label), tint = tint ?: if (active) Accent else EInk.Value, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = tr(label), tint = tint ?: if (active) Accent else Color.White, modifier = Modifier.size(22.dp))
         if (count != null && count > 0) {
             Spacer(Modifier.width(5.dp))
-            Text(compactCount(count), color = if (active) Accent else EInk.Caption, fontSize = 14.sp)
+            Text(compactCount(count), color = if (active) Accent else OnPhotoCaption, fontSize = 14.sp)
         }
     }
 }
