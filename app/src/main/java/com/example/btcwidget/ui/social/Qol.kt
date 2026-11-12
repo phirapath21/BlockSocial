@@ -121,7 +121,9 @@ val READABLE_WIDTH = 560.dp
 
 /** The side panel beside the posts on a wide screen (trending, live now), as X's right column. */
 private val SIDE_PANEL_WIDTH = 340.dp
-private val SIDE_PANEL_MIN = 250.dp
+private val SIDE_PANEL_MIN = 220.dp
+/** How narrow the posts may get to make room for the side panel (a phone on its side). */
+private val READABLE_MIN = 460.dp
 
 /** What goes in the side panel on wide screens; provided at the top of the app (null: none). */
 val LocalSidePanel = androidx.compose.runtime.compositionLocalOf<(@Composable () -> Unit)?> { null }
@@ -160,14 +162,17 @@ fun ReadableColumn(enabled: Boolean = androidx.compose.ui.platform.LocalConfigur
         contentAlignment = androidx.compose.ui.Alignment.TopCenter
     ) {
         // Room beside the posts: the side panel (trending, live now), as X has on the right.
-        val room = maxWidth - READABLE_WIDTH
-        val side = if (panel != null && room >= SIDE_PANEL_MIN) minOf(room, SIDE_PANEL_WIDTH) else 0.dp
+        // A phone on its side has ~750dp once the rail, the system's buttons and the camera cut-out
+        // are taken: the posts give up some width (down to READABLE_MIN) so the panel still fits.
+        val side = if (panel != null && maxWidth >= READABLE_MIN + SIDE_PANEL_MIN)
+            (maxWidth - READABLE_WIDTH).coerceIn(SIDE_PANEL_MIN, SIDE_PANEL_WIDTH) else 0.dp
+        val posts = if (side > 0.dp) minOf(READABLE_WIDTH, maxWidth - side) else READABLE_WIDTH
         androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxHeight()) {
             androidx.compose.foundation.layout.Box(
                 androidx.compose.ui.Modifier
                     .widthIn(max = READABLE_WIDTH)
                     .fillMaxHeight()
-                    .then(if (side > 0.dp) androidx.compose.ui.Modifier.width(READABLE_WIDTH) else androidx.compose.ui.Modifier.fillMaxWidth())
+                    .then(if (side > 0.dp) androidx.compose.ui.Modifier.width(posts) else androidx.compose.ui.Modifier.fillMaxWidth())
                     .drawBehind {
                         val c = com.example.btcwidget.ui.main.EInk.BodyStroke
                         val w = 0.5.dp.toPx()
