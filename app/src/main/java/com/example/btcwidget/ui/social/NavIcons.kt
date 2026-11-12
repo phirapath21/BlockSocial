@@ -19,6 +19,8 @@ class NavIcon(val outline: ImageVector, val filled: ImageVector) {
  * it appears. An object, so they build on first use.
  */
 object NavIcons {
+    private const val HOUSE = "M4,10.2L10.6,4.9Q12,3.8 13.4,4.9L20,10.2V19a1.5,1.5 0,0 1,-1.5 1.5H15v-5.5h-6v5.5H5.5A1.5,1.5 0,0 1,4 19z"
+    private const val BUBBLE = "M7,4.5h10a3.5,3.5 0,0 1,3.5 3.5v6a3.5,3.5 0,0 1,-3.5 3.5h-5.5l-4.5,3.5v-3.5a3.5,3.5 0,0 1,-3.5 -3.5v-6a3.5,3.5 0,0 1,3.5 -3.5z"
     private sealed class Part(val d: String) {
         class Fill(d: String) : Part(d)
         class EvenOdd(d: String) : Part(d)
@@ -68,17 +70,19 @@ object NavIcons {
         icon("Communities", Part.Fill("M9,13.75c-2.34,0 -7,1.17 -7,3.5L2,19h14v-1.75c0,-2.33 -4.66,-3.5 -7,-3.5zM4.34,17c0.84,-0.58 2.87,-1.25 4.66,-1.25s3.82,0.67 4.66,1.25L4.34,17zM9,12c1.93,0 3.5,-1.57 3.5,-3.5S10.93,5 9,5 5.5,6.57 5.5,8.5 7.07,12 9,12zM9,7c0.83,0 1.5,0.67 1.5,1.5S9.83,10 9,10s-1.5,-0.67 -1.5,-1.5S8.17,7 9,7zM16.04,13.81c1.16,0.84 1.96,1.96 1.96,3.44L18,19h4v-1.75c0,-2.02 -3.5,-3.17 -5.96,-3.44zM15,12c1.93,0 3.5,-1.57 3.5,-3.5S16.93,5 15,5c-0.54,0 -1.04,0.13 -1.5,0.35 0.63,0.89 1,1.98 1,3.15s-0.37,2.26 -1,3.15c0.46,0.22 0.96,0.35 1.5,0.35z")),
         icon("CommunitiesFilled", Part.Fill("M16,11c1.66,0 2.99,-1.34 2.99,-3S17.66,5 16,5c-1.66,0 -3,1.34 -3,3s1.34,3 3,3zM8,11c1.66,0 2.99,-1.34 2.99,-3S9.66,5 8,5C6.34,5 5,6.34 5,8s1.34,3 3,3zM8,13c-2.33,0 -7,1.17 -7,3.5V19h14v-2.5c0,-2.33 -4.67,-3.5 -7,-3.5zM16,13c-0.29,0 -0.62,0.02 -0.97,0.05 1.16,0.84 1.97,1.97 1.97,3.45V19h6v-2.5c0,-2.33 -4.67,-3.5 -7,-3.5z"))
     )
+    // A house with a soft, rounded roof (drawn for Block).
     val Home = NavIcon(
-        icon("Home", Part.Fill("M12,5.69l5,4.5V18h-2v-6H9v6H7v-7.81l5,-4.5M12,3L2,12h3v8h6v-6h2v6h6v-8h3L12,3z")),
-        icon("HomeFilled", Part.Fill("M10,20v-6h4v6h5v-8h3L12,3 2,12h3v8z"))
+        icon("Home", Part.Stroke(HOUSE, 1.9f)),
+        icon("HomeFilled", Part.Fill(HOUSE), Part.Stroke(HOUSE, 1.9f))
     )
     val Lists = NavIcon(
         icon("Lists", Part.Fill("M19,5v14H5V5h14m1.1,-2H3.9c-0.5,0 -0.9,0.4 -0.9,0.9v16.2c0,0.4 0.4,0.9 0.9,0.9h16.2c0.4,0 0.9,-0.5 0.9,-0.9V3.9c0,-0.5 -0.5,-0.9 -0.9,-0.9zM11,7h6v2h-6V7zM11,11h6v2h-6v-2zM11,15h6v2h-6zM7,7h2v2H7zM7,11h2v2H7zM7,15h2v2H7z")),
         icon("ListsFilled", Part.EvenOdd("M3.9,3h16.2c0.5,0 0.9,0.4 0.9,0.9v16.2c0,0.5 -0.4,0.9 -0.9,0.9H3.9c-0.5,0 -0.9,-0.4 -0.9,-0.9V3.9C3,3.4 3.4,3 3.9,3zM11,7h6v2h-6zM11,11h6v2h-6zM11,15h6v2h-6zM7,7h2v2H7zM7,11h2v2H7zM7,15h2v2H7z"))
     )
+    // A speech bubble, as on the profile's message button (drawn for Block).
     val Messages = NavIcon(
-        icon("Messages", Part.Fill("M22,6c0,-1.1 -0.9,-2 -2,-2H4c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V6zM20,6l-8,5 -8,-5h16zM20,18H4V8l8,5 8,-5v10z")),
-        icon("MessagesFilled", Part.Fill("M20,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V6c0,-1.1 -0.9,-2 -2,-2zM20,8l-8,5 -8,-5V6l8,5 8,-5v2z"))
+        icon("Messages", Part.Stroke(BUBBLE, 1.9f)),
+        icon("MessagesFilled", Part.Fill(BUBBLE), Part.Stroke(BUBBLE, 1.9f))
     )
     val Profile = NavIcon(
         icon("Profile", Part.Fill("M12,6c1.1,0 2,0.9 2,2s-0.9,2 -2,2 -2,-0.9 -2,-2 0.9,-2 2,-2m0,10c2.7,0 5.8,1.29 6,2H6c0.23,-0.72 3.31,-2 6,-2m0,-12C9.79,4 8,5.79 8,8s1.79,4 4,4 4,-1.79 4,-4 -1.79,-4 -4,-4zM12,14c-2.67,0 -8,1.34 -8,4v2h16v-2c0,-2.66 -5.33,-4 -8,-4z")),

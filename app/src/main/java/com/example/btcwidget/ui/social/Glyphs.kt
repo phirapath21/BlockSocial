@@ -122,4 +122,20 @@ object Glyphs {
         "MoreHoriz",
         "M6,10.2a1.8,1.8 0,1 0,0.001 0zM12,10.2a1.8,1.8 0,1 0,0.001 0zM18,10.2a1.8,1.8 0,1 0,0.001 0z"
     )
+
+    // Feed icons and the feed sheet's buttons, drawn for Block in the same line.
+    val ArrowUp = stroked("ArrowUp", "M12,19V5M6,11l6,-6 6,6", 2f)
+    val ArrowDown = stroked("ArrowDown", "M12,5V19M6,13l6,6 6,-6", 2f)
+    val Plus = stroked("Plus", "M12,5v14M5,12h14", 2f)
+    val Check = stroked("Check", "M5,12.5l4.5,4.5L19,7.5", 2.2f)
+    val Trash = stroked("Trash", "M5,7h14M10,7V5h4v2M7,7l0.8,12a1.5,1.5 0,0 0,1.5 1.4h5.4a1.5,1.5 0,0 0,1.5 -1.4L17,7M10.5,11v5.5M13.5,11v5.5")
+    val Sliders = stroked("Sliders", "M4,7h9M17,7h3M4,17h3M11,17h9M15,5v4M9,15v4", 1.9f)
+    val Following = stroked("Following", "M12,4a3.8,3.8 0,1 0,0.001 0zM4.5,20c0.8,-3.6 3.8,-5.5 7.5,-5.5s6.7,1.9 7.5,5.5")
+    val Globe = stroked("Globe", "M12,3.5a8.5,8.5 0,1 0,0.001 0zM3.5,12h17M12,3.5c2.6,2.4 3.8,5.2 3.8,8.5s-1.2,6.1 -3.8,8.5M12,3.5c-2.6,2.4 -3.8,5.2 -3.8,8.5s1.2,6.1 3.8,8.5")
+    val Hashtag = stroked("Hashtag", "M9.5,4L7.5,20M16.5,4L14.5,20M4.5,9h16M3.5,15h16")
+    val Relay = stroked("Relay", "M5.5,4.5h13a1,1 0,0 1,1 1v4a1,1 0,0 1,-1 1h-13a1,1 0,0 1,-1 -1v-4a1,1 0,0 1,1 -1zM5.5,13.5h13a1,1 0,0 1,1 1v4a1,1 0,0 1,-1 1h-13a1,1 0,0 1,-1 -1v-4a1,1 0,0 1,1 -1zM8,7.5h0.01M8,16.5h0.01", 1.8f)
+    val Sparkle = stroked("Sparkle", "M11,3.5l1.9,5.1 5.1,1.9 -5.1,1.9L11,17.5l-1.9,-5.1L4,10.5l5.1,-1.9zM18.5,15v5M16,17.5h5")
+    val PlayLine = stroked("PlayLine", "M8,5.5v13l10.5,-6.5z")
+    val PhotoLine = stroked("PhotoLine", "M5.5,4.5h13a1,1 0,0 1,1 1v13a1,1 0,0 1,-1 1h-13a1,1 0,0 1,-1 -1v-13a1,1 0,0 1,1 -1zM4.5,16l4.5,-4.5 3.5,3.5 2.5,-2.5 4.5,4.5M15.5,8.5h0.01")
+    val ListLine = stroked("ListLine", "M9,7h11M9,12h11M9,17h11M4.5,7h0.01M4.5,12h0.01M4.5,17h0.01")
 }

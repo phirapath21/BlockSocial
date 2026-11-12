@@ -58,6 +58,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -71,6 +73,7 @@ import com.example.btcwidget.nostr.FeedItem
 import com.example.btcwidget.nostr.NoteStats
 import com.example.btcwidget.nostr.NostrNotification
 import com.example.btcwidget.nostr.NotificationGroup
+import com.example.btcwidget.nostr.core.HomeFeed
 import com.example.btcwidget.nostr.core.Nip19
 import com.example.btcwidget.nostr.core.Profile
 import com.example.btcwidget.ui.main.EInk
@@ -185,10 +188,14 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 val shown = home.items
                 var feedMenu by remember { mutableStateOf(false) }
                 Column(Modifier.fillMaxSize()) {
-                    FeedHeader(
-                        feed, open = feedMenu,
-                        onShorts = { navigate(com.example.btcwidget.ShortsKey(everyone = (feed as? com.example.btcwidget.nostr.core.HomeFeed.Media)?.everyone == true)) }
-                    ) { feedMenu = true }
+                    val feeds by vm.homeFeeds.collectAsState()
+                    FeedTabBar(
+                        feeds, feed,
+                        // The open tab again: back to the top (and again: refresh), as on X.
+                        onSelect = { f -> if (f == feed) TabTaps.tap("HOME") else vm.selectFeed(f) },
+                        onShorts = { navigate(com.example.btcwidget.ShortsKey(everyone = (feed as? com.example.btcwidget.nostr.core.HomeFeed.Media)?.everyone == true)) },
+                        onManage = { feedMenu = true }
+                    )
                     PullToRefreshBox(isRefreshing = home.refreshing, onRefresh = { pullHaptics.tick(); vm.refreshHome() }, modifier = Modifier.fillMaxSize()) {
                         when {
                             home.loading && home.items.isEmpty() -> Spinner(Modifier.padding(top = 40.dp))
@@ -413,133 +420,270 @@ private fun NotificationRow(g: NotificationGroup, profiles: Map<String, Profile>
 
 private fun formatSats(sats: Long): String = "%,d".format(sats)
 
-// ---- Home feed menu ----
+// ---- Home feeds: tabs and the sheet to manage them ----
 
-/** "Latest ⌄ / Latest notes by your follows": tap to pick another feed. */
-@Composable
-private fun FeedHeader(feed: com.example.btcwidget.nostr.core.HomeFeed, open: Boolean, onShorts: () -> Unit, onOpen: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(
-            Modifier.weight(1f).clickable(onClickLabel = tr("Choose feed"), onClick = onOpen).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
-        ) {
-            Text(feedTitle(feed) + if (open) "  ⌃" else "  ⌄", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(feedSubtitle(feed), color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        // Videos one at a time, full screen (Shorts). Stands out on a Videos feed.
-        val videos = (feed as? com.example.btcwidget.nostr.core.HomeFeed.Media)?.videos == true
-        Row(
-            Modifier.padding(end = 12.dp).clip(RoundedCornerShape(50))
-                .background(if (videos) androidx.compose.ui.graphics.Color(0xFFF7931A) else EInk.Body)
-                .clickable(onClickLabel = tr("Watch videos full screen"), onClick = onShorts)
-                .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val ink = if (videos) androidx.compose.ui.graphics.Color.Black else EInk.Value
-            androidx.compose.material3.Icon(Glyphs.Play, contentDescription = null, tint = ink, modifier = Modifier.size(18.dp))
-            Text(tr("Shorts"), color = ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+/** The icon for a kind of feed, the same in the tabs' sheet and wherever feeds are listed. */
+internal fun feedIcon(f: HomeFeed): androidx.compose.ui.graphics.vector.ImageVector = when (f) {
+    is HomeFeed.Following -> if (f.replies) Glyphs.Chat else Glyphs.Following
+    is HomeFeed.Global -> if (f.relay == null) Glyphs.Globe else Glyphs.Relay
+    is HomeFeed.Hashtag -> Glyphs.Hashtag
+    is HomeFeed.Dvm -> Glyphs.Sparkle
+    is HomeFeed.Media -> if (f.videos) Glyphs.PlayLine else Glyphs.PhotoLine
+    is HomeFeed.People -> Glyphs.ListLine
+    else -> Glyphs.ListLine
 }
 
-/** Pick a feed; Edit to reorder, remove, or add hashtag, relay and DVM feeds. */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+/** A feed's name on its tab: short, since tabs sit side by side. */
+internal fun feedTabTitle(f: HomeFeed): String = when (f) {
+    is HomeFeed.Following -> tr(if (f.replies) "With replies" else "Latest")
+    is HomeFeed.Global -> f.relay?.removePrefix("wss://")?.removePrefix("ws://")?.removeSuffix("/") ?: tr("Global")
+    is HomeFeed.Hashtag -> "#" + f.tag
+    is HomeFeed.Dvm -> f.name
+    is HomeFeed.People -> f.name
+    else -> feedTitle(f)
+}
+
+/**
+ * The feeds as tabs across the top of Home, as on X: tap one to switch, tap the open one again
+ * to go back to the top. At the end, Shorts and the button to manage feeds. Slides away with
+ * the top bar while you scroll down.
+ */
+@Composable
+internal fun FeedTabBar(
+    feeds: List<HomeFeed>,
+    current: HomeFeed,
+    onSelect: (HomeFeed) -> Unit,
+    onShorts: () -> Unit,
+    onManage: () -> Unit
+) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible = LocalBarsVisible.current,
+        enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+    ) {
+        Column(Modifier.fillMaxWidth().background(EInk.Background)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                val row = androidx.compose.foundation.lazy.rememberLazyListState()
+                val index = feeds.indexOf(current)
+                // Keeps the open feed's tab in view (after switching from the sheet, or on start).
+                LaunchedEffect(index) { if (index >= 0) row.animateScrollToItem((index - 1).coerceAtLeast(0)) }
+                androidx.compose.foundation.lazy.LazyRow(
+                    state = row, modifier = Modifier.weight(1f).testTag("feed_tabs"),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 4.dp, end = 4.dp)
+                ) {
+                    items(feeds, key = { it.id }) { f -> FeedTab(feedTabTitle(f), selected = f == current) { onSelect(f) } }
+                }
+                val videos = (current as? HomeFeed.Media)?.videos == true
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape)
+                        .then(if (videos) Modifier.background(SettingsAccent) else Modifier.border(1.dp, EInk.BodyStroke, CircleShape))
+                        .clickable(onClickLabel = tr("Watch videos full screen"), onClick = onShorts),
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.material3.Icon(
+                        Glyphs.PlayLine, contentDescription = tr("Shorts"),
+                        tint = if (videos) androidx.compose.ui.graphics.Color.Black else EInk.Value, modifier = Modifier.size(18.dp)
+                    )
+                }
+                CircleIconButton(Glyphs.Sliders, tr("Manage feeds"), Modifier.padding(start = 8.dp, end = 12.dp), onClick = onManage)
+            }
+            HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+        }
+    }
+}
+
+/** One tab: the name, and an orange bar under it when it's open. */
+@Composable
+private fun FeedTab(label: String, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClickLabel = label, onClick = onClick)
+            .padding(horizontal = 12.dp)
+            .padding(top = 13.dp)
+            .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+    ) {
+        Text(
+            label, color = if (selected) EInk.Value else EInk.Caption, fontSize = 15.sp, maxLines = 1,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            modifier = Modifier.widthIn(max = 180.dp), overflow = TextOverflow.Ellipsis
+        )
+        Box(
+            Modifier.padding(top = 10.dp).fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp))
+                .background(if (selected) SettingsAccent else androidx.compose.ui.graphics.Color.Transparent)
+        )
+    }
+}
+
+/** The feed's icon in a soft round tile. */
+@Composable
+private fun FeedIconTile(f: HomeFeed, selected: Boolean = false) {
+    Box(
+        Modifier.size(40.dp).clip(CircleShape).background(if (selected) SettingsAccent.copy(alpha = 0.16f) else EInk.Track.copy(alpha = 0.6f)),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.material3.Icon(feedIcon(f), contentDescription = null, tint = if (selected) SettingsAccent else EInk.Value, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** A small round button in the sheet's edit mode (move up, move down, remove). */
+@Composable
+private fun SheetIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, tint: androidx.compose.ui.graphics.Color = EInk.Value, onClick: () -> Unit) {
+    Box(
+        Modifier.size(36.dp).clip(CircleShape).clickable(enabled = enabled, onClickLabel = label, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.material3.Icon(icon, contentDescription = label, tint = if (enabled) tint else EInk.BodyStroke, modifier = Modifier.size(19.dp))
+    }
+}
+
+/** Pick a feed; Edit to reorder, remove, or add topic, relay and DVM feeds. */
 @Composable
 private fun FeedMenu(vm: SocialViewModel, onClose: () -> Unit) {
     val feeds by vm.homeFeeds.collectAsState()
     val current by vm.homeFeed.collectAsState()
     var editing by remember { mutableStateOf(false) }
     BlockSheet(onDismiss = onClose) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)
+        ) {
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(tr("Feeds"), color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (editing) Text(
+                    tr("Reset"), color = EInk.Caption, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable { vm.resetFeeds() }.padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+                Box(
+                    Modifier.clip(RoundedCornerShape(50))
+                        .then(if (editing) Modifier.background(SettingsAccent) else Modifier.border(1.dp, EInk.BodyStroke, RoundedCornerShape(50)))
+                        .clickable { editing = !editing }
+                        .padding(horizontal = 16.dp, vertical = 7.dp)
+                ) {
+                    Text(
+                        if (editing) tr("Done") else tr("Edit"), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                        color = if (editing) androidx.compose.ui.graphics.Color.Black else EInk.Value
+                    )
+                }
+            }
             feeds.forEachIndexed { i, f ->
                 val selected = f == current
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (selected) EInk.Body else EInk.Background)
-                        .clickable(enabled = !editing) { vm.selectFeed(f); onClose() }.padding(horizontal = 14.dp, vertical = 12.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (selected && !editing) EInk.Body else androidx.compose.ui.graphics.Color.Transparent)
+                        .clickable(enabled = !editing) { vm.selectFeed(f); onClose() }.padding(horizontal = 10.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(feedTitle(f), color = EInk.Value, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(f.subtitle, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    FeedIconTile(f, selected = selected)
+                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(feedTitle(f), color = EInk.Value, fontSize = 16.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(feedSubtitle(f), color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (editing) {
-                        MenuGlyph("↑", "Move up", enabled = i > 0) { vm.moveFeed(f, -1) }
-                        MenuGlyph("↓", "Move down", enabled = i < feeds.lastIndex) { vm.moveFeed(f, 1) }
-                        MenuGlyph("✕", "Remove", enabled = feeds.size > 1) { vm.removeFeed(f) }
-                    } else if (selected) Text("✓", color = EInk.Value, fontSize = 18.sp)
+                        SheetIconButton(Glyphs.ArrowUp, tr("Move up"), enabled = i > 0) { vm.moveFeed(f, -1) }
+                        SheetIconButton(Glyphs.ArrowDown, tr("Move down"), enabled = i < feeds.lastIndex) { vm.moveFeed(f, 1) }
+                        SheetIconButton(Glyphs.Trash, tr("Remove"), enabled = feeds.size > 1, tint = EInk.Alert) { vm.removeFeed(f) }
+                    } else if (selected) {
+                        androidx.compose.material3.Icon(Glyphs.Check, contentDescription = tr("Selected"), tint = SettingsAccent, modifier = Modifier.size(22.dp))
+                    }
                 }
             }
             if (editing) AddFeed(vm, feeds)
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    if (editing) tr("Done") else tr("Edit"), color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { editing = !editing }.padding(8.dp)
-                )
-                if (editing) Text(tr("Reset"), color = EInk.Caption, fontSize = 16.sp, modifier = Modifier.clickable { vm.resetFeeds() }.padding(8.dp))
-                Text(tr("Close"), color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onClose).padding(8.dp))
-            }
         }
     }
 }
 
+/** A choice of what kind of feed to add: icon and name, orange when chosen. */
 @Composable
-private fun MenuGlyph(glyph: String, label: String, enabled: Boolean, onClick: () -> Unit) {
-    Text(
-        glyph, color = if (enabled) EInk.Value else EInk.BodyStroke, fontSize = 18.sp,
-        modifier = Modifier.clip(CircleShape).clickable(enabled = enabled, onClickLabel = label, onClick = onClick).padding(horizontal = 10.dp, vertical = 4.dp)
-    )
+private fun KindChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(50))
+            .then(if (selected) Modifier.background(SettingsAccent) else Modifier.border(1.dp, EInk.BodyStroke, RoundedCornerShape(50)))
+            .clickable(onClick = onClick)
+            .padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val ink = if (selected) androidx.compose.ui.graphics.Color.Black else EInk.Value
+        androidx.compose.material3.Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(16.dp))
+        Text(label, color = ink, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+    }
 }
 
-/** Adds a hashtag, relay (global on one relay) or DVM feed to the menu. */
+/** A feed you can add with one tap: its icon, name, and a + button. */
 @Composable
-private fun AddFeed(vm: SocialViewModel, existing: List<com.example.btcwidget.nostr.core.HomeFeed>) {
+private fun AddableFeedRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String?, onAdd: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = tr("Add"), onClick = onAdd).padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        androidx.compose.material3.Icon(icon, contentDescription = null, tint = EInk.Label, modifier = Modifier.size(20.dp))
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(title, color = EInk.Value, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) Text(subtitle, color = EInk.Caption, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box(Modifier.size(30.dp).clip(CircleShape).background(EInk.Track), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.Icon(Glyphs.Plus, contentDescription = tr("Add"), tint = EInk.Value, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+/** Adds a topic (hashtag), relay (global on one relay) or DVM feed, or brings back a built-in one. */
+@Composable
+private fun AddFeed(vm: SocialViewModel, existing: List<HomeFeed>) {
     var kind by remember { mutableStateOf(0) }
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
-        Text(tr("Add a feed"), color = EInk.Value, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("#HASHTAG", "RELAY", "DVM").forEachIndexed { i, t ->
-                com.example.btcwidget.ui.main.EInkChip(text = t, selected = kind == i, onClick = { kind = i; input = ""; error = null })
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(18.dp)).background(EInk.Body).padding(14.dp)) {
+        Text(tr("Add a feed"), color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(Triple(Glyphs.Hashtag, tr("Topic"), 0), Triple(Glyphs.Relay, tr("Relay"), 1), Triple(Glyphs.Sparkle, "DVM", 2)).forEach { (icon, label, i) ->
+                KindChip(icon, label, selected = kind == i) { kind = i; input = ""; error = null }
             }
-        }
-        // Built-in feeds that were removed can come back.
-        (com.example.btcwidget.nostr.core.HomeFeed.DEFAULTS + com.example.btcwidget.nostr.core.HomeFeed.SUGGESTED).filter { it !in existing }.forEach { f ->
-            Text("+ " + feedTitle(f), color = EInk.Value, fontSize = 14.sp, modifier = Modifier.clickable { vm.addFeed(f) }.padding(vertical = 6.dp))
         }
         if (kind == 2) {
             val services by produceKept<List<com.example.btcwidget.nostr.core.Dvm.Service>?>(null) { value = vm.feedServices() }
             when (val l = services) {
                 null -> Spinner()
                 else -> if (l.isEmpty()) Text(tr("No feed services found on your relays."), color = EInk.Caption, fontSize = 13.sp)
-                else Column(Modifier.heightIn(max = 260.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                else Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
                     l.forEach { svc ->
-                        Text(
-                            "+ " + svc.name + (svc.about?.let { " · $it" } ?: ""), color = EInk.Value, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth().clickable { vm.addFeed(com.example.btcwidget.nostr.core.HomeFeed.Dvm(svc.pubkey, svc.id, svc.name)) }.padding(vertical = 6.dp)
-                        )
+                        AddableFeedRow(Glyphs.Sparkle, svc.name, svc.about) { vm.addFeed(HomeFeed.Dvm(svc.pubkey, svc.id, svc.name)) }
                     }
                 }
             }
-            return@Column
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = input, onValueChange = { input = it; error = null },
+                    placeholder = { Text(if (kind == 0) "siamstr" else "relay.example.com", color = EInk.Caption) },
+                    leadingIcon = { androidx.compose.material3.Icon(if (kind == 0) Glyphs.Hashtag else Glyphs.Relay, contentDescription = null, tint = EInk.Caption, modifier = Modifier.size(18.dp)) },
+                    singleLine = true, isError = error != null,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = SettingsAccent, unfocusedBorderColor = EInk.BodyStroke, focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = SettingsAccent),
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(8.dp))
+                val ready = input.isNotBlank()
+                Box(
+                    Modifier.clip(RoundedCornerShape(50)).background(if (ready) SettingsAccent else EInk.Track)
+                        .clickable(enabled = ready) {
+                            val feed = if (kind == 0) HomeFeed.cleanTag(input)?.let { HomeFeed.Hashtag(it) }
+                            else com.example.btcwidget.nostr.core.normalizeRelayUrl(input.trim().let { if (it.startsWith("ws")) it else "wss://$it" })?.let { HomeFeed.Global(it) }
+                            if (feed == null) error = if (kind == 0) tr("One word, letters and numbers only") else tr("Not a relay address")
+                            else { vm.addFeed(feed); input = "" }
+                        }
+                        .padding(horizontal = 18.dp, vertical = 12.dp)
+                ) {
+                    Text(tr("Add"), color = if (ready) androidx.compose.ui.graphics.Color.Black else EInk.Caption, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            error?.let { Text(it, color = EInk.Alert, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.OutlinedTextField(
-                value = input, onValueChange = { input = it; error = null },
-                placeholder = { Text(if (kind == 0) "siamstr" else "wss://relay.example.com") },
-                singleLine = true, isError = error != null,
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(focusedBorderColor = EInk.Value, unfocusedBorderColor = EInk.BodyStroke, focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = EInk.Value),
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(8.dp))
-            com.example.btcwidget.ui.main.EInkChip(text = "ADD", selected = input.isNotBlank(), onClick = {
-                val feed = if (kind == 0) com.example.btcwidget.nostr.core.HomeFeed.cleanTag(input)?.let { com.example.btcwidget.nostr.core.HomeFeed.Hashtag(it) }
-                else com.example.btcwidget.nostr.core.normalizeRelayUrl(input.trim().let { if (it.startsWith("ws")) it else "wss://$it" })?.let { com.example.btcwidget.nostr.core.HomeFeed.Global(it) }
-                if (feed == null) error = if (kind == 0) tr("One word, letters and numbers only") else tr("Not a relay address")
-                else { vm.addFeed(feed); input = "" }
-            })
+        // Built-in feeds that were removed can come back.
+        val suggested = (HomeFeed.DEFAULTS + HomeFeed.SUGGESTED).filter { it !in existing }
+        if (suggested.isNotEmpty()) {
+            Text(tr("Suggested"), color = EInk.Caption, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
+            suggested.forEach { f -> AddableFeedRow(feedIcon(f), feedTitle(f), feedSubtitle(f)) { vm.addFeed(f) } }
         }
-        error?.let { Text(it, color = EInk.Alert, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
     }
 }
 
