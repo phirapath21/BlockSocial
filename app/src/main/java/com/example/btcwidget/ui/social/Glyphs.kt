@@ -107,4 +107,19 @@ object Glyphs {
     val Search = icon("Search", "M15.5,14h-0.79l-0.28,-0.27C15.41,12.59 16,11.11 16,9.5 16,5.91 13.09,3 9.5,3S3,5.91 3,9.5 5.91,16 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zM9.5,14C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z")
     val Chevron = icon("Chevron", "M10,6L8.59,7.41 13.17,12l-4.58,4.59L10,18l6,-6z")
     val Close = icon("Close", "M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z")
+
+    // Drawn for Block's profile page, in the same line weight as the zap bolt.
+    /** A speech bubble: send a direct message. */
+    val Chat = stroked("Chat", "M7,4.5h10a3.5,3.5 0,0 1,3.5 3.5v6a3.5,3.5 0,0 1,-3.5 3.5h-5.5l-4.5,3.5v-3.5a3.5,3.5 0,0 1,-3.5 -3.5v-6a3.5,3.5 0,0 1,3.5 -3.5z")
+    /** Two overlapping rounded sheets: copy. */
+    val CopyLine = stroked(
+        "CopyLine",
+        "M11,8.5h7a2.5,2.5 0,0 1,2.5 2.5v7a2.5,2.5 0,0 1,-2.5 2.5h-7a2.5,2.5 0,0 1,-2.5 -2.5v-7a2.5,2.5 0,0 1,2.5 -2.5zM15.5,8.5V6a2.5,2.5 0,0 0,-2.5 -2.5H6A2.5,2.5 0,0 0,3.5 6v7a2.5,2.5 0,0 0,2.5 2.5h2.5",
+        2f
+    )
+    /** Three dots in a row: more options. */
+    val MoreHoriz = icon(
+        "MoreHoriz",
+        "M6,10.2a1.8,1.8 0,1 0,0.001 0zM12,10.2a1.8,1.8 0,1 0,0.001 0zM18,10.2a1.8,1.8 0,1 0,0.001 0z"
+    )
 }

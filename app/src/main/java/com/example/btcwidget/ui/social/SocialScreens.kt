@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -56,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -657,9 +659,11 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     // Loaded the first time the Articles tab opens.
     var articles by rememberKeptState<List<com.example.btcwidget.nostr.core.Article>?>(pubkey) { null }
     LaunchedEffect(pubkey, tab) { if (tab == 3 && articles == null) articles = vm.articlesBy(pubkey) }
+    // Until the first answer, the header shows grey shapes (a person may have no profile at all).
+    var profileTried by remember(pubkey) { mutableStateOf(false) }
     LaunchedEffect(pubkey) {
         // Header and notes load at the same time; coming Back, the notes are already here.
-        launch { vm.refreshProfile(pubkey) }
+        launch { vm.refreshProfile(pubkey); profileTried = true }
         if (items == null) items = vm.profileFeed(pubkey)
     }
     val profile = profiles[pubkey]
@@ -678,8 +682,34 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
         }
     }
 
-    Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        if (onBack != null) SocialTopBar(profile?.bestName ?: tr("Profile"), onBack)
+    // The bar over the banner fills in as the banner scrolls away, as on X.
+    val listState = rememberKept(pubkey) { LazyListState() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val statusTop = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
+    var widthPx by remember { mutableStateOf(0) }
+    val topInset = onBack != null
+    val bannerPx = widthPx / 3 + if (topInset) statusTop else 0
+    val barPx = statusTop + with(density) { 52.dp.roundToPx() }
+    val fadePx = with(density) { 28.dp.roundToPx() }
+    val titlePx = with(density) { 96.dp.roundToPx() }
+    val collapse by remember(bannerPx, barPx) {
+        derivedStateOf {
+            when {
+                widthPx == 0 -> 0f
+                listState.firstVisibleItemIndex > 0 -> 1f
+                else -> ((listState.firstVisibleItemScrollOffset - (bannerPx - barPx - fadePx)).toFloat() / fadePx).coerceIn(0f, 1f)
+            }
+        }
+    }
+    val showTitle by remember(bannerPx, barPx) {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > bannerPx - barPx + titlePx }
+    }
+    val postsLine = items?.let { list ->
+        val n = list.count { it.repostedBy == null && !com.example.btcwidget.nostr.core.ThreadRef.of(it.note).isReply }
+        if (n == 0) null else tr("{0} posts", compactCount(n) + if (end) "" else "+")
+    }
+
+    Box(Modifier.fillMaxSize().background(EInk.Background).onSizeChanged { widthPx = it.width }) {
         if (addToList) AddToListSheet(vm, pubkey, onClose = { addToList = false })
         if (showQr) ProfileQrDialog(vm, pubkey, navigate, onDismiss = { showQr = false })
         if (profileMenu) {
@@ -705,6 +735,7 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
         SocialScaffold(vm, navigate) { actions ->
             NoteList(
                 items = shown, stats = stats, actions = actions,
+                state = listState,
                 loadingMore = loadingMore,
                 onLoadMore = {
                     val list = items
@@ -719,7 +750,8 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                     }
                 },
                 header = {
-                    ProfileHeader(
+                    if (profile == null && !profileTried) ProfileHeaderSkeleton(topInset)
+                    else ProfileHeader(
                         profile = profile, pubkey = pubkey, isMe = isMe,
                         followsYou = account?.pubkey?.let { theirFollowing?.contains(it) } == true,
                         followingCount = theirFollowing?.size,
@@ -733,12 +765,13 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         onUnmute = { vm.mute(pubkey, false) },
                         onMore = { profileMenu = true },
                         onOpenLists = { navigate(com.example.btcwidget.ListsKey(pubkey)) },
-                        actions = actions
+                        actions = actions,
+                        topInset = topInset
                     )
                     BadgesRow(badges)
                     FeedTabs(listOf(tr("Posts"), tr("Replies"), tr("Media"), tr("Articles")), selected = tab) { tab = it }
                     pinnedNote?.takeIf { tab == 0 }?.let { pin ->
-                        Text(tr("📌 Pinned"), color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 8.dp))
+                        PinnedLabel()
                         NoteCard(pin, stats[pin.id] ?: NoteStats(), actions)
                     }
                     val loaded = items
@@ -748,11 +781,12 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
                         else if (list.isEmpty()) EmptyNote(tr("No articles yet."))
                         else list.forEach { ArticleRow(it, onClick = { actions.openArticle(com.example.btcwidget.nostr.core.Nip19.Address(it.event.kind, it.pubkey, it.identifier)) }) }
                     }
-                    else if (loaded == null) Spinner()
+                    else if (loaded == null) NotesSkeleton()
                     else if (shown.isEmpty()) EmptyNote(listOf("No posts yet.", "No replies yet.", "No photos yet.")[tab] + if (!end && loaded.isNotEmpty()) tr(" Scroll loads older notes.") else "")
                 }
             )
         }
+        if (onBack != null) ProfileTopBar(profile, pubkey, postsLine, collapse, showTitle, onBack)
     }
 }
 
@@ -773,13 +807,19 @@ private fun ProfileHeader(
     onUnmute: () -> Unit,
     onMore: () -> Unit,
     onOpenLists: () -> Unit,
-    actions: NoteActions
+    actions: NoteActions,
+    topInset: Boolean = false
 ) {
     Column {
         Box {
             val banner = profile?.banner
-            Box(Modifier.fillMaxWidth().aspectRatio(3f).background(EInk.Track)) {
-                if (banner != null) AsyncImage(banner, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            // Under the status bar too when the screen has no bar of its own, as on X.
+            Box(Modifier.fillMaxWidth().background(EInk.Track)) {
+                if (banner != null) AsyncImage(banner, null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+                Column {
+                    if (topInset) Spacer(Modifier.statusBarsPadding())
+                    Spacer(Modifier.fillMaxWidth().aspectRatio(3f))
+                }
             }
             Box(
                 Modifier
@@ -790,14 +830,14 @@ private fun ProfileHeader(
             ) { Avatar(profile, pubkey, size = 76) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp, end = 14.dp), horizontalArrangement = Arrangement.End) {
-            PillButton("⋯", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onMore)
+            CircleIconButton(Glyphs.MoreHoriz, tr("More"), Modifier.padding(end = 8.dp).align(Alignment.CenterVertically), onClick = onMore)
             when {
                 isMe -> PillButton(tr("Edit profile"), filled = false, onClick = onEdit)
                 isMuted -> PillButton(tr("Unmute"), filled = false, onClick = onUnmute)
                 else -> {
-                    PillButton("✉", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = onMessage)
+                    CircleIconButton(Glyphs.Chat, tr("Message"), Modifier.padding(end = 8.dp).align(Alignment.CenterVertically), onClick = onMessage)
                     if (profile?.lud16 != null || profile?.lud06 != null) {
-                        PillButton("⚡", filled = false, modifier = Modifier.padding(end = 8.dp), onClick = { actions.zap(fakeProfileNote(pubkey)) })
+                        CircleIconButton(Glyphs.Zap, tr("Zap"), Modifier.padding(end = 8.dp).align(Alignment.CenterVertically), onClick = { actions.zap(fakeProfileNote(pubkey)) })
                     }
                     PillButton(if (isFollowing) tr("Following") else tr("Follow"), filled = !isFollowing, onClick = onFollow)
                 }
@@ -818,9 +858,22 @@ private fun ProfileHeader(
                     )
                 }
             }
-            profile?.about?.let { Text(it, color = EInk.Value, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp)) }
-            profile?.website?.let { Text("🔗 " + it.removePrefix("https://"), color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp)) }
-            profile?.lud16?.let { Text("⚡ $it", color = EInk.Label, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp)) }
+            profile?.about?.takeIf { it.isNotBlank() }?.let { ProfileBio(it, actions, Modifier.padding(top = 10.dp)) }
+            Column(Modifier.padding(top = 6.dp)) {
+                profile?.website?.trim()?.takeIf { it.isNotEmpty() }?.let { site ->
+                    val url = if ("://" in site) site else "https://$site"
+                    ProfileInfoRow(
+                        Glyphs.Link, site.removePrefix("https://").removePrefix("http://").removeSuffix("/"), url, tr("Link copied"),
+                        color = SettingsAccent, onClick = { actions.openLink(url, null) }
+                    )
+                }
+                profile?.lud16?.trim()?.takeIf { it.isNotEmpty() }?.let { address ->
+                    ProfileInfoRow(
+                        Glyphs.Zap, address, address, tr("Lightning address copied"),
+                        onClick = if (isMe) null else ({ actions.zap(fakeProfileNote(pubkey)) })
+                    )
+                }
+            }
             Row(Modifier.padding(top = 8.dp)) {
                 Text(
                     (followingCount?.let { compactCount(it) } ?: "…") + tr(" Following"),
@@ -838,10 +891,10 @@ private fun ProfileHeader(
                     modifier = Modifier.clickable(onClickLabel = tr("Show their lists"), onClick = onOpenLists).padding(vertical = 2.dp)
                 )
             }
-            Text(
-                Nip19.npub(pubkey).let { it.take(16) + "…" + it.takeLast(6) },
-                color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)
-            )
+            val npub = Nip19.npub(pubkey)
+            Box(Modifier.padding(top = 2.dp)) {
+                ProfileInfoRow(null, npub.take(16) + "…" + npub.takeLast(6), npub, tr("npub copied"), color = EInk.Caption, fontSize = 12)
+            }
         }
     }
 }
