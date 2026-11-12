@@ -138,4 +138,10 @@ object Glyphs {
     val PlayLine = stroked("PlayLine", "M8,5.5v13l10.5,-6.5z")
     val PhotoLine = stroked("PhotoLine", "M5.5,4.5h13a1,1 0,0 1,1 1v13a1,1 0,0 1,-1 1h-13a1,1 0,0 1,-1 -1v-13a1,1 0,0 1,1 -1zM4.5,16l4.5,-4.5 3.5,3.5 2.5,-2.5 4.5,4.5M15.5,8.5h0.01")
     val ListLine = stroked("ListLine", "M9,7h11M9,12h11M9,17h11M4.5,7h0.01M4.5,12h0.01M4.5,17h0.01")
+
+    // The composer's toolbar, drawn for Block.
+    val Poll = stroked("Poll", "M5,19.5V13M10,19.5V5M15,19.5V9.5M20,19.5V15.5M3.5,19.5h18")
+    val Calendar = stroked("Calendar", "M5.5,5.5h13a1.5,1.5 0,0 1,1.5 1.5v11.5a1.5,1.5 0,0 1,-1.5 1.5h-13a1.5,1.5 0,0 1,-1.5 -1.5V7a1.5,1.5 0,0 1,1.5 -1.5zM4,10h16M8.5,3.5v3.5M15.5,3.5v3.5M12,13v2.5l1.8,1.2")
+    val Warning = stroked("Warning", "M12,4.5L21,19.5H3zM12,10v4.5M12,17h0.01")
+    val CloseLine = stroked("CloseLine", "M6,6l12,12M18,6L6,18", 2f)
 }

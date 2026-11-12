@@ -1,5 +1,9 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.draggable
 import com.example.btcwidget.ui.main.EInk
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.animation.animateContentSize
@@ -71,9 +75,9 @@ private val PanelShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
 /**
  * Full-screen image or ([video]) video in Block's style: back and ⋮ (Save image, Open in browser)
- * on top; underneath, on a rounded panel in the app's colours, the video controls (orange seek
- * bar), the author with Follow, the note's text (Show more opens the rest) and Reply · Repost ·
- * Like · Zap · Bookmark · Share, then the reply box. Pinch or double-tap to zoom, drag to pan.
+ * on top; underneath, on a rounded panel in the app's colours with a handle to drag it taller, the
+ * author with Follow, the note's text (Show more, or the handle, opens the rest to scroll), Reply ·
+ * Repost · Like · Zap · Bookmark · Share, the reply box, and last the video controls. Pinch or double-tap to zoom, drag to pan.
  */
 @Composable
 fun ImageViewer(
@@ -219,11 +223,29 @@ fun ImageViewer(
                     .imePadding()
                     .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp)
             ) {
-                // The video's controls first, right under the picture they control.
-                if (player != null && !replying) {
-                    VideoControls(player, url, landscape = rotated, onRotate = rotate)
-                    androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 6.dp, bottom = 10.dp))
-                } else Spacer(Modifier.height(4.dp))
+                // Drag the handle up to read more of the post (pause first if you like), down to
+                // give the picture back its room. Tapping it does the same in one go.
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val screenPx = with(density) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }
+                val minPx = with(density) { 88.dp.toPx() }
+                val maxPx = (screenPx * 0.6f).coerceAtLeast(minPx)
+                var expanded by remember(note.id) { mutableStateOf(false) }
+                var textPx by remember(note.id) { mutableStateOf(screenPx * 0.32f) }
+                val drag = androidx.compose.foundation.gestures.rememberDraggableState { delta ->
+                    if (delta < 0 && !expanded) { expanded = true; textPx = minPx }
+                    textPx = (textPx - delta).coerceIn(minPx, maxPx)
+                    if (delta > 0 && textPx <= minPx) expanded = false
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .draggable(drag, androidx.compose.foundation.gestures.Orientation.Vertical)
+                        .clickable(onClickLabel = if (expanded) tr("Show less") else tr("Show more")) {
+                            expanded = !expanded; if (expanded) textPx = screenPx * 0.32f
+                        }
+                        .padding(bottom = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) { Box(Modifier.size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(EInk.Track)) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Avatar(author, note.pubkey, size = 44, onClick = { onDismiss(); actions.openProfile(note.pubkey) })
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
@@ -245,21 +267,34 @@ fun ImageViewer(
                     }
                 }
                 if (caption.isNotEmpty()) {
-                    var expanded by remember(note.id) { mutableStateOf(false) }
                     var cut by remember(note.id) { mutableStateOf(false) }
-                    Text(
-                        caption, color = EInk.Value, fontSize = 15.sp, lineHeight = 20.sp,
-                        maxLines = if (expanded) 10 else 2, overflow = TextOverflow.Ellipsis,
-                        onTextLayout = { if (!expanded) cut = it.hasVisualOverflow },
-                        modifier = Modifier
-                            .padding(top = 10.dp)
-                            .animateContentSize()
-                            .clickable(onClickLabel = tr("Open post")) { onDismiss(); actions.openNote(note) }
-                    )
-                    if (cut && !expanded) Text(
-                        tr("Show more"), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = tr("Read the whole post")) { expanded = true }.padding(vertical = 4.dp)
-                    )
+                    if (expanded) {
+                        // The whole post, scrolling inside the room the handle gives it.
+                        Box(
+                            Modifier.padding(top = 10.dp).fillMaxWidth()
+                                .heightIn(max = with(density) { textPx.toDp() })
+                                .verticalScroll(rememberScrollState())
+                        ) { Text(caption, color = EInk.Value, fontSize = 15.sp, lineHeight = 21.sp) }
+                        Text(
+                            tr("Show less"), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { expanded = false }.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        Text(
+                            caption, color = EInk.Value, fontSize = 15.sp, lineHeight = 20.sp,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            onTextLayout = { cut = it.hasVisualOverflow },
+                            modifier = Modifier
+                                .padding(top = 10.dp)
+                                .clickable(onClickLabel = tr("Open post")) { onDismiss(); actions.openNote(note) }
+                        )
+                        if (cut) Text(
+                            tr("Show more"), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                                .clickable(onClickLabel = tr("Read the whole post")) { expanded = true; textPx = screenPx * 0.32f }
+                                .padding(vertical = 4.dp)
+                        )
+                    }
                 }
                 // While replying the buttons make way for the reply box.
                 if (!replying) Spacer(Modifier.height(10.dp))
@@ -281,6 +316,11 @@ fun ImageViewer(
                 if (replyBar != null) {
                     Spacer(Modifier.height(10.dp))
                     replyBar { replying = it }
+                }
+                // The video's controls at the very bottom, under everything else, within thumb's reach.
+                if (player != null && !replying) {
+                    androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+                    VideoControls(player, url, landscape = rotated, onRotate = rotate)
                 }
             }
         }
