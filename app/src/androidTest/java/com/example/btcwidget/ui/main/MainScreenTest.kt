@@ -74,7 +74,7 @@ class MainScreenTest {
     @Test
     fun bottomBar_hasFiveTabsAndTheMenuIsTopLeft() {
         setContent()
-        listOf("Home", "Search", "Bitcoin", "Notifications", "Messages", "Open menu").forEach {
+        listOf("Home", "Shorts", "Bitcoin", "Notifications", "Messages", "Open menu", "Search").forEach {
             composeTestRule.onNodeWithContentDescription(it).assertExists()
         }
         // Profile and Settings are in the side panel.
@@ -98,7 +98,7 @@ class MainScreenTest {
             }
         }
         composeTestRule.onNodeWithTag("side_rail").assertExists()
-        listOf("Home", "Search", "Bitcoin", "Notifications", "Messages", "Open menu").forEach {
+        listOf("Home", "Shorts", "Bitcoin", "Notifications", "Messages", "Open menu", "Search").forEach {
             composeTestRule.onNodeWithContentDescription(it).assertExists()
         }
     }

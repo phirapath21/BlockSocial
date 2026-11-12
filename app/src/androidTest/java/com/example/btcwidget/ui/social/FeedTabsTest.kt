@@ -24,7 +24,7 @@ class FeedTabsTest {
             FeedTabBar(
                 feeds = HomeFeed.DEFAULTS + HomeFeed.Hashtag("siamstr"),
                 current = HomeFeed.DEFAULTS.first(),
-                onSelect = { picked = it }, onShorts = {}, onManage = { managed = true }
+                onSelect = { picked = it }, onManage = { managed = true }
             )
         }
         composeTestRule.onNodeWithText("Latest").assertExists()
