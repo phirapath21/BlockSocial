@@ -19,7 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,7 +40,7 @@ import com.example.btcwidget.ui.main.EInk
 @Composable
 internal fun FollowPackList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val profiles by vm.profiles.collectAsState()
-    val packs by produceState<List<FollowPack>?>(null) { value = vm.followPacks() }
+    val packs by produceKept<List<FollowPack>?>(null) { value = vm.followPacks() }
     when (val l = packs) {
         null -> Spinner(Modifier.padding(top = 30.dp))
         else -> if (l.isEmpty()) EmptyNote(tr("No follow packs found on your relays.")) else LazyColumn(Modifier.fillMaxSize()) {
@@ -75,7 +74,7 @@ fun FollowPackScreen(vm: SocialViewModel, address: String, navigate: (NavKey) ->
     val account by vm.account.collectAsState()
     val profiles by vm.profiles.collectAsState()
     val following by vm.following.collectAsState()
-    val loaded by produceState<Any?>(Unit, address) { value = vm.followPack(address) }
+    val loaded by produceKept<Any?>(Unit, address) { value = vm.followPack(address) }
     val pack = loaded as? FollowPack
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar(pack?.title ?: tr("Follow pack"), onBack)

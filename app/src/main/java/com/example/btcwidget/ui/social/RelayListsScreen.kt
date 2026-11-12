@@ -22,7 +22,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -150,7 +149,7 @@ private fun AddRelayRow(onAdd: (String) -> Unit) {
 @Composable
 internal fun RelayInfoSheet(vm: SocialViewModel, url: String, onDismiss: () -> Unit) {
     val profiles by vm.profiles.collectAsState()
-    val info by produceState<Any?>(Unit, url) { value = vm.relayInfo(url) }
+    val info by produceKept<Any?>(Unit, url) { value = vm.relayInfo(url) }
     BlockSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             Text(url.removePrefix("wss://"), color = EInk.Caption, fontSize = 13.sp)

@@ -17,7 +17,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,7 +36,7 @@ import com.example.btcwidget.ui.main.EInk
 fun EngagementScreen(vm: SocialViewModel, noteId: String, initialTab: Int, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
     val profiles by vm.profiles.collectAsState()
     var tab by rememberSaveable { mutableStateOf(initialTab) }
-    val data by produceState<NostrRepository.Engagement?>(null, noteId) { value = vm.engagement(noteId) }
+    val data by produceKept<NostrRepository.Engagement?>(null, noteId) { value = vm.engagement(noteId) }
 
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar(tr("Post engagement"), onBack)

@@ -29,7 +29,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -64,7 +63,7 @@ fun ListsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, owner: String? 
     val mine by vm.lists.collectAsState()
     val me = account?.pubkey
     val own = owner == null || owner == me
-    val theirs by produceState<List<PeopleList>?>(null, owner) { if (!own) value = vm.listsBy(owner) }
+    val theirs by produceKept<List<PeopleList>?>(null, owner) { if (!own) value = vm.listsBy(owner) }
     LaunchedEffect(me, own) { if (own && me != null) vm.loadLists() }
     var creating by remember { mutableStateOf(false) }
 
@@ -144,14 +143,14 @@ fun ListScreen(vm: SocialViewModel, owner: String, d: String, navigate: (NavKey)
     val following by vm.following.collectAsState()
     val isOwn = owner == account?.pubkey
     // Your own list follows your edits; someone else's is fetched once.
-    val fetched by produceState<Any?>(Unit, owner, d) { value = vm.peopleList(owner, d) }
+    val fetched by produceKept<Any?>(Unit, owner, d) { value = vm.peopleList(owner, d) }
     val list = (if (isOwn) mine?.firstOrNull { it.d == d } else null) ?: fetched as? PeopleList
     val feedKey = list?.members?.sorted()?.hashCode()
-    val posts by produceState<List<FeedItem>?>(null, feedKey) {
+    val posts by produceKept<List<FeedItem>?>(null, feedKey) {
         value = null
         if (list != null) value = vm.listFeed(list)
     }
-    var tab by remember { mutableStateOf(0) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
     var editing by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }

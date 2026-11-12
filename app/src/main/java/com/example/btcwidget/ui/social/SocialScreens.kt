@@ -46,7 +46,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -102,7 +101,8 @@ fun NoteList(
     stats: Map<String, NoteStats>,
     actions: NoteActions,
     modifier: Modifier = Modifier,
-    state: LazyListState = rememberLazyListState(),
+    // Kept across Back, with the notes: you return to the post you left.
+    state: LazyListState = rememberKept { LazyListState() },
     loadingMore: Boolean = false,
     onLoadMore: (() -> Unit)? = null,
     header: (@Composable () -> Unit)? = null
@@ -269,7 +269,7 @@ fun FeedTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
 @Composable
 private fun WelcomeScreen(vm: SocialViewModel, actions: NoteActions, onLogin: () -> Unit) {
     val stats by vm.stats.collectAsState()
-    val feed by produceState<List<FeedItem>?>(null) { value = vm.hashtagFeed("bitcoin") }
+    val feed by produceKept<List<FeedItem>?>(null) { value = vm.hashtagFeed("bitcoin") }
     NoteList(items = feed.orEmpty(), stats = stats, actions = actions, header = {
         Column(Modifier.fillMaxWidth().padding(20.dp)) {
             Text(tr("Bitcoin people, on Nostr"), color = EInk.Value, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -344,7 +344,7 @@ private fun NotificationRow(g: NotificationGroup, profiles: Map<String, Profile>
             else "reacted " + g.items.map { it.event.content }.filter { it != "+" && it.isNotBlank() && it.length <= 8 }.distinct().take(5).joinToString("")
         else -> "zapped ${formatSats(g.totalMsat / 1000)} sats"
     }
-    val target by produceState<Event?>(null, g.noteId) { value = g.noteId?.let { runCatching { actions.resolveNote(it) }.getOrNull() } }
+    val target by produceKept<Event?>(null, g.noteId) { value = g.noteId?.let { runCatching { actions.resolveNote(it) }.getOrNull() } }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -483,7 +483,7 @@ private fun AddFeed(vm: SocialViewModel, existing: List<com.example.btcwidget.no
             Text("+ " + feedTitle(f), color = EInk.Value, fontSize = 14.sp, modifier = Modifier.clickable { vm.addFeed(f) }.padding(vertical = 6.dp))
         }
         if (kind == 2) {
-            val services by produceState<List<com.example.btcwidget.nostr.core.Dvm.Service>?>(null) { value = vm.feedServices() }
+            val services by produceKept<List<com.example.btcwidget.nostr.core.Dvm.Service>?>(null) { value = vm.feedServices() }
             when (val l = services) {
                 null -> Spinner()
                 else -> if (l.isEmpty()) Text(tr("No feed services found on your relays."), color = EInk.Caption, fontSize = 13.sp)
@@ -523,8 +523,9 @@ private fun AddFeed(vm: SocialViewModel, existing: List<com.example.btcwidget.no
 @Composable
 fun ThreadScreen(vm: SocialViewModel, noteId: String, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
     val stats by vm.stats.collectAsState()
-    var reload by remember { mutableStateOf(0) }
-    val thread by produceState<com.example.btcwidget.nostr.NostrRepository.Thread?>(null, noteId, reload) { value = vm.thread(noteId) }
+    // Saved, so Back to this thread after replying shows the version with your reply.
+    var reload by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
+    val thread by produceKept<com.example.btcwidget.nostr.NostrRepository.Thread?>(null, noteId, reload) { value = vm.thread(noteId) }
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar(tr("Post"), onBack)
         SocialScaffold(vm, navigate) { actions ->
@@ -577,7 +578,7 @@ private const val MAX_INDENT = 5
 @Composable
 fun HashtagScreen(vm: SocialViewModel, tag: String, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
     val stats by vm.stats.collectAsState()
-    val feed by produceState<List<FeedItem>?>(null, tag) { value = vm.hashtagFeed(tag) }
+    val feed by produceKept<List<FeedItem>?>(null, tag) { value = vm.hashtagFeed(tag) }
     val followed by vm.followedTags.collectAsState()
     val account by vm.account.collectAsState()
     val isFollowed = tag.lowercase().removePrefix("#") in followed
@@ -615,27 +616,28 @@ fun ProfileScreen(vm: SocialViewModel, pubkey: String, navigate: (NavKey) -> Uni
     val muted by vm.muted.collectAsState()
     val account by vm.account.collectAsState()
     val scope = rememberCoroutineScope()
-    var items by remember(pubkey) { mutableStateOf<List<FeedItem>?>(null) }
+    // Kept across Back: opening a post or their followers and coming back shows the same notes.
+    var items by rememberKeptState<List<FeedItem>?>(pubkey) { null }
     var loadingMore by remember(pubkey) { mutableStateOf(false) }
-    var end by remember(pubkey) { mutableStateOf(false) }
-    val theirFollowing by produceState<Set<String>?>(null, pubkey) { value = vm.followingOf(pubkey) }
+    var end by rememberKeptState(pubkey) { false }
+    val theirFollowing by produceKept<Set<String>?>(null, pubkey) { value = vm.followingOf(pubkey) }
     // X shows the pinned note first on the Posts tab. My own pins reload when I change them.
     val myPins by vm.pinned.collectAsState()
-    val pinnedNote by produceState<com.example.btcwidget.nostr.core.Event?>(null, pubkey, if (account?.pubkey == pubkey) myPins else null) {
+    val pinnedNote by produceKept<com.example.btcwidget.nostr.core.Event?>(null, pubkey, if (account?.pubkey == pubkey) myPins else null) {
         value = vm.pinnedNoteOf(pubkey)
     }
     var tab by androidx.compose.runtime.saveable.rememberSaveable(pubkey) { mutableStateOf(0) }
     var addToList by remember(pubkey) { mutableStateOf(false) }
     var profileMenu by remember(pubkey) { mutableStateOf(false) }
     var showQr by remember(pubkey) { mutableStateOf(false) }
-    val badges by produceState<List<com.example.btcwidget.nostr.core.Badges.Definition>>(emptyList(), pubkey) { value = vm.badgesOf(pubkey) }
+    val badges by produceKept<List<com.example.btcwidget.nostr.core.Badges.Definition>>(emptyList(), pubkey) { value = vm.badgesOf(pubkey) }
     // Loaded the first time the Articles tab opens.
-    var articles by remember(pubkey) { mutableStateOf<List<com.example.btcwidget.nostr.core.Article>?>(null) }
+    var articles by rememberKeptState<List<com.example.btcwidget.nostr.core.Article>?>(pubkey) { null }
     LaunchedEffect(pubkey, tab) { if (tab == 3 && articles == null) articles = vm.articlesBy(pubkey) }
     LaunchedEffect(pubkey) {
-        // Header and notes load at the same time.
+        // Header and notes load at the same time; coming Back, the notes are already here.
         launch { vm.refreshProfile(pubkey) }
-        items = vm.profileFeed(pubkey)
+        if (items == null) items = vm.profileFeed(pubkey)
     }
     val profile = profiles[pubkey]
     val isMe = account?.pubkey == pubkey

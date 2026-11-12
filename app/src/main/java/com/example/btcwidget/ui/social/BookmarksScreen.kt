@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -20,7 +19,7 @@ fun BookmarksScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val account by vm.account.collectAsState()
     val ids by vm.bookmarks.collectAsState()
     val stats by vm.stats.collectAsState()
-    val items by produceState<List<FeedItem>?>(null, ids) { value = vm.bookmarkedNotes() }
+    val items by produceKept<List<FeedItem>?>(null, ids) { value = vm.bookmarkedNotes() }
     SocialScaffold(vm, navigate) { actions ->
         when {
             account == null -> {
