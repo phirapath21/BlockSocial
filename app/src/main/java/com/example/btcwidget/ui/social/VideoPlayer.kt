@@ -216,7 +216,7 @@ fun VideoPlayer(url: String, note: Event, actions: NoteActions) {
         Modifier
             .padding(top = 8.dp)
             .fillMaxWidth()
-            .aspectRatio(ratio.coerceIn(mediaMinRatio(0.8f), 2f))
+            .aspectRatio(mediaRatio(ratio, 0.8f, 2f))
             .clip(shape)
             .background(Color.Black)
             .border(0.5.dp, EInk.BodyStroke, shape)

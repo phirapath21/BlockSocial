@@ -105,7 +105,7 @@ fun LiveMiniPlayer(onOpen: (address: String) -> Unit, modifier: Modifier = Modif
                                 // Settle at the nearer side, kept on screen.
                                 val targetX = if (x.value + widthPx / 2 < constraints.maxWidth / 2f) margin else maxX
                                 scope.launch { x.animateTo(targetX, spring(dampingRatio = 0.8f)) }
-                                scope.launch { y.animateTo(y.value.coerceIn(margin, maxY), spring(dampingRatio = 0.8f)) }
+                                scope.launch { y.animateTo(y.value.coerceIn(margin, maxY.coerceAtLeast(margin)), spring(dampingRatio = 0.8f)) }
                             }
                         ) { change, drag ->
                             change.consume()
