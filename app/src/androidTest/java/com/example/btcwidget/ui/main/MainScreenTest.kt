@@ -71,9 +71,9 @@ class MainScreenTest {
     }
 
     @Test
-    fun bottomBar_hasFourTabsThenTheMenu() {
+    fun bottomBar_hasFiveTabsAndTheMenuIsTopLeft() {
         setContent()
-        listOf("Home", "Search", "Bitcoin", "Messages", "Open menu").forEach {
+        listOf("Home", "Search", "Bitcoin", "Notifications", "Messages", "Open menu").forEach {
             composeTestRule.onNodeWithContentDescription(it).assertExists()
         }
         // Profile and Settings are in the side panel.
@@ -81,7 +81,7 @@ class MainScreenTest {
     }
 
     @Test
-    fun notifications_openFromTheTopBar() {
+    fun notifications_openFromTheBottomBar() {
         setContent()
         composeTestRule.onNodeWithContentDescription("Notifications").performClick()
         // The page's title in the top bar.
@@ -98,7 +98,7 @@ class MainScreenTest {
         composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(target)
     }
 
-    /** Opens the side panel with its button (right of the bottom bar) and picks [page]. */
+    /** Opens the side bar with your avatar at the top left and picks [page]. */
     private fun openFromSideBar(page: String) {
         composeTestRule.onNodeWithContentDescription("Open menu").performClick()
         composeTestRule.onNodeWithText(page).performClick()
