@@ -771,4 +771,13 @@ internal val THAI: Map<String, String> = hashMapOf(
     "Lightning address copied" to "คัดลอก Lightning address แล้ว",
     "Pinned" to "ปักหมุด",
     "{0} posts" to "{0} โพสต์",
+    "Feeds" to "ฟีด",
+    "Manage feeds" to "จัดการฟีด",
+    "With replies" to "รวมการตอบกลับ",
+    "Topic" to "หัวข้อ",
+    "Relay" to "รีเลย์",
+    "Suggested" to "แนะนำ",
+    "Move up" to "เลื่อนขึ้น",
+    "Move down" to "เลื่อนลง",
+    "Selected" to "เลือกอยู่",
 )
