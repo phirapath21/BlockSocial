@@ -59,7 +59,9 @@ object Zaps {
         relays: List<String>,
         noteId: String? = null,
         noteKind: Int? = null,
-        comment: String = ""
+        comment: String = "",
+        /** An addressable event zapped (a live stream's "30311:pubkey:d"), as NIP-57 allows. */
+        address: String? = null
     ): UnsignedEvent {
         val tags = ArrayList<List<String>>()
         tags += listOf("relays") + relays.take(5)
@@ -68,6 +70,7 @@ object Zaps {
         tags += listOf("p", recipient)
         if (noteId != null) tags += listOf("e", noteId)
         if (noteKind != null) tags += listOf("k", noteKind.toString())
+        if (address != null) tags += listOf("a", address)
         return UnsignedEvent(sender, Events.now(), Kind.ZAP_REQUEST, tags, comment)
     }
 

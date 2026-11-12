@@ -4,6 +4,7 @@ import com.example.btcwidget.nostr.core.Communities
 import com.example.btcwidget.nostr.core.Event
 import com.example.btcwidget.nostr.core.Filter
 import com.example.btcwidget.nostr.core.LiveStreams
+import com.example.btcwidget.nostr.core.Kind
 import com.example.btcwidget.nostr.core.PublicChat
 import com.example.btcwidget.nostr.core.RelayGroups
 import kotlinx.coroutines.async
@@ -138,7 +139,8 @@ class Spaces internal constructor(private val repo: NostrRepository) {
 
     /** Recent chat in [live], then new messages as they arrive (also on its own relays). Returns a stop function. */
     fun watchLiveChat(live: LiveStreams.Live, onMessages: (List<Event>) -> Unit): () -> Unit {
-        val filter = Filter(kinds = listOf(LiveStreams.CHAT), tags = mapOf("a" to listOf(live.address)), limit = 200)
+        // Chat messages, and zaps to the stream (shown in the chat, like Super Chats).
+        val filter = Filter(kinds = listOf(LiveStreams.CHAT, Kind.ZAP_RECEIPT), tags = mapOf("a" to listOf(live.address)), limit = 300)
         val seen = ConcurrentHashMap<String, Event>()
         fun emit() = onMessages(seen.values.filter { it.pubkey !in repo.muted.value && LiveStreams.chatOf(it) == live.address }.sortedBy { it.createdAt })
         val onEvent = { e: Event, _: String -> if (seen.putIfAbsent(e.id, e) == null) { repo.loadProfilesLater(listOf(e.pubkey)); emit() } }
