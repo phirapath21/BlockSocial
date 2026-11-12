@@ -226,7 +226,7 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 }
                 if (feedMenu) FeedMenu(vm, onClose = { feedMenu = false })
                 FirstTimeTip(
-                    "home-tabs", tr("Tap Home again to jump back to the top. Long-press your picture at the bottom right to switch accounts."),
+                    "home-tabs-v2", tr("Tap Home again to jump back to the top. Long-press your picture at the top left to switch accounts."),
                     Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 84.dp, bottom = 16.dp)
                 )
                 // Fades away with the bars while you scroll down.

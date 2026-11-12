@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Badge
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.BadgedBox
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -253,20 +257,36 @@ fun MainScreenContent(
     accountSwitcher: (@Composable (onDismiss: () -> Unit) -> Unit)? = null
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
-    // Your pages (Profile, Lists… Settings) rise from the bottom, under the avatar button that
-    // opens them: easy to reach one-handed, closed by swiping down or Back.
-    // Not saved: opening a page from it (or your profile from its header) and coming Back finds it closed.
-    var panelOpen by remember { mutableStateOf(false) }
+    // The side bar (Profile, Lists… Settings), from the left, opened by your avatar at the top left.
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val openPage: (MainTab) -> Unit = { tab ->
         onTabSelected(tab)
-        panelOpen = false
+        scope.launch { drawerState.close() }
     }
-    // Back from one of the panel's pages returns to Home.
-    BackHandler(enabled = !panelOpen && selectedTab !in BAR_TABS) { onTabSelected(MainTab.HOME) }
+    // Back closes the side bar first, then returns from a side-bar page to Home.
+    BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
+    BackHandler(enabled = !drawerState.isOpen && selectedTab !in BAR_TABS) { onTabSelected(MainTab.HOME) }
 
-    Column(
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        // Swipe right to open, left to close. Pages with sideways drags of their own (the price
+        // chart scrub, widget reordering) open it with the avatar instead.
+        gesturesEnabled = drawerState.isOpen || selectedTab !in DRAG_PAGES,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = EInk.Background,
+                drawerContentColor = EInk.Value,
+                drawerShape = androidx.compose.foundation.shape.RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp),
+                modifier = Modifier.width(310.dp)
+            ) {
+                SideBar(selectedTab = selectedTab, header = drawerHeader, onOpen = openPage)
+            }
+        },
         modifier = modifier
+    ) {
+    Column(
+        modifier = Modifier
             .fillMaxSize()
             .background(EInk.Background)
             .statusBarsPadding()
@@ -298,10 +318,10 @@ fun MainScreenContent(
         ) {
             TopBar(
                 title = tr(selectedTab.title),
-                notifications = badges[MainTab.NOTIFICATIONS] ?: 0,
-                notificationsOpen = selectedTab == MainTab.NOTIFICATIONS,
-                // Already there: back to the top (or refresh), like the bottom bar's tabs.
-                onNotifications = { if (selectedTab == MainTab.NOTIFICATIONS) com.example.btcwidget.ui.social.TabTaps.tap(MainTab.NOTIFICATIONS.name) else onTabSelected(MainTab.NOTIFICATIONS) }
+                menuIcon = menuButtonIcon,
+                menuOpen = drawerState.isOpen || selectedTab in DRAWER_PAGES,
+                onMenu = { scope.launch { drawerState.open() } },
+                onMenuLongPress = if (accountSwitcher != null) ({ switcher = true }) else null
             )
         }
         androidx.compose.runtime.CompositionLocalProvider(com.example.btcwidget.ui.social.LocalBarsVisible provides showBars) {
@@ -399,37 +419,27 @@ fun MainScreenContent(
             BottomBar(
                 selectedTab = selectedTab,
                 badges = badges,
-                menuOpen = panelOpen || selectedTab in DRAWER_PAGES,
-                menuIcon = menuButtonIcon,
                 // The tab you're on: back to the top, or refresh when already there.
-                onTab = { tab -> if (tab == selectedTab) com.example.btcwidget.ui.social.TabTaps.tap(tab.name) else onTabSelected(tab) },
-                onMenu = { panelOpen = !panelOpen },
-                onMenuLongPress = if (accountSwitcher != null) ({ switcher = true }) else null
+                onTab = { tab -> if (tab == selectedTab) com.example.btcwidget.ui.social.TabTaps.tap(tab.name) else onTabSelected(tab) }
             )
         }
         if (switcher) accountSwitcher?.invoke { switcher = false }
     }
-    if (panelOpen) com.example.btcwidget.ui.social.BlockSheet(onDismiss = { panelOpen = false }) {
-        SideBar(selectedTab = selectedTab, header = drawerHeader, onOpen = openPage)
     }
 }
 
 private val Accent = Color(0xFFF7931A)
 
 /**
- * The bottom bar, as on X: icons only, outlined, the open page's filled; on the page's own
- * background with a hairline above. Unread counts sit on the icon in an orange bubble. Last,
- * your avatar opens the side panel (ringed in orange while it or one of its pages is open).
+ * The bottom bar, as on X: Home, Search, Bitcoin, Notifications, Messages as icons only,
+ * outlined, the open page's filled; on the page's own background with a hairline above.
+ * Unread counts sit on the icon in an orange bubble.
  */
 @Composable
 private fun BottomBar(
     selectedTab: MainTab,
     badges: Map<MainTab, Int>,
-    menuOpen: Boolean,
-    menuIcon: @Composable () -> Unit,
-    onTab: (MainTab) -> Unit,
-    onMenu: () -> Unit,
-    onMenuLongPress: (() -> Unit)? = null
+    onTab: (MainTab) -> Unit
 ) {
     Column(Modifier.fillMaxWidth().background(EInk.Background)) {
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
@@ -450,14 +460,6 @@ private fun BottomBar(
                         if (count > 0) CountBadge(count, Modifier.align(Alignment.TopEnd).offset(x = 9.dp, y = (-6).dp))
                     }
                 }
-            }
-            BarSlot(label = tr("Open menu"), selected = menuOpen, onClick = onMenu, onLongClick = onMenuLongPress) {
-                Box(
-                    Modifier.size(30.dp).clip(CircleShape)
-                        .then(if (menuOpen) Modifier.border(2.dp, Accent, CircleShape) else Modifier)
-                        .padding(if (menuOpen) 3.dp else 1.dp),
-                    contentAlignment = Alignment.Center
-                ) { menuIcon() }
             }
         }
     }
@@ -491,61 +493,66 @@ private fun CountBadge(count: Int, modifier: Modifier = Modifier) {
     ) { Text(if (count > 99) "99+" else "$count", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp) }
 }
 
-/** Title row above every page, with Notifications (and their unread count) at the right, as on X. */
+/**
+ * Title row above every page: your avatar at the left opens the side bar (long-press it to
+ * switch accounts), as on X; ringed in orange while one of the side bar's pages is open.
+ */
 @Composable
-private fun TopBar(title: String, notifications: Int, notificationsOpen: Boolean, onNotifications: () -> Unit) {
+private fun TopBar(title: String, menuIcon: @Composable () -> Unit, menuOpen: Boolean, onMenu: () -> Unit, onMenuLongPress: (() -> Unit)?) {
+    val haptics = com.example.btcwidget.ui.social.rememberHaptics()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .height(52.dp)
-            .padding(start = 16.dp, end = 6.dp)
+            .padding(horizontal = 8.dp)
     ) {
-        Text(
-            text = title,
-            color = EInk.Value,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f)
-        )
-        val label = if (notifications > 0) tr("{0}, {1} unread", tr("Notifications"), notifications) else tr("Notifications")
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .clickable(onClickLabel = tr("Notifications"), onClick = onNotifications)
-                .semantics { contentDescription = label }
-        ) {
-            BadgedBox(badge = {
-                if (notifications > 0) CountBadge(notifications)
-            }) {
-                Icon(
-                    com.example.btcwidget.ui.social.NavIcons.Bell.of(notificationsOpen),
-                    contentDescription = null,
-                    tint = EInk.Value,
-                    modifier = Modifier.size(26.dp)
+                .combinedClickable(
+                    onClickLabel = tr("Open menu"),
+                    onLongClickLabel = if (onMenuLongPress != null) tr("Switch accounts") else null,
+                    onLongClick = onMenuLongPress?.let { lc -> { haptics.heavy(); lc() } },
+                    onClick = onMenu
                 )
-            }
+                .semantics { contentDescription = tr("Open menu") }
+        ) {
+            Box(
+                Modifier.size(34.dp).clip(CircleShape)
+                    .then(if (menuOpen) Modifier.border(2.dp, Accent, CircleShape) else Modifier)
+                    .padding(if (menuOpen) 3.dp else 1.dp),
+                contentAlignment = Alignment.Center
+            ) { menuIcon() }
         }
+        Text(
+            text = title,
+            color = EInk.Value,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 10.dp)
+        )
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
 
 /**
- * Your pages, in a sheet that rises from the bottom: your account at the top, then the pages
- * in large type, Settings last under a line. Opened by your avatar at the right of the bottom bar.
+ * The side bar, from the left as on X: your account at the top, then your pages in large type,
+ * Settings last under a line. Opened by your avatar at the top left.
  */
 @Composable
 private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen: (MainTab) -> Unit) {
     Column(
         Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .fillMaxHeight()
+            .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(bottom = 8.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 8.dp)
     ) {
-        Box(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 0.dp, bottom = 12.dp)) { header() }
+        Box(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 8.dp, bottom = 12.dp)) { header() }
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(bottom = 6.dp))
         DRAWER_PAGES.forEach { tab ->
             if (tab == MainTab.SETTINGS) HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(vertical = 6.dp))
@@ -574,8 +581,8 @@ private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen
 }
 
 /**
- * Pages. The bottom bar holds Home, Search, Bitcoin and Messages, then the side panel's button;
- * Notifications opens from the top bar; the panel (a sheet from the bottom) holds Profile, Lists, Bookmarks,
+ * Pages. The bottom bar holds Home, Search, Bitcoin, Notifications and Messages; the side bar
+ * (your avatar at the top left) holds Profile, Lists, Bookmarks,
  * Communities, Widgets, Price alerts and Settings. [label] names the bar
  * icon for TalkBack, [title] is shown in the top bar and side bar.
  */
@@ -596,7 +603,10 @@ enum class MainTab(val label: String, val icon: com.example.btcwidget.ui.social.
 
 // Getters, not stored values: a top-level val that touches MainTab would initialize the
 // enum while this file's other top-level vals are still null (that crashed the app once).
-private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SEARCH, MainTab.DASHBOARD, MainTab.MESSAGES)
+private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SEARCH, MainTab.DASHBOARD, MainTab.NOTIFICATIONS, MainTab.MESSAGES)
+
+/** Pages with sideways drags of their own, where a swipe must not open the side bar. */
+private val DRAG_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS)
 private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.LISTS, MainTab.BOOKMARKS, MainTab.COMMUNITIES, MainTab.WIDGETS, MainTab.ALERTS, MainTab.SETTINGS)
 
 /** Feeds, where the bars slide away while you scroll down (not forms, settings or the dashboard). */
