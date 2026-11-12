@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -287,6 +290,7 @@ private fun ShortPage(
     var heartAt by remember { mutableStateOf<Offset?>(null) }
     val heartScale = remember { Animatable(0f) }
     var heartKey by remember { mutableStateOf(0) }
+    var scrubbing by remember(note.id) { mutableStateOf(false) }
     LaunchedEffect(heartKey) {
         if (heartKey == 0) return@LaunchedEffect
         heartScale.snapTo(0.4f)
@@ -333,7 +337,8 @@ private fun ShortPage(
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xB3000000))))
         )
 
-        Row(
+        // The caption and buttons step aside while you drag the time bar.
+        if (!scrubbing) Row(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = LocalBottomOverlay.current).padding(bottom = 14.dp),
             verticalAlignment = Alignment.Bottom
         ) {
@@ -341,7 +346,10 @@ private fun ShortPage(
             ShortSideBar(note, author, stats, muted, actions, onToggleMute, Modifier.padding(end = 8.dp))
         }
 
-        if (active && player != null) ShortProgress(player, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = LocalBottomOverlay.current))
+        if (active && player != null) ShortProgress(
+            player, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = LocalBottomOverlay.current),
+            onScrubbing = { scrubbing = it }
+        )
     }
 }
 
@@ -420,16 +428,71 @@ private fun SideButton(icon: ImageVector, count: Int?, label: String, tint: Colo
 
 /** A thin accent line along the bottom: how far through the video is. */
 @Composable
-private fun ShortProgress(player: ExoPlayer, modifier: Modifier) {
+private fun ShortProgress(player: ExoPlayer, modifier: Modifier, onScrubbing: (Boolean) -> Unit = {}) {
     var progress by remember(player) { mutableFloatStateOf(0f) }
+    // While your finger is on the bar: where it is (0..1), shown instead of where the video is.
+    var scrub by remember(player) { mutableStateOf<Float?>(null) }
+    val haptics = rememberHaptics()
     LaunchedEffect(player) {
         while (true) {
             val d = player.duration
-            progress = if (d > 0) (player.currentPosition.toFloat() / d).coerceIn(0f, 1f) else 0f
+            if (scrub == null) progress = if (d > 0) (player.currentPosition.toFloat() / d).coerceIn(0f, 1f) else 0f
             delay(100)
         }
     }
-    Box(modifier.fillMaxWidth().height(2.dp).background(Color(0x33FFFFFF))) {
-        Box(Modifier.fillMaxWidth(progress).height(2.dp).background(Accent))
+    fun seekTo(f: Float) { val d = player.duration; if (d > 0) player.seekTo((f * d).toLong()) }
+    val shown = scrub ?: progress
+    val dragging = scrub != null
+    val barHeight by androidx.compose.animation.core.animateDpAsState(if (dragging) 6.dp else 2.dp, label = "bar")
+    Box(modifier.fillMaxWidth()) {
+        // The time you'd jump to, large in the middle above the bar, as on TikTok.
+        if (dragging) Text(
+            clockLabel((shown * player.duration.coerceAtLeast(0)).toLong()) + "  /  " + clockLabel(player.duration),
+            color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp)
+                .clip(RoundedCornerShape(12.dp)).background(Color(0x99000000)).padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+        // A tall, invisible strip to grab; the bar itself stays thin until you do.
+        Box(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(28.dp)
+                .semantics { contentDescription = tr("Video position") }
+                .pointerInput(player) {
+                    detectTapGestures { at ->
+                        val f = (at.x / size.width).coerceIn(0f, 1f)
+                        haptics.tick(); progress = f; seekTo(f)
+                    }
+                }
+                .pointerInput(player) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { at ->
+                            haptics.tick()
+                            scrub = (at.x / size.width).coerceIn(0f, 1f)
+                            onScrubbing(true)
+                        },
+                        onHorizontalDrag = { change, _ ->
+                            change.consume()
+                            val f = (change.position.x / size.width).coerceIn(0f, 1f)
+                            scrub = f
+                            seekTo(f)
+                        },
+                        onDragEnd = {
+                            scrub?.let { f -> progress = f; seekTo(f) }
+                            scrub = null; onScrubbing(false)
+                        },
+                        onDragCancel = { scrub = null; onScrubbing(false) }
+                    )
+                },
+            contentAlignment = Alignment.BottomStart
+        ) {
+            Box(Modifier.fillMaxWidth().height(barHeight).background(Color(0x40FFFFFF))) {
+                Box(Modifier.fillMaxWidth(shown).height(barHeight).background(Accent))
+            }
+            // The handle under your finger.
+            if (dragging) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height(16.dp)) {
+                Box(
+                    Modifier.offset(x = maxWidth * shown - 8.dp, y = 5.dp).size(16.dp).clip(CircleShape).background(Accent)
+                )
+            }
+        }
     }
 }

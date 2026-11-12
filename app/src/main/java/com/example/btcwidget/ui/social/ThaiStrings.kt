@@ -818,4 +818,5 @@ internal val THAI: Map<String, String> = hashMapOf(
     "Who to follow" to "แนะนำให้ติดตาม",
     "{0} people · {1} posts" to "{0} คน · {1} โพสต์",
     "{0} · Trending" to "{0} · มาแรง",
+    "Video position" to "ตำแหน่งวิดีโอ",
 )
