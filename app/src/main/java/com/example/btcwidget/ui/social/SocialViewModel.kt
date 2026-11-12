@@ -891,9 +891,9 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
      * Zaps [amountSat]: with a connected wallet (NWC) it pays right here; otherwise the
      * invoice goes to [onInvoice], which opens a wallet app.
      */
-    fun zap(recipient: String, amountSat: Long, note: Event?, comment: String, onInvoice: (String) -> Unit) =
+    fun zap(recipient: String, amountSat: Long, note: Event?, comment: String, address: String? = null, onInvoice: (String) -> Unit) =
         act(tr("Couldn't zap")) {
-            val invoice = repo.zapInvoice(recipient, amountSat, note, comment)
+            val invoice = repo.zapInvoice(recipient, amountSat, note, comment, address)
             if (repo.nwc.value != null) {
                 say(tr("⚡ Paying {0} sats…", amountSat))
                 repo.payWithNwc(invoice)

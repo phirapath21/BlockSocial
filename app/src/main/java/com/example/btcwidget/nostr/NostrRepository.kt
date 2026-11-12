@@ -1773,7 +1773,7 @@ class NostrRepository private constructor(private val context: Context) {
      * Gets a Lightning invoice zapping [amountSat] to the author of [note] (or to [recipient]).
      * The caller hands it to a wallet app.
      */
-    suspend fun zapInvoice(recipient: String, amountSat: Long, note: Event? = null, comment: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun zapInvoice(recipient: String, amountSat: Long, note: Event? = null, comment: String = "", address: String? = null): String = withContext(Dispatchers.IO) {
         val me = requireMe()
         val profile = _profiles.value[recipient] ?: refreshProfile(recipient)
             ?: error("Couldn't load their profile")
@@ -1789,7 +1789,7 @@ class NostrRepository private constructor(private val context: Context) {
             return@withContext Zaps.parseInvoice(httpGet(info.callback + (if ('?' in info.callback) "&" else "?") + "amount=$msat")).getOrThrow()
         }
         val request = requireSigner().sign(
-            Zaps.request(me, recipient, msat, lnurl, pool.urls.toList(), note?.id, note?.kind, comment)
+            Zaps.request(me, recipient, msat, lnurl, pool.urls.toList(), note?.id, note?.kind, comment, address)
         )
         Zaps.parseInvoice(httpGet(Zaps.callbackUrl(info, msat, request, lnurl))).getOrThrow()
     }

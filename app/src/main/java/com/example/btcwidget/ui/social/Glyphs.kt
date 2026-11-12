@@ -148,4 +148,9 @@ object Glyphs {
     // Skip back / forward 10 s on live streams and replays (drawn for Block; "10" goes inside).
     val Replay = stroked("Replay", "M12,4a8,8 0,1 0,8 8M14.5,1.5L12,4l2.5,2.5", 1.8f)
     val Forward = stroked("Forward", "M12,4a8,8 0,1 1,-8 8M9.5,1.5L12,4l-2.5,2.5", 1.8f)
+    /** A paper plane: send a chat message (drawn for Block). */
+    val Send = stroked("Send", "M4.5,11.5L20,4.5l-4.5,15.5 -3.5,-6.5zM12,13.5L20,4.5", 1.9f)
+    /** Corners pointing out / in: full screen and back (drawn for Block). */
+    val Fullscreen = stroked("Fullscreen", "M4,9V4h5M15,4h5v5M20,15v5h-5M9,20H4v-5", 2f)
+    val ExitFullscreen = stroked("ExitFullscreen", "M9,4v5H4M20,9h-5V4M15,20v-5h5M4,15h5v5", 2f)
 }

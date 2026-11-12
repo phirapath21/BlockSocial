@@ -198,7 +198,7 @@ fun SocialScaffold(
 }
 
 @Composable
-private fun ZapDialog(recipientName: String, inApp: Boolean, onDismiss: () -> Unit, onZap: (Long, String) -> Unit) {
+internal fun ZapDialog(recipientName: String, inApp: Boolean, onDismiss: () -> Unit, onZap: (Long, String) -> Unit) {
     var amount by remember { mutableStateOf("21") }
     var comment by remember { mutableStateOf("") }
     val sats = amount.toLongOrNull()?.takeIf { it > 0 }

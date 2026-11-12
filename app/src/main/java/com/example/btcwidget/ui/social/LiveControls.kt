@@ -226,3 +226,39 @@ internal fun SeekBar(fraction: Float, dragging: Boolean, onScrub: (Float?) -> Un
         }
     }
 }
+
+/**
+ * Over a stream or replay: a spinner while it loads or buffers, and when it can't play, what
+ * happened with Try again (which loads it afresh).
+ */
+@Composable
+internal fun PlayerStatus(player: ExoPlayer, modifier: Modifier = Modifier) {
+    var buffering by remember(player) { mutableStateOf(player.playbackState == androidx.media3.common.Player.STATE_BUFFERING) }
+    var failed by remember(player) { mutableStateOf(false) }
+    androidx.compose.runtime.DisposableEffect(player) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                buffering = playbackState == androidx.media3.common.Player.STATE_BUFFERING
+                if (playbackState == androidx.media3.common.Player.STATE_READY) failed = false
+            }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { failed = true; buffering = false }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        if (failed) Column(
+            Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xCC000000)).padding(horizontal = 20.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(tr("Couldn't play this"), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(tr("The connection dropped or the stream is offline."), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(
+                tr("Try again"), color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 10.dp).clip(RoundedCornerShape(50)).background(VideoAccent)
+                    .clickable { failed = false; player.prepare(); player.play() }.padding(horizontal = 18.dp, vertical = 8.dp)
+            )
+        } else if (buffering) androidx.compose.material3.CircularProgressIndicator(color = VideoAccent, strokeWidth = 3.dp, modifier = Modifier.size(40.dp))
+    }
+}
+
