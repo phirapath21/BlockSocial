@@ -46,7 +46,10 @@ fun MainNavigation() {
       slideInHorizontally(tween(SLIDE_MS)) { it } togetherWith slideOutHorizontally(tween(SLIDE_MS)) { -it / 4 }
     },
     popTransitionSpec = {
-      slideInHorizontally(tween(SLIDE_MS)) { -it / 4 } togetherWith slideOutHorizontally(tween(SLIDE_MS)) { it }
+      // Dragged down into the mini player: the screen just fades back to the one under it.
+      if (com.example.btcwidget.ui.social.PipVideo.leavingForMini)
+        androidx.compose.animation.fadeIn(tween(FADE_MS)) togetherWith androidx.compose.animation.fadeOut(tween(FADE_MS))
+      else slideInHorizontally(tween(SLIDE_MS)) { -it / 4 } togetherWith slideOutHorizontally(tween(SLIDE_MS)) { it }
     },
     predictivePopTransitionSpec = {
       slideInHorizontally(tween(SLIDE_MS)) { -it / 4 } togetherWith slideOutHorizontally(tween(SLIDE_MS)) { it }
@@ -122,6 +125,9 @@ fun MainNavigation() {
 
 /** How long a screen takes to slide in or out. */
 private const val SLIDE_MS = 280
+
+/** How long a screen dragged into the mini player takes to fade away. */
+private const val FADE_MS = 220
 
 /** A Settings page; the Bitcoin one reads the price settings from the main screen's ViewModel. */
 @Composable
