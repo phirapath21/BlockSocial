@@ -541,6 +541,10 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     fun hashtagSuggestions(prefix: String) = repo.hashtagSuggestions(prefix)
     suspend fun article(address: com.example.btcwidget.nostr.core.Nip19.Address) = runCatching { repo.article(address) }.getOrNull()
     suspend fun articlesBy(pubkey: String) = runCatching { repo.articlesBy(pubkey) }.getOrDefault(emptyList())
+    /** Video posts for Shorts: by the people you follow, or by everyone on your relays. */
+    suspend fun videoFeed(everyone: Boolean, until: Long? = null) =
+        runCatching { repo.mediaFeed(com.example.btcwidget.nostr.core.HomeFeed.Media(videos = true, everyone = everyone), until) }.getOrDefault(emptyList())
+
     suspend fun profileFeed(pubkey: String, until: Long? = null) = runCatching { repo.profileFeed(pubkey, until) }.getOrDefault(emptyList())
     suspend fun hashtagFeed(tag: String) = runCatching { repo.hashtagFeed(tag) }.getOrDefault(emptyList())
     suspend fun refreshProfile(pubkey: String) = runCatching { repo.refreshProfile(pubkey) }.getOrNull()

@@ -73,6 +73,7 @@ import kotlinx.serialization.Serializable
 
 /** A live stream (NIP-53), by its address "30311:<pubkey>:<d>". */
 @Serializable data class LiveKey(val address: String) : NavKey
+@Serializable data class ShortsKey(val everyone: Boolean = false) : NavKey
 
 /** A follow pack (kind 39089), by its address "39089:<pubkey>:<d>". */
 @Serializable data class PackKey(val address: String) : NavKey
