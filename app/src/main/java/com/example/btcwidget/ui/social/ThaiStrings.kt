@@ -587,7 +587,7 @@ internal val THAI: Map<String, String> = hashMapOf(
     "About" to "เกี่ยวกับ",
     "Prices: {0}" to "ราคา: {0}",
     " · Network: mempool.space" to " · เครือข่าย: mempool.space",
-    "Type: Oswald, VT323 (SIL Open Font License)" to "ฟอนต์: Oswald, VT323 (SIL Open Font License)",
+    "Type: Inter, Noto Sans Thai, Oswald, VT323 (SIL Open Font License)" to "ฟอนต์: Inter, Noto Sans Thai, Oswald, VT323 (SIL Open Font License)",
     "Privacy policy ›" to "นโยบายความเป็นส่วนตัว ›",
     "Open privacy policy" to "เปิดนโยบายความเป็นส่วนตัว",
     "Account" to "บัญชี",
