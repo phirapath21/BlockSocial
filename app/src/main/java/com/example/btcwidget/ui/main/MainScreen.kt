@@ -25,6 +25,9 @@ import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.ripple
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -178,6 +181,8 @@ fun MainScreen(
         listsContent = { com.example.btcwidget.ui.social.ListsScreen(social, onItemClick) },
         drawerHeader = { com.example.btcwidget.ui.social.DrawerAccountHeader(social, onLogin = { onItemClick(com.example.btcwidget.LoginKey) }, navigate = onItemClick) },
         menuButtonIcon = { com.example.btcwidget.ui.social.MenuAvatar(social) },
+        // Long-press your avatar in the bottom bar to switch accounts, as on X.
+        accountSwitcher = if (account != null) { dismiss -> com.example.btcwidget.ui.social.AccountSwitcherSheet(social, onItemClick, dismiss) } else null,
         badges = mapOf(MainTab.NOTIFICATIONS to unreadNotifications, MainTab.MESSAGES to unreadChats.size),
         notificationsContent = { com.example.btcwidget.ui.social.NotificationsScreen(social, onItemClick) },
         profileContent = {
@@ -247,7 +252,9 @@ fun MainScreenContent(
     /** Unread counts shown on bottom-bar tabs. */
     badges: Map<MainTab, Int> = emptyMap(),
     /** The top-left button that opens the side bar (the user's avatar when logged in). */
-    menuButtonIcon: @Composable () -> Unit = { Text("≡", color = EInk.Value, fontSize = 22.sp) }
+    menuButtonIcon: @Composable () -> Unit = { Text("≡", color = EInk.Value, fontSize = 22.sp) },
+    /** Long-pressing the side panel's button: switch accounts (null: nothing). */
+    accountSwitcher: (@Composable (onDismiss: () -> Unit) -> Unit)? = null
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -290,16 +297,45 @@ fun MainScreenContent(
             .background(EInk.Background)
             .statusBarsPadding()
     ) {
-        TopBar(
-            title = tr(selectedTab.title),
-            notifications = badges[MainTab.NOTIFICATIONS] ?: 0,
-            notificationsOpen = selectedTab == MainTab.NOTIFICATIONS,
-            onNotifications = { onTabSelected(MainTab.NOTIFICATIONS) }
-        )
+        // On feeds the bars slide away while you scroll down and come back when you scroll up,
+        // as on X. Every page starts with them showing.
+        var barsVisible by remember { mutableStateOf(true) }
+        androidx.compose.runtime.LaunchedEffect(selectedTab) { barsVisible = true }
+        val hides = selectedTab in HIDING_PAGES
+        val scrollWatch = remember {
+            object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                    if (available.y < -8f) barsVisible = false else if (available.y > 8f) barsVisible = true
+                    return androidx.compose.ui.geometry.Offset.Zero
+                }
+            }
+        }
+        val showBars = barsVisible || !hides
+        // Tap Bitcoin again: fetch fresh prices.
+        val refreshNow by androidx.compose.runtime.rememberUpdatedState(onRefresh)
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            com.example.btcwidget.ui.social.TabTaps.flow.collect { if (it == MainTab.DASHBOARD.name) refreshNow() }
+        }
+        var switcher by remember { mutableStateOf(false) }
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showBars,
+            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+        ) {
+            TopBar(
+                title = tr(selectedTab.title),
+                notifications = badges[MainTab.NOTIFICATIONS] ?: 0,
+                notificationsOpen = selectedTab == MainTab.NOTIFICATIONS,
+                // Already there: back to the top (or refresh), like the bottom bar's tabs.
+                onNotifications = { if (selectedTab == MainTab.NOTIFICATIONS) com.example.btcwidget.ui.social.TabTaps.tap(MainTab.NOTIFICATIONS.name) else onTabSelected(MainTab.NOTIFICATIONS) }
+            )
+        }
+        androidx.compose.runtime.CompositionLocalProvider(com.example.btcwidget.ui.social.LocalBarsVisible provides showBars) {
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .then(if (hides) Modifier.nestedScroll(scrollWatch) else Modifier)
         ) {
             when (selectedTab) {
                 MainTab.HOME -> homeContent()
@@ -380,14 +416,24 @@ fun MainScreenContent(
             }
         }
 
-        BottomBar(
-            selectedTab = selectedTab,
-            badges = badges,
-            menuOpen = drawerState.isOpen || selectedTab in DRAWER_PAGES,
-            menuIcon = menuButtonIcon,
-            onTab = onTabSelected,
-            onMenu = { scope.launch { if (drawerState.isOpen) drawerState.close() else drawerState.open() } }
-        )
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showBars,
+            enter = androidx.compose.animation.expandVertically(expandFrom = Alignment.Top) + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Top) + androidx.compose.animation.fadeOut()
+        ) {
+            BottomBar(
+                selectedTab = selectedTab,
+                badges = badges,
+                menuOpen = drawerState.isOpen || selectedTab in DRAWER_PAGES,
+                menuIcon = menuButtonIcon,
+                // The tab you're on: back to the top, or refresh when already there.
+                onTab = { tab -> if (tab == selectedTab) com.example.btcwidget.ui.social.TabTaps.tap(tab.name) else onTabSelected(tab) },
+                onMenu = { scope.launch { if (drawerState.isOpen) drawerState.close() else drawerState.open() } },
+                onMenuLongPress = if (accountSwitcher != null) ({ switcher = true }) else null
+            )
+        }
+        if (switcher) accountSwitcher?.invoke { switcher = false }
     }
     }
     }
@@ -408,7 +454,8 @@ private fun BottomBar(
     menuOpen: Boolean,
     menuIcon: @Composable () -> Unit,
     onTab: (MainTab) -> Unit,
-    onMenu: () -> Unit
+    onMenu: () -> Unit,
+    onMenuLongPress: (() -> Unit)? = null
 ) {
     Column(Modifier.fillMaxWidth().background(EInk.Background)) {
         HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
@@ -430,7 +477,7 @@ private fun BottomBar(
                     }
                 }
             }
-            BarSlot(label = tr("Open menu"), selected = menuOpen, onClick = onMenu) {
+            BarSlot(label = tr("Open menu"), selected = menuOpen, onClick = onMenu, onLongClick = onMenuLongPress) {
                 Box(
                     Modifier.size(30.dp).clip(CircleShape)
                         .then(if (menuOpen) Modifier.border(2.dp, Accent, CircleShape) else Modifier)
@@ -443,15 +490,19 @@ private fun BottomBar(
 }
 
 @Composable
-private fun RowScope.BarSlot(label: String, selected: Boolean, onClick: () -> Unit, content: @Composable () -> Unit) {
+private fun RowScope.BarSlot(label: String, selected: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+    val haptics = com.example.btcwidget.ui.social.rememberHaptics()
     Box(
         Modifier.weight(1f).fillMaxHeight()
-            .selectable(
-                selected = selected, onClick = onClick, role = Role.Tab,
+            .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = false, radius = 26.dp)
+                indication = ripple(bounded = false, radius = 26.dp),
+                role = Role.Tab,
+                onLongClickLabel = if (onLongClick != null) tr("Switch accounts") else null,
+                onLongClick = onLongClick?.let { lc -> { haptics.heavy(); lc() } },
+                onClick = { haptics.tick(); onClick() }
             )
-            .semantics { contentDescription = label },
+            .semantics { contentDescription = label; this.selected = selected },
         contentAlignment = Alignment.Center
     ) { content() }
 }
@@ -577,4 +628,7 @@ private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.LISTS, MainTab.
 
 /** Pages with sideways drags of their own, where a swipe must not open the side bar. */
 private val DRAG_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS)
+
+/** Feeds, where the bars slide away while you scroll down (not forms, settings or the dashboard). */
+private val HIDING_PAGES get() = setOf(MainTab.HOME, MainTab.NOTIFICATIONS, MainTab.MESSAGES, MainTab.PROFILE, MainTab.BOOKMARKS, MainTab.LISTS, MainTab.COMMUNITIES)
 

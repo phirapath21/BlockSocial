@@ -3,6 +3,8 @@ package com.example.btcwidget.ui.social
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,4 +70,46 @@ fun MenuAvatar(vm: SocialViewModel) {
     val profiles by vm.profiles.collectAsState()
     val me = account?.pubkey
     if (me == null) Text("≡", color = EInk.Value, fontSize = 24.sp) else Avatar(profiles[me], me, size = 28)
+}
+
+/**
+ * Accounts on this phone, from a long press on your avatar in the bottom bar (as on X): tap one
+ * to switch to it, or add another. The one in use has an orange tick.
+ */
+@Composable
+fun AccountSwitcherSheet(vm: SocialViewModel, navigate: (androidx.navigation3.runtime.NavKey) -> Unit, onDismiss: () -> Unit) {
+    val account by vm.account.collectAsState()
+    val saved by vm.savedAccounts.collectAsState()
+    val profiles by vm.profiles.collectAsState()
+    val haptics = rememberHaptics()
+    androidx.compose.runtime.LaunchedEffect(saved) { saved.forEach { vm.refreshProfile(it.pubkey) } }
+    BlockSheet(onDismiss = onDismiss) {
+        Column(Modifier.padding(bottom = 16.dp)) {
+            Text(tr("Accounts"), color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            val rows = listOfNotNull(account?.pubkey) + saved.map { it.pubkey }.filter { it != account?.pubkey }
+            rows.forEach { pk ->
+                val current = pk == account?.pubkey
+                androidx.compose.foundation.layout.Row(
+                    Modifier.fillMaxWidth().clickable(onClickLabel = if (current) null else tr("Switch")) {
+                        if (!current) { haptics.confirm(); vm.switchAccount(pk) }
+                        onDismiss()
+                    }.padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Avatar(profiles[pk], pk, size = 44)
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        DisplayName(profiles[pk], pk, EInk.Value, 16.sp)
+                        Text(handleText(profiles[pk], pk), color = EInk.Caption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (current) Text("✓", color = androidx.compose.ui.graphics.Color(0xFFF7931A), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(vertical = 6.dp))
+            Text(
+                tr("+ Add account"), color = EInk.Value, fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth().clickable { onDismiss(); vm.prepareAddAccount(); navigate(com.example.btcwidget.LoginKey) }
+                    .padding(horizontal = 20.dp, vertical = 14.dp)
+            )
+        }
+    }
 }

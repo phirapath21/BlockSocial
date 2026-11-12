@@ -71,6 +71,7 @@ fun ReplyBar(
     var images by remember(target.id) { mutableStateOf<List<SocialViewModel.Attachment>>(emptyList()) }
     var uploading by remember { mutableStateOf(0) }
     var sending by remember { mutableStateOf(false) }
+    val sendHaptics = rememberHaptics()
 
     // Slightly see-through, like X's card over the post.
     val fill = if (dark) Color(0xF02A2F36) else EInk.Body.copy(alpha = 0.97f)
@@ -161,6 +162,7 @@ fun ReplyBar(
                         .background(if (canSend) Color(0xFFF7931A) else hint.copy(alpha = 0.25f))
                         .clickable(enabled = canSend, onClickLabel = tr("Send reply")) {
                             sending = true
+                            sendHaptics.confirm()
                             vm.send(text.trim(), target, null, images) { ok ->
                                 sending = false
                                 if (ok) {

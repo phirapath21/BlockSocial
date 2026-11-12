@@ -754,4 +754,8 @@ internal val THAI: Map<String, String> = hashMapOf(
     "Turn sound on" to "เปิดเสียง",
     "Landscape" to "แนวนอน",
     "Back to portrait" to "กลับเป็นแนวตั้ง",
+    "All" to "ทั้งหมด",
+    "When someone replies to or mentions you, it shows here." to "เมื่อมีคนตอบกลับหรือกล่าวถึงคุณ จะแสดงที่นี่",
+    "Switch accounts" to "สลับบัญชี",
+    "Active" to "ใช้อยู่",
 )

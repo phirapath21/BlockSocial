@@ -90,8 +90,11 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     }
     val shown = if (showRequests) requests else chats
 
+    // Tap Messages again: back to the top; at the top, check for new messages.
+    val listState = vm.listState("messages")
+    ScrollToTopOnTabTap("MESSAGES", listState) { vm.startDms() }
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState) {
             if (requests.isNotEmpty() || showRequests) item(key = "tabs") {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     com.example.btcwidget.ui.main.EInkChip(text = "CHATS", selected = !showRequests, onClick = { showRequests = false })
@@ -287,6 +290,7 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
     val byId = remember(messages) { messages.associateBy { it.id } }
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    val sendHaptics = rememberHaptics()
     var replyTo by remember { mutableStateOf<com.example.btcwidget.nostr.core.Nip17.Message?>(null) }
     var menuFor by remember { mutableStateOf<String?>(null) }
     var photoSending by remember { mutableStateOf(false) }
@@ -429,6 +433,7 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                     PillButton(if (sending) "…" else tr("Send"), filled = text.isNotBlank() && !sending) {
                         if (text.isBlank() || sending || me == null) return@PillButton
                         sending = true
+                        sendHaptics.confirm()
                         val outgoing = text
                         text = ""
                         val parent = replyTo

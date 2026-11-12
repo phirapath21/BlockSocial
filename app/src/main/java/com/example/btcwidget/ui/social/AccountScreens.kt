@@ -270,6 +270,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     var text by remember { mutableStateOf(com.example.btcwidget.nostr.Drafts.get(context, draftKey).orEmpty()) }
     LaunchedEffect(text) { com.example.btcwidget.nostr.Drafts.put(context, draftKey, text) }
     var sending by remember { mutableStateOf(false) }
+    val sendHaptics = rememberHaptics()
     var images by remember { mutableStateOf<List<SocialViewModel.Attachment>>(emptyList()) }
     var uploading by remember { mutableStateOf(0) }
     var sensitive by remember { mutableStateOf(false) }
@@ -493,6 +494,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                 PillButton(if (sending) tr("Posting…") else if (replyTo != null) tr("Reply") else if (scheduleAt != null) tr("Schedule") else tr("Post"), filled = canSend) {
                     if (!canSend) return@PillButton
                     sending = true
+                    sendHaptics.confirm()
                     // "@handle" → nostr:npub… so it links and notifies them (and gets a "p" tag).
                     val body = mentions.entries.fold(text.trim()) { acc, (handle, pk) ->
                         acc.replace(Regex("@" + Regex.escape(handle) + "(?![\\p{L}\\p{M}\\p{N}_])"), "nostr:" + com.example.btcwidget.nostr.core.Nip19.npub(pk))
