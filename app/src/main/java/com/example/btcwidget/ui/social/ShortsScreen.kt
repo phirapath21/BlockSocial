@@ -78,17 +78,27 @@ private val Accent = Color(0xFFF7931A)
  */
 @Composable
 fun ShortsScreen(vm: SocialViewModel, startEveryone: Boolean, navigate: (NavKey) -> Unit, onBack: () -> Unit) {
-    var everyone by rememberSaveable { mutableStateOf(startEveryone) }
+    // Following and Everyone side by side: swipe left or right between them (or tap the tabs).
+    val feeds = androidx.compose.foundation.pager.rememberPagerState(initialPage = if (startEveryone) 1 else 0) { 2 }
+    val scope = rememberCoroutineScope()
     SocialScaffold(vm, navigate) { actions ->
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            key(everyone) { ShortsPager(vm, everyone, actions) }
-            ShortsTopBar(everyone, onBack = onBack, onEveryone = { everyone = it })
+            androidx.compose.foundation.pager.HorizontalPager(state = feeds, modifier = Modifier.fillMaxSize(), key = { it }) { page ->
+                // Only the feed on screen plays; the other waits where it was.
+                ShortsPager(vm, everyone = page == 1, actions, active = feeds.currentPage == page)
+            }
+            ShortsTopBar(
+                position = feeds.currentPage + feeds.currentPageOffsetFraction,
+                onBack = onBack,
+                onSelect = { scope.launch { feeds.animateScrollToPage(it) } }
+            )
         }
     }
 }
 
+/** Back, and the two feeds as tabs; the orange line slides between them with your swipe. */
 @Composable
-private fun ShortsTopBar(everyone: Boolean, onBack: () -> Unit, onEveryone: (Boolean) -> Unit) {
+private fun ShortsTopBar(position: Float, onBack: () -> Unit, onSelect: (Int) -> Unit) {
     Row(
         Modifier.fillMaxWidth()
             .background(Brush.verticalGradient(listOf(Color(0x88000000), Color.Transparent)))
@@ -100,23 +110,32 @@ private fun ShortsTopBar(everyone: Boolean, onBack: () -> Unit, onEveryone: (Boo
             contentAlignment = Alignment.Center
         ) { Icon(Glyphs.Back, contentDescription = tr("Back"), tint = Color.White, modifier = Modifier.size(24.dp)) }
         Spacer(Modifier.weight(1f))
-        ShortsTab("Following", selected = !everyone) { onEveryone(false) }
-        ShortsTab("Everyone", selected = everyone) { onEveryone(true) }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row {
+                listOf("Following", "Everyone").forEachIndexed { i, label ->
+                    // Brighter the closer the swipe is to this tab.
+                    val near = (1f - kotlin.math.abs(position - i)).coerceIn(0f, 1f)
+                    Text(
+                        tr(label), color = Color.White.copy(alpha = 0.6f + 0.4f * near), fontSize = 16.sp,
+                        fontWeight = if (near > 0.5f) FontWeight.Bold else FontWeight.Normal, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.width(TAB_WIDTH).clip(RoundedCornerShape(8.dp))
+                            .clickable(onClickLabel = tr(label)) { onSelect(i) }.padding(vertical = 6.dp)
+                    )
+                }
+            }
+            Box(Modifier.width(TAB_WIDTH * 2).height(3.dp)) {
+                Box(
+                    Modifier.offset(x = TAB_WIDTH * position.coerceIn(0f, 1f) + (TAB_WIDTH - 24.dp) / 2)
+                        .size(width = 24.dp, height = 3.dp).clip(RoundedCornerShape(2.dp)).background(Accent)
+                )
+            }
+        }
         Spacer(Modifier.weight(1f))
         Spacer(Modifier.width(44.dp))
     }
 }
 
-@Composable
-private fun ShortsTab(label: String, selected: Boolean, onClick: () -> Unit) {
-    Column(
-        Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = label, onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(label, color = if (selected) Color.White else Color(0xAAFFFFFF), fontSize = 16.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-        Box(Modifier.padding(top = 4.dp).size(width = 22.dp, height = 2.5.dp).clip(RoundedCornerShape(2.dp)).background(if (selected) Color.White else Color.Transparent))
-    }
-}
+private val TAB_WIDTH = 104.dp
 
 /** A video post and the address of its video. */
 private class Short(val note: Event, val url: String)
@@ -128,7 +147,7 @@ private fun shortOf(item: FeedItem): Short? {
 }
 
 @Composable
-private fun ShortsPager(vm: SocialViewModel, everyone: Boolean, actions: NoteActions) {
+private fun ShortsPager(vm: SocialViewModel, everyone: Boolean, actions: NoteActions, active: Boolean = true) {
     val context = LocalContext.current
     val stats by vm.stats.collectAsState()
     val shorts = remember { mutableStateListOf<Short>() }
@@ -198,7 +217,7 @@ private fun ShortsPager(vm: SocialViewModel, everyone: Boolean, actions: NoteAct
         userPaused = false
         if (current >= shorts.size - 3 && !loading) loadMore()
     }
-    LaunchedEffect(current, shorts.size, userPaused, appVisible, muted) {
+    LaunchedEffect(current, shorts.size, userPaused, appVisible, muted, active) {
         val keep = (current - 1)..(current + 1)
         players.keys.filter { it !in keep }.forEach { players.remove(it)?.release() }
         keep.filter { it in shorts.indices && it !in players }.forEach { i ->
@@ -206,7 +225,7 @@ private fun ShortsPager(vm: SocialViewModel, everyone: Boolean, actions: NoteAct
         }
         players.forEach { (i, p) ->
             p.volume = if (muted) 0f else 1f
-            if (i == current && !userPaused && appVisible) p.play()
+            if (i == current && !userPaused && appVisible && active) p.play()
             else {
                 p.pause()
                 // A video swiped away starts from the top when it comes back.

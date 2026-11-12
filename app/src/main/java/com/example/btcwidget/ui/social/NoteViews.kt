@@ -1,5 +1,6 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -327,7 +328,7 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
         }
     }
     val shown = text.text.trim()
-    // Long notes are cut in timelines, profiles and quotes, with "Read more" opening the post.
+    // Long notes are cut in timelines, profiles and quotes, with "Show more" under them.
     val maxLines = when {
         !collapse -> Int.MAX_VALUE
         depth > 0 -> QUOTE_LINES
@@ -335,18 +336,20 @@ fun NoteBody(note: Event, actions: NoteActions, fontSize: Int = 15, depth: Int =
     }
     if (shown.isNotEmpty()) {
         var cut by remember(note.id) { mutableStateOf(false) }
+        // In a timeline the rest of the post opens in place (and stays open while you scroll).
+        var expanded by androidx.compose.runtime.saveable.rememberSaveable(note.id) { mutableStateOf(false) }
         Text(
             text = text,
             inlineContent = emojiContent,
             color = EInk.Value,
             fontSize = fontSize.sp,
             lineHeight = (fontSize * 1.35).sp,
-            maxLines = maxLines,
+            maxLines = if (expanded) Int.MAX_VALUE else maxLines,
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { cut = it.hasVisualOverflow },
-            modifier = Modifier.padding(top = 2.dp)
+            modifier = Modifier.padding(top = 2.dp).animateContentSize(androidx.compose.animation.core.tween(220))
         )
-        if (cut) ReadMore(note, actions)
+        if (cut && !expanded) ShowMore { if (depth > 0) actions.openNote(note) else expanded = true }
     }
     if (note.kind == com.example.btcwidget.nostr.core.Kind.POLL) {
         com.example.btcwidget.nostr.core.Poll.of(note)?.let { PollView(it, actions) }
@@ -420,16 +423,17 @@ internal fun noteImageUrls(note: Event): List<String> {
     }.distinct()
 }
 
-/** Lines a note shows before "Read more" in a timeline (about X's length), and in a quote. */
+/** Lines a note shows before "Show more" in a timeline (about X's length), and in a quote. */
 private const val TIMELINE_LINES = 10
 private const val QUOTE_LINES = 5
 
-/** Opens the full post, under text that was cut short. */
+/** "Show more" in the accent colour, under text that was cut short. */
 @Composable
-private fun ReadMore(note: Event, actions: NoteActions) {
+private fun ShowMore(onClick: () -> Unit) {
     Text(
-        tr("Read more…"), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 4.dp).clickable(onClickLabel = tr("Read the whole post")) { actions.openNote(note) }.padding(vertical = 2.dp)
+        tr("Show more"), color = androidx.compose.ui.graphics.Color(0xFFF7931A), fontSize = 15.sp, fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(6.dp))
+            .clickable(onClickLabel = tr("Read the whole post"), onClick = onClick).padding(vertical = 4.dp)
     )
 }
 

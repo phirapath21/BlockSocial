@@ -6,6 +6,10 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import androidx.compose.foundation.background
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,8 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -259,13 +261,15 @@ private fun VideoBadge(onClick: (() -> Unit)? = null, label: String? = null, con
 }
 
 /**
- * Full-screen controls, as X shows them under a video: a seek bar, then play/pause, time
- * left, speed (1x › 1.5x › 2x › 0.5x), sound, and rotate to landscape.
+ * Full-screen controls in Block's style: a slim orange seek bar (it thickens while you drag,
+ * showing where you'll land), then play/pause on an orange button, elapsed and total time,
+ * speed (1x › 1.5x › 2x › 0.5x), quality, sound and rotate.
  */
 @Composable
 internal fun VideoControls(player: ExoPlayer, url: String, landscape: Boolean, onRotate: () -> Unit, modifier: Modifier = Modifier) {
     var position by remember { mutableLongStateOf(player.currentPosition) }
     var duration by remember { mutableLongStateOf(player.duration) }
+    var buffered by remember { mutableLongStateOf(player.bufferedPosition) }
     var playing by remember { mutableStateOf(player.isPlaying) }
     var dragging by remember { mutableStateOf<Float?>(null) }
     // Read back from the player: these controls are rebuilt when the screen turns.
@@ -275,34 +279,42 @@ internal fun VideoControls(player: ExoPlayer, url: String, landscape: Boolean, o
         while (true) {
             position = player.currentPosition
             duration = player.duration
+            buffered = player.bufferedPosition
             playing = player.isPlaying
             VideoPositions[url] = position
-            delay(250)
+            delay(200)
         }
     }
 
     Column(modifier.fillMaxWidth()) {
         val total = duration.coerceAtLeast(1)
-        Slider(
-            value = dragging ?: (position.toFloat() / total).coerceIn(0f, 1f),
-            onValueChange = { dragging = it },
-            onValueChangeFinished = { dragging?.let { player.seekTo((it * total).toLong()) }; dragging = null },
-            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color(0x55FFFFFF)),
-            modifier = Modifier.fillMaxWidth()
+        SeekBar(
+            fraction = dragging ?: (position.toFloat() / total).coerceIn(0f, 1f),
+            buffered = (buffered.toFloat() / total).coerceIn(0f, 1f),
+            dragging = dragging != null,
+            onDrag = { dragging = it },
+            onSeek = { f -> player.seekTo((f * total).toLong()); position = (f * total).toLong(); dragging = null }
         )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            ControlIcon(if (playing) Glyphs.Pause else Glyphs.Play, if (playing) "Pause" else "Play") {
-                if (player.isPlaying) player.pause() else player.play()
-            }
-            Text(remainingLabel(duration, position), color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(VideoAccent)
+                    .clickable(onClickLabel = if (playing) tr("Pause") else tr("Play")) { if (player.isPlaying) player.pause() else player.play() },
+                contentAlignment = Alignment.Center
+            ) { Icon(if (playing) Glyphs.Pause else Glyphs.Play, contentDescription = null, tint = Color.Black, modifier = Modifier.size(24.dp)) }
+            val shown = dragging?.let { (it * total).toLong() } ?: position
+            Text(
+                clockLabel(shown) + (if (duration > 0) "  /  " + clockLabel(duration) else ""),
+                color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp)
+            )
             Box(Modifier.weight(1f))
             QualityButton(player)
             Text(
-                SPEED_LABELS[speedIndex], color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClickLabel = tr("Playback speed")) {
-                    speedIndex = (speedIndex + 1) % SPEEDS.size
-                    player.setPlaybackSpeed(SPEEDS[speedIndex])
-                }.padding(horizontal = 12.dp, vertical = 8.dp)
+                SPEED_LABELS[speedIndex], color = if (speedIndex == 0) Color.White else VideoAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, if (speedIndex == 0) Color(0x55FFFFFF) else VideoAccent, RoundedCornerShape(50))
+                    .clickable(onClickLabel = tr("Playback speed")) {
+                        speedIndex = (speedIndex + 1) % SPEEDS.size
+                        player.setPlaybackSpeed(SPEEDS[speedIndex])
+                    }.padding(horizontal = 12.dp, vertical = 5.dp)
             )
             ControlIcon(if (muted) Glyphs.SoundOff else Glyphs.SoundOn, if (muted) "Turn sound on" else "Mute") {
                 muted = !muted
@@ -310,6 +322,46 @@ internal fun VideoControls(player: ExoPlayer, url: String, landscape: Boolean, o
             }
             ControlIcon(Glyphs.Rotate, if (landscape) "Back to portrait" else "Landscape", onRotate)
         }
+    }
+}
+
+internal val VideoAccent = Color(0xFFF7931A)
+
+/** "1:05" or "1:02:05". */
+internal fun clockLabel(ms: Long): String {
+    val s = (ms.coerceAtLeast(0) / 1000)
+    return if (s >= 3600) "${s / 3600}:" + "%02d".format((s % 3600) / 60) + ":" + "%02d".format(s % 60) else "${s / 60}:" + "%02d".format(s % 60)
+}
+
+/**
+ * The seek bar: a 3 dp track (played in orange, loaded in grey), 5 dp with a bigger thumb while
+ * dragged. Tap or drag anywhere along it; the video jumps when you let go.
+ */
+@Composable
+private fun SeekBar(fraction: Float, buffered: Float, dragging: Boolean, onDrag: (Float) -> Unit, onSeek: (Float) -> Unit) {
+    val track by androidx.compose.animation.core.animateDpAsState(if (dragging) 5.dp else 3.dp, label = "track")
+    val thumb by androidx.compose.animation.core.animateDpAsState(if (dragging) 8.dp else 6.dp, label = "thumb")
+    var width by remember { mutableFloatStateOf(1f) }
+    var last by remember { mutableFloatStateOf(fraction) }
+    androidx.compose.foundation.Canvas(
+        Modifier.fillMaxWidth().height(28.dp)
+            .onGloballyPositioned { width = it.size.width.toFloat().coerceAtLeast(1f) }
+            .pointerInput(Unit) { detectTapGestures { o -> onSeek((o.x / width).coerceIn(0f, 1f)) } }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { o -> last = (o.x / width).coerceIn(0f, 1f); onDrag(last) },
+                    onDragEnd = { onSeek(last) },
+                    onDragCancel = { onSeek(last) }
+                ) { change, _ -> change.consume(); last = (change.position.x / width).coerceIn(0f, 1f); onDrag(last) }
+            }
+    ) {
+        val y = size.height / 2
+        val h = track.toPx()
+        val r = androidx.compose.ui.geometry.CornerRadius(h / 2)
+        drawRoundRect(Color(0x33FFFFFF), topLeft = androidx.compose.ui.geometry.Offset(0f, y - h / 2), size = androidx.compose.ui.geometry.Size(size.width, h), cornerRadius = r)
+        drawRoundRect(Color(0x66FFFFFF), topLeft = androidx.compose.ui.geometry.Offset(0f, y - h / 2), size = androidx.compose.ui.geometry.Size(size.width * buffered, h), cornerRadius = r)
+        drawRoundRect(VideoAccent, topLeft = androidx.compose.ui.geometry.Offset(0f, y - h / 2), size = androidx.compose.ui.geometry.Size(size.width * fraction, h), cornerRadius = r)
+        drawCircle(VideoAccent, radius = thumb.toPx(), center = androidx.compose.ui.geometry.Offset(size.width * fraction, y))
     }
 }
 
@@ -347,9 +399,9 @@ private val SPEED_LABELS = listOf("1x", "1.5x", "2x", "0.5x")
 @Composable
 private fun ControlIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = label, onClick = onClick),
+        Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = tr(label), onClick = onClick),
         contentAlignment = Alignment.Center
-    ) { Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp)) }
+    ) { Icon(icon, contentDescription = tr(label), tint = EInk.Value, modifier = Modifier.size(24.dp)) }
 }
 
 /**
