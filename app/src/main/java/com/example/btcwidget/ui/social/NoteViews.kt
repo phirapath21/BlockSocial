@@ -502,7 +502,7 @@ private fun NoteImage(note: Event, url: String, actions: NoteActions) {
         modifier = Modifier
             .padding(top = 8.dp)
             .fillMaxWidth()
-            .then(ratio?.let { Modifier.aspectRatio(it.coerceIn(MIN_RATIO, MAX_RATIO)) } ?: Modifier.heightIn(min = 120.dp, max = 320.dp))
+            .then(ratio?.let { Modifier.aspectRatio(it.coerceIn(mediaMinRatio(MIN_RATIO), MAX_RATIO)) } ?: Modifier.heightIn(min = 120.dp, max = 320.dp))
             .clip(shape)
             .background(EInk.Body)
             .border(0.5.dp, EInk.BodyStroke, shape)

@@ -3,6 +3,9 @@ package com.example.btcwidget.ui.social
 import android.os.Build
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.sp
@@ -114,7 +117,27 @@ fun FirstTimeTip(id: String, text: String, modifier: androidx.compose.ui.Modifie
 }
 
 /** The widest a column of posts gets on a wide screen, as on X (more makes lines hard to read). */
-val READABLE_WIDTH = 640.dp
+val READABLE_WIDTH = 560.dp
+
+/** The side panel beside the posts on a wide screen (trending, live now), as X's right column. */
+private val SIDE_PANEL_WIDTH = 340.dp
+private val SIDE_PANEL_MIN = 250.dp
+
+/** What goes in the side panel on wide screens; provided at the top of the app (null: none). */
+val LocalSidePanel = androidx.compose.runtime.compositionLocalOf<(@Composable () -> Unit)?> { null }
+
+/**
+ * The narrowest (widest-over-tall) a photo or video in a post may be: so it's never taller than
+ * about half the screen, and more posts fit, above all on a phone on its side. Taller ones are
+ * trimmed to fit, as X does.
+ */
+@Composable
+fun mediaMinRatio(base: Float): Float {
+    val c = androidx.compose.ui.platform.LocalConfiguration.current
+    val width = minOf(c.screenWidthDp.toFloat(), READABLE_WIDTH.value) - 70f
+    val maxHeight = c.screenHeightDp * 0.55f
+    return maxOf(base, width / maxHeight)
+}
 
 /**
  * On a wide screen (landscape, tablet, unfolded), [content] in a column of [READABLE_WIDTH] in
@@ -123,20 +146,28 @@ val READABLE_WIDTH = 640.dp
 @Composable
 fun ReadableColumn(enabled: Boolean = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600, content: @Composable () -> Unit) {
     if (!enabled) { content(); return }
-    androidx.compose.foundation.layout.Box(
+    val panel = LocalSidePanel.current
+    androidx.compose.foundation.layout.BoxWithConstraints(
         androidx.compose.ui.Modifier.fillMaxSize().background(com.example.btcwidget.ui.main.EInk.Background),
         contentAlignment = androidx.compose.ui.Alignment.TopCenter
     ) {
-        androidx.compose.foundation.layout.Box(
-            androidx.compose.ui.Modifier
-                .widthIn(max = READABLE_WIDTH)
-                .fillMaxSize()
-                .drawBehind {
-                    val c = com.example.btcwidget.ui.main.EInk.BodyStroke
-                    val w = 0.5.dp.toPx()
-                    drawLine(c, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(0f, size.height), w)
-                    drawLine(c, androidx.compose.ui.geometry.Offset(size.width, 0f), androidx.compose.ui.geometry.Offset(size.width, size.height), w)
-                }
-        ) { content() }
+        // Room beside the posts: the side panel (trending, live now), as X has on the right.
+        val room = maxWidth - READABLE_WIDTH
+        val side = if (panel != null && room >= SIDE_PANEL_MIN) minOf(room, SIDE_PANEL_WIDTH) else 0.dp
+        androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxHeight()) {
+            androidx.compose.foundation.layout.Box(
+                androidx.compose.ui.Modifier
+                    .widthIn(max = READABLE_WIDTH)
+                    .fillMaxHeight()
+                    .then(if (side > 0.dp) androidx.compose.ui.Modifier.width(READABLE_WIDTH) else androidx.compose.ui.Modifier.fillMaxWidth())
+                    .drawBehind {
+                        val c = com.example.btcwidget.ui.main.EInk.BodyStroke
+                        val w = 0.5.dp.toPx()
+                        drawLine(c, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(0f, size.height), w)
+                        drawLine(c, androidx.compose.ui.geometry.Offset(size.width, 0f), androidx.compose.ui.geometry.Offset(size.width, size.height), w)
+                    }
+            ) { content() }
+            if (side > 0.dp && panel != null) androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.width(side).fillMaxHeight()) { panel() }
+        }
     }
 }

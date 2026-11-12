@@ -546,6 +546,18 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun profileFeed(pubkey: String, until: Long? = null) = runCatching { repo.profileFeed(pubkey, until) }.getOrDefault(emptyList())
     suspend fun hashtagFeed(tag: String) = runCatching { repo.hashtagFeed(tag) }.getOrDefault(emptyList())
     suspend fun trendingHashtags() = runCatching { repo.trendingHashtags() }.getOrDefault(emptyList())
+
+    // The side panel (wide screens) is on every page: ask the relays now and then, not on each one.
+    private var trendsCache: Pair<Long, List<com.example.btcwidget.nostr.NostrRepository.Trend>>? = null
+    private var livesCache: Pair<Long, List<com.example.btcwidget.nostr.core.LiveStreams.Live>>? = null
+    suspend fun trendingCached(): List<com.example.btcwidget.nostr.NostrRepository.Trend> {
+        trendsCache?.let { (at, l) -> if (System.currentTimeMillis() - at < 10 * 60_000 && l.isNotEmpty()) return l }
+        return trendingHashtags().also { trendsCache = System.currentTimeMillis() to it }
+    }
+    suspend fun liveStreamsCached(): List<com.example.btcwidget.nostr.core.LiveStreams.Live> {
+        livesCache?.let { (at, l) -> if (System.currentTimeMillis() - at < 2 * 60_000) return l }
+        return liveStreams().also { livesCache = System.currentTimeMillis() to it }
+    }
     suspend fun refreshProfile(pubkey: String) = runCatching { repo.refreshProfile(pubkey) }.getOrNull()
     suspend fun followingOf(pubkey: String) = runCatching { repo.followingOf(pubkey) }.getOrDefault(emptySet())
     fun loadProfiles(pubkeys: Collection<String>) = viewModelScope.launch { runCatching { repo.loadProfiles(pubkeys) } }

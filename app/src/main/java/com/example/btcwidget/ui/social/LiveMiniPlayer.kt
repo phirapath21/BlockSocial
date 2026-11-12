@@ -87,8 +87,9 @@ fun LiveMiniPlayer(onOpen: (address: String) -> Unit, modifier: Modifier = Modif
             val maxX = constraints.maxWidth - widthPx - margin
             val maxY = constraints.maxHeight - heightPx - margin
             // Starts bottom right; remembered while it's shown.
-            val x = remember { Animatable(maxX) }
-            val y = remember { Animatable(maxY) }
+            // Bottom right to start with, and again when the screen turns (its old spot may be off it now).
+            val x = remember(maxX, maxY) { Animatable(maxX) }
+            val y = remember(maxX, maxY) { Animatable(maxY) }
             val scope = rememberCoroutineScope()
             Column(
                 Modifier
