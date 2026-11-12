@@ -44,6 +44,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Profile polish: round icon buttons (speech bubble for messages), tappable bio, copyable website / Lightning address / npub, pinned icon, loading skeleton, bar over the banner that fills in with name and posts as you scroll
 - [x] Home feeds as tabs (X-style) with a Feeds sheet: icon per feed, Edit with drawn arrows, Add-a-feed card; new Home (rounded roof) and Messages (speech bubble) icons
 - [x] Shorts as a bottom-bar tab (bar over the video, see-through) and a Search pill at the top after your avatar
+- [x] Composer rework (X-style: Post top right, thread line to the post you answer, toolbar of drawn icons above the keyboard, status chips) and a viewer panel you drag taller to read the post, with video controls at the bottom
 - [ ] Profile: followers count (NIP-45 COUNT) and tabs that load their own notes from relays
 
 ### Direct messages

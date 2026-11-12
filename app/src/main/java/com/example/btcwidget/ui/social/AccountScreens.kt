@@ -33,6 +33,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -318,209 +324,205 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
         onPick = { scheduleAt = it; schedulePicker = false }
     )
 
-    Column(Modifier.fillMaxSize().background(EInk.Background)) {
-        SocialTopBar(
-            when {
-                replyTo != null -> tr("Reply")
-                quote != null -> tr("Quote")
-                else -> tr("New post")
-            },
-            onBack
-        )
-        // Scrolls when the keyboard leaves little room (a phone on its side); the text box is
-        // shorter there so the buttons stay close.
-        val shortScreen = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 520
-        Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(14.dp)) {
-            if (replyTo != null) {
-                target?.let { t ->
-                    Text(
-                        tr("Replying to @") + (profiles[t.pubkey]?.bestName ?: Profile.shortNpub(t.pubkey)),
-                        color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Text(t.content.take(280), color = EInk.Label, fontSize = 14.sp, maxLines = 4, modifier = Modifier.padding(bottom = 10.dp))
-                }
+    val canSend = !sending && uploading == 0 && (text.isNotBlank() || images.isNotEmpty() || quote != null) &&
+        (replyTo == null && quote == null || target != null) &&
+        (!poll || text.isNotBlank() && pollOptions.count { it.isNotBlank() } >= 2)
+    fun send() {
+        if (!canSend) return
+        sending = true
+        sendHaptics.confirm()
+        // "@handle" → nostr:npub… so it links and notifies them (and gets a "p" tag).
+        val body = mentions.entries.fold(text.trim()) { acc, (handle, pk) ->
+            acc.replace(Regex("@" + Regex.escape(handle) + "(?![\\p{L}\\p{M}\\p{N}_])"), "nostr:" + com.example.btcwidget.nostr.core.Nip19.npub(pk))
+        }
+        scheduleAt?.let { at ->
+            if (vm.schedule(body, images, if (sensitive) "Sensitive content" else null, at)) {
+                com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack()
+            } else sending = false
+            return
+        }
+        if (poll) {
+            vm.createPoll(body, pollOptions, pollMulti, pollDays * 86_400L) { ok ->
+                if (ok) { com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack() } else sending = false
             }
-            Row(verticalAlignment = Alignment.Top) {
-                account?.let { Avatar(profiles[it.pubkey], it.pubkey, size = 40) }
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    placeholder = { Text(if (replyTo != null) tr("Post your reply") else tr("What's happening?")) },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = EInk.Background, unfocusedBorderColor = EInk.Background,
-                        focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = EInk.Value,
-                        focusedPlaceholderColor = EInk.Caption, unfocusedPlaceholderColor = EInk.Caption
-                    ),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp),
-                    modifier = Modifier.weight(1f).height(if (shortScreen) 104.dp else 180.dp).focusRequester(focus)
+            return
+        }
+        vm.send(body, replyTo?.let { target }, quote?.let { target }, images, if (sensitive) "Sensitive content" else null) { ok ->
+            // Success closes the screen; a failure re-enables the button.
+            if (ok) { com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack() } else sending = false
+        }
+    }
+    val newPost = replyTo == null && quote == null
+    // A phone on its side leaves little room above the keyboard: a shorter box.
+    val shortScreen = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 520
+
+    Column(Modifier.fillMaxSize().background(EInk.Background).navigationBarsPadding().imePadding()) {
+        // ✕ on the left, Post on the right, as on X.
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = tr("Close"), onClick = onBack),
+                contentAlignment = Alignment.Center
+            ) { androidx.compose.material3.Icon(Glyphs.CloseLine, contentDescription = tr("Close"), tint = EInk.Value, modifier = Modifier.size(22.dp)) }
+            Spacer(Modifier.weight(1f))
+            Row(
+                Modifier.padding(end = 6.dp).clip(RoundedCornerShape(50))
+                    .background(SettingsAccent.copy(alpha = if (canSend || sending) 1f else 0.4f))
+                    .clickable(enabled = canSend, onClickLabel = tr("Post")) { send() }
+                    .padding(horizontal = 18.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (sending) CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.Black, strokeWidth = 2.dp, modifier = Modifier.padding(end = 8.dp).size(14.dp))
+                Text(
+                    if (sending) tr("Posting…") else if (replyTo != null) tr("Reply") else if (scheduleAt != null) tr("Schedule") else tr("Post"),
+                    color = androidx.compose.ui.graphics.Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold
                 )
             }
-            suggestions.forEach { p ->
-                val handle = mentionHandle(p)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClickLabel = tr("Mention {0}", p.bestName)) {
-                            text = text.replace(MENTION_AT_END, "\$1@" + Regex.escapeReplacement(handle) + " ")
-                            mentions = mentions + (handle to p.pubkey)
-                        }
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
-                ) {
-                    Avatar(p, p.pubkey, size = 28)
-                    Text(p.bestName, color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
-                    Text(" @$handle", color = EInk.Caption, fontSize = 13.sp, maxLines = 1)
-                }
-            }
-            if (tagSuggestions.isNotEmpty()) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp)
-                ) {
-                    tagSuggestions.forEach { tag ->
-                        com.example.btcwidget.ui.main.EInkChip(text = "#$tag", selected = false, onClick = {
-                            text = text.replace(HASHTAG_AT_END, "\$1#" + Regex.escapeReplacement(tag) + " ")
-                        })
-                    }
-                }
-            }
-            if (quote != null) {
-                target?.let { t ->
-                    Column(Modifier.fillMaxWidth().padding(top = 8.dp).background(EInk.Body).padding(10.dp)) {
-                        Text(profiles[t.pubkey]?.bestName ?: Profile.shortNpub(t.pubkey), color = EInk.Value, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text(t.content.take(280), color = EInk.Label, fontSize = 14.sp, maxLines = 5)
-                    }
-                }
-            }
-            if (poll) {
-                Column(Modifier.fillMaxWidth().padding(top = 8.dp).border(0.5.dp, EInk.BodyStroke, RoundedCornerShape(12.dp)).padding(10.dp)) {
-                    pollOptions.forEachIndexed { i, value ->
-                        OutlinedTextField(
-                            value = value,
-                            onValueChange = { v -> pollOptions = pollOptions.toMutableList().also { it[i] = v.take(25) } },
-                            placeholder = { Text(tr("Choice {0}", i + 1) + if (i >= 2) tr(" (optional)") else "") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+        }
+
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+            if (replyTo != null) target?.let { ReplyParent(it, profiles[it.pubkey]) }
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(top = if (replyTo != null) 0.dp else 8.dp)) {
+                account?.let { Avatar(profiles[it.pubkey], it.pubkey, size = 40) }
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    if (replyTo != null) target?.let { t ->
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(color = EInk.Caption)) { append(tr("Replying to ")) }
+                                withStyle(SpanStyle(color = SettingsAccent)) { append("@" + (profiles[t.pubkey]?.bestName ?: Profile.shortNpub(t.pubkey))) }
+                            },
+                            fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp)
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState())) {
-                        if (pollOptions.size < 4) com.example.btcwidget.ui.main.EInkChip(text = tr("+ CHOICE"), selected = false, onClick = { pollOptions = pollOptions + "" })
-                        com.example.btcwidget.ui.main.EInkChip(text = if (pollMulti) tr("MULTIPLE") else tr("ONE CHOICE"), selected = pollMulti, onClick = { pollMulti = !pollMulti })
-                        listOf(1, 3, 7).forEach { d ->
-                            com.example.btcwidget.ui.main.EInkChip(text = "${d}D", selected = pollDays == d, onClick = { pollDays = d })
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EInk.Value, fontSize = 18.sp, lineHeight = 25.sp),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(SettingsAccent),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = if (shortScreen) 64.dp else 120.dp).padding(top = 8.dp).focusRequester(focus),
+                        decorationBox = { field ->
+                            Box {
+                                if (text.isEmpty()) Text(
+                                    if (replyTo != null) tr("Post your reply") else if (quote != null) tr("Add a comment") else tr("What's happening?"),
+                                    color = EInk.Caption, fontSize = 18.sp
+                                )
+                                field()
+                            }
+                        }
+                    )
+                    MentionSuggestions(suggestions, ::mentionHandle) { p ->
+                        val handle = mentionHandle(p)
+                        text = text.replace(MENTION_AT_END, "\$1@" + Regex.escapeReplacement(handle) + " ")
+                        mentions = mentions + (handle to p.pubkey)
+                    }
+                    HashtagSuggestions(tagSuggestions) { tag ->
+                        text = text.replace(HASHTAG_AT_END, "\$1#" + Regex.escapeReplacement(tag) + " ")
+                    }
+                    if (images.isNotEmpty() || uploading > 0) {
+                        val single = images.size + uploading == 1
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(top = ComposeGap).then(if (single) Modifier else Modifier.horizontalScroll(rememberScrollState()))
+                        ) {
+                            images.forEach { img -> AttachmentTile(img, single) { images = images - img } }
+                            repeat(uploading) { AttachmentTile(null, single) {} }
                         }
                     }
-                }
-            }
-            if (images.isNotEmpty() || uploading > 0) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState())
-                ) {
-                    images.forEach { img ->
-                        Box {
-                            if (img.isVideo) {
-                                Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body), contentAlignment = Alignment.Center) {
-                                    Text(tr("▶ Video"), color = EInk.Value, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                }
-                            } else AsyncImage(
-                                model = img.url, contentDescription = tr("Attached image"), contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body)
-                            )
-                            Text(
-                                "✕", color = EInk.Value, fontSize = 14.sp,
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(4.dp)
-                                    .clip(CircleShape)
-                                    .background(EInk.Background.copy(alpha = 0.7f))
-                                    .clickable(onClickLabel = tr("Remove image")) { images = images - img }
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                    repeat(uploading) {
-                        Box(Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)).background(EInk.Body), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = EInk.Value, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "🖼",
-                    color = EInk.Value, fontSize = 22.sp,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable(enabled = !poll && images.size + uploading < 4, onClickLabel = tr("Add photo or video")) {
-                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                        }
-                        .padding(8.dp)
-                )
-                if (replyTo == null && quote == null) Text(
-                    "📊",
-                    color = EInk.Value, fontSize = 20.sp,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (poll) EInk.Body else EInk.Background)
-                        .clickable(enabled = images.isEmpty() && uploading == 0, onClickLabel = if (poll) "Remove poll" else "Add poll") { poll = !poll }
-                        .padding(8.dp)
-                )
-                if (replyTo == null && quote == null) Text(
-                    "🕒",
-                    color = EInk.Value, fontSize = 20.sp,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (scheduleAt != null) EInk.Body else EInk.Background)
-                        .clickable(enabled = !poll, onClickLabel = tr("Schedule")) { schedulePicker = true }
-                        .padding(8.dp)
-                )
-                Text(
-                    "⚠",
-                    color = if (sensitive) EInk.Alert else EInk.Caption, fontSize = 20.sp,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable(onClickLabel = if (sensitive) tr("Unmark sensitive") else tr("Mark as sensitive")) { sensitive = !sensitive }
-                        .padding(8.dp)
-                )
-                Text(
-                    if (scheduleAt != null) tr("Posts ") + java.text.SimpleDateFormat("EEE, MMM d - h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(scheduleAt!! * 1000)) + tr(", if your phone is on and online.")
-                    else if (sensitive) tr("Marked sensitive: shown behind a warning.")
-                    else if (images.any { it.isVideo }) tr("Videos are posted as they are: any location saved in the file is not removed.")
-                    else tr("Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed."),
-                    color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
-                )
-                val canSend = !sending && uploading == 0 && (text.isNotBlank() || images.isNotEmpty() || quote != null) &&
-                    (replyTo == null && quote == null || target != null) &&
-                    (!poll || text.isNotBlank() && pollOptions.count { it.isNotBlank() } >= 2)
-                PillButton(if (sending) tr("Posting…") else if (replyTo != null) tr("Reply") else if (scheduleAt != null) tr("Schedule") else tr("Post"), filled = canSend) {
-                    if (!canSend) return@PillButton
-                    sending = true
-                    sendHaptics.confirm()
-                    // "@handle" → nostr:npub… so it links and notifies them (and gets a "p" tag).
-                    val body = mentions.entries.fold(text.trim()) { acc, (handle, pk) ->
-                        acc.replace(Regex("@" + Regex.escape(handle) + "(?![\\p{L}\\p{M}\\p{N}_])"), "nostr:" + com.example.btcwidget.nostr.core.Nip19.npub(pk))
-                    }
-                    scheduleAt?.let { at ->
-                        if (vm.schedule(body, images, if (sensitive) "Sensitive content" else null, at)) {
-                            com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack()
-                        } else sending = false
-                        return@PillButton
-                    }
-                    if (poll) {
-                        vm.createPoll(body, pollOptions, pollMulti, pollDays * 86_400L) { ok ->
-                            if (ok) { com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack() } else sending = false
-                        }
-                        return@PillButton
-                    }
-                    vm.send(body, replyTo?.let { target }, quote?.let { target }, images, if (sensitive) "Sensitive content" else null) { ok ->
-                        // Success closes the screen; a failure re-enables the button.
-                        if (ok) { com.example.btcwidget.nostr.Drafts.remove(context, draftKey); onBack() } else sending = false
-                    }
+                    if (poll) PollEditor(
+                        options = pollOptions, onOptions = { pollOptions = it },
+                        multi = pollMulti, onMulti = { pollMulti = it },
+                        days = pollDays, onDays = { pollDays = it },
+                        onRemove = { poll = false }
+                    )
+                    if (quote != null) target?.let { QuotePreview(it, profiles[it.pubkey]) }
+                    FirstTimeTip(
+                        "compose-public", tr("Public and permanent: notes can't be fully deleted from every relay. Photo location data is removed."),
+                        Modifier.padding(top = 16.dp, bottom = 8.dp)
+                    )
                 }
             }
         }
+
+        // What this post will do, each with ✕ to undo it.
+        val chips = scheduleAt != null || sensitive || images.any { it.isVideo }
+        if (chips) Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            scheduleAt?.let { at ->
+                ComposeStatusChip(
+                    Glyphs.Calendar,
+                    java.text.SimpleDateFormat("EEE, MMM d · h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(at * 1000)),
+                    onClear = { scheduleAt = null }
+                )
+            }
+            if (sensitive) ComposeStatusChip(Glyphs.Warning, tr("Sensitive: shown behind a warning"), onClear = { sensitive = false }, alert = true)
+            if (images.any { it.isVideo }) ComposeStatusChip(Glyphs.Info, tr("Videos keep any location saved in the file"))
+        }
+        androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+        // The toolbar stays above the keyboard.
+        Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            ComposeToolButton(Glyphs.PhotoLine, tr("Add photo or video"), enabled = !poll && images.size + uploading < 4) {
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+            }
+            if (newPost) ComposeToolButton(Glyphs.Poll, if (poll) tr("Remove poll") else tr("Add poll"), enabled = images.isEmpty() && uploading == 0, on = poll) { poll = !poll }
+            if (newPost) ComposeToolButton(Glyphs.Calendar, tr("Schedule"), enabled = !poll, on = scheduleAt != null) { schedulePicker = true }
+            ComposeToolButton(Glyphs.Warning, if (sensitive) tr("Unmark sensitive") else tr("Mark as sensitive"), on = sensitive) { sensitive = !sensitive }
+            Spacer(Modifier.weight(1f))
+            if (text.isNotEmpty()) Text("${text.length}", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(end = 10.dp))
+        }
+    }
+}
+
+/** A poll under the post (NIP-88): up to four choices, one or several answers, how long it runs. */
+@Composable
+private fun PollEditor(
+    options: List<String>, onOptions: (List<String>) -> Unit,
+    multi: Boolean, onMulti: (Boolean) -> Unit,
+    days: Int, onDays: (Int) -> Unit,
+    onRemove: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = ComposeGap).clip(RoundedCornerShape(16.dp))
+            .border(1.dp, EInk.BodyStroke, RoundedCornerShape(16.dp)).padding(12.dp)
+    ) {
+        options.forEachIndexed { i, value ->
+            OutlinedTextField(
+                value = value,
+                onValueChange = { v -> onOptions(options.toMutableList().also { it[i] = v.take(25) }) },
+                placeholder = { Text(tr("Choice {0}", i + 1) + if (i >= 2) tr(" (optional)") else "") },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SettingsAccent, unfocusedBorderColor = EInk.BodyStroke,
+                    focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = SettingsAccent,
+                    focusedPlaceholderColor = EInk.Caption, unfocusedPlaceholderColor = EInk.Caption
+                ),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            )
+        }
+        if (options.size < 4) Row(
+            Modifier.clip(RoundedCornerShape(50)).clickable { onOptions(options + "") }.padding(vertical = 6.dp, horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            androidx.compose.material3.Icon(Glyphs.Plus, contentDescription = null, tint = SettingsAccent, modifier = Modifier.size(18.dp))
+            Text(tr("Add a choice"), color = SettingsAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+        }
+        Text(tr("Answers"), color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChoicePill(tr("One choice"), selected = !multi) { onMulti(false) }
+            ChoicePill(tr("Several"), selected = multi) { onMulti(true) }
+        }
+        Text(tr("Poll length"), color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(1, 3, 7).forEach { d -> ChoicePill(tr(if (d == 1) "{0} day" else "{0} days", d), selected = days == d) { onDays(d) } }
+        }
+        Text(
+            tr("Remove poll"), color = EInk.Alert, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(50)).clickable(onClick = onRemove).padding(vertical = 6.dp, horizontal = 4.dp)
+        )
     }
 }
 
