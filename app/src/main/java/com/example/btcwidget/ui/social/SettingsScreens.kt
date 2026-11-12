@@ -45,15 +45,18 @@ import com.example.btcwidget.nostr.core.Nip19
 import com.example.btcwidget.nostr.core.Profile
 import com.example.btcwidget.ui.main.EInk
 
-/** The settings pages, in the order the Settings list shows them. */
-enum class SettingsPage(val title: String, val summary: String, val icon: () -> androidx.compose.ui.graphics.vector.ImageVector?) {
-    ACCOUNT("Your account", "Accounts on this phone, your key, scheduled posts, log out", { Glyphs.Person }),
-    NOTIFICATIONS("Notifications", "What Block tells you about while it's closed", { Glyphs.Bell }),
+/**
+ * The settings pages, in the order the Settings list shows them. Pages that also appear in the
+ * bars or the side panel (your account, notifications, Bitcoin) use the same icon there.
+ */
+enum class SettingsPage(val title: String, val summary: String, val icon: () -> androidx.compose.ui.graphics.vector.ImageVector) {
+    ACCOUNT("Your account", "Accounts on this phone, your key, scheduled posts, log out", { NavIcons.Profile.outline }),
+    NOTIFICATIONS("Notifications", "What Block tells you about while it's closed", { NavIcons.Bell.outline }),
     PRIVACY("Privacy and safety", "Muted words, web of trust, private lists", { Glyphs.Shield }),
     DISPLAY("Display and language", "Language, videos, where links open", { Glyphs.Eye }),
     RELAYS("Relays and servers", "Where your notes, messages and media go", { Glyphs.Server }),
     WALLET("Wallet and zaps", "Connect a Lightning wallet to zap in one tap", { Glyphs.Zap }),
-    BITCOIN("Bitcoin and widgets", "Your stack, currency, price sources, refresh", { null }),
+    BITCOIN("Bitcoin and widgets", "Your stack, currency, price sources, refresh", { NavIcons.Bitcoin.outline }),
     ABOUT("About Block", "Version, privacy policy, community rules", { Glyphs.Info });
 
     companion object {
@@ -100,11 +103,7 @@ fun SettingsHome(accountName: String?, onOpen: (SettingsPage) -> Unit) {
         }
         SettingsPage.entries.forEach { page ->
             val summary = if (page == SettingsPage.ACCOUNT && accountName != null) accountName + " · " + tr(page.summary) else tr(page.summary)
-            val icon = page.icon()
-            SettingsLinkRow(
-                tr(page.title), summary = summary, icon = icon,
-                leading = if (icon == null) ({ Text("₿", color = EInk.Value, fontSize = 22.sp, fontWeight = FontWeight.Bold) }) else null,
-            ) { onOpen(page) }
+            SettingsLinkRow(tr(page.title), summary = summary, icon = page.icon()) { onOpen(page) }
         }
         Spacer(Modifier.height(24.dp))
     }

@@ -9,11 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DrawerValue
@@ -29,6 +24,14 @@ import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.ripple
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -40,18 +43,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -385,54 +379,90 @@ fun MainScreenContent(
             }
         }
 
-        HorizontalDivider(thickness = 1.dp, color = EInk.BodyStroke)
-        NavigationBar(
-            containerColor = EInk.Body,
-            tonalElevation = 0.dp
+        BottomBar(
+            selectedTab = selectedTab,
+            badges = badges,
+            menuOpen = drawerState.isOpen || selectedTab in DRAWER_PAGES,
+            menuIcon = menuButtonIcon,
+            onTab = onTabSelected,
+            onMenu = { scope.launch { if (drawerState.isOpen) drawerState.close() else drawerState.open() } }
+        )
+    }
+    }
+    }
+    }
+}
+
+private val Accent = Color(0xFFF7931A)
+
+/**
+ * The bottom bar, as on X: icons only, outlined, the open page's filled; on the page's own
+ * background with a hairline above. Unread counts sit on the icon in an orange bubble. Last,
+ * your avatar opens the side panel (ringed in orange while it or one of its pages is open).
+ */
+@Composable
+private fun BottomBar(
+    selectedTab: MainTab,
+    badges: Map<MainTab, Int>,
+    menuOpen: Boolean,
+    menuIcon: @Composable () -> Unit,
+    onTab: (MainTab) -> Unit,
+    onMenu: () -> Unit
+) {
+    Column(Modifier.fillMaxWidth().background(EInk.Background)) {
+        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+        Row(
+            Modifier.fillMaxWidth().navigationBarsPadding().height(56.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val itemColors = NavigationBarItemDefaults.colors(
-                selectedIconColor = EInk.Value,
-                selectedTextColor = EInk.Value,
-                indicatorColor = Color.Transparent,
-                unselectedIconColor = EInk.Caption,
-                unselectedTextColor = EInk.Caption
-            )
             BAR_TABS.forEach { tab ->
-                // Icons only, as in X; the names are read out by TalkBack.
                 val count = badges[tab] ?: 0
-                NavigationBarItem(
-                    icon = {
-                        BadgedBox(badge = {
-                            if (count > 0) Badge(containerColor = EInk.Alert) { Text(if (count > 99) "99+" else "$count") }
-                        }) {
-                            Icon(tab.icon, contentDescription = if (count > 0) tr("{0}, {1} unread", tr(tab.label), count) else tr(tab.label))
-                        }
-                    },
-                    alwaysShowLabel = false,
-                    selected = selectedTab == tab,
-                    onClick = { onTabSelected(tab) },
-                    colors = itemColors
-                )
+                val selected = selectedTab == tab
+                BarSlot(
+                    label = if (count > 0) tr("{0}, {1} unread", tr(tab.label), count) else tr(tab.label),
+                    selected = selected,
+                    onClick = { onTab(tab) }
+                ) {
+                    Box {
+                        Icon(tab.icon.of(selected), contentDescription = null, tint = EInk.Value, modifier = Modifier.size(27.dp))
+                        if (count > 0) CountBadge(count, Modifier.align(Alignment.TopEnd).offset(x = 9.dp, y = (-6).dp))
+                    }
+                }
             }
-            // Last: the side panel (Profile, Lists, Bookmarks… Settings), your avatar as its icon.
-            // Shown selected while one of its pages is open.
-            NavigationBarItem(
-                icon = {
-                    Box(
-                        Modifier.size(28.dp).semantics { contentDescription = tr("Open menu") },
-                        contentAlignment = Alignment.Center
-                    ) { menuButtonIcon() }
-                },
-                alwaysShowLabel = false,
-                selected = drawerState.isOpen || selectedTab in DRAWER_PAGES,
-                onClick = { scope.launch { if (drawerState.isOpen) drawerState.close() else drawerState.open() } },
-                colors = itemColors
-            )
+            BarSlot(label = tr("Open menu"), selected = menuOpen, onClick = onMenu) {
+                Box(
+                    Modifier.size(30.dp).clip(CircleShape)
+                        .then(if (menuOpen) Modifier.border(2.dp, Accent, CircleShape) else Modifier)
+                        .padding(if (menuOpen) 3.dp else 1.dp),
+                    contentAlignment = Alignment.Center
+                ) { menuIcon() }
+            }
         }
     }
-    }
-    }
-    }
+}
+
+@Composable
+private fun RowScope.BarSlot(label: String, selected: Boolean, onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(
+        Modifier.weight(1f).fillMaxHeight()
+            .selectable(
+                selected = selected, onClick = onClick, role = Role.Tab,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = false, radius = 26.dp)
+            )
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center
+    ) { content() }
+}
+
+/** An unread count: a small orange bubble, "99+" past 99. */
+@Composable
+private fun CountBadge(count: Int, modifier: Modifier = Modifier) {
+    Box(
+        modifier.height(18.dp).widthIn(min = 18.dp).clip(CircleShape).background(Accent).border(1.5.dp, EInk.Background, CircleShape)
+            .padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center
+    ) { Text(if (count > 99) "99+" else "$count", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp) }
 }
 
 /** Title row above every page, with Notifications (and their unread count) at the right, as on X. */
@@ -462,12 +492,10 @@ private fun TopBar(title: String, notifications: Int, notificationsOpen: Boolean
                 .semantics { contentDescription = label }
         ) {
             BadgedBox(badge = {
-                if (notifications > 0) Badge(containerColor = Color(0xFFF7931A), contentColor = Color.Black) {
-                    Text(if (notifications > 99) "99+" else "$notifications", fontWeight = FontWeight.Bold)
-                }
+                if (notifications > 0) CountBadge(notifications)
             }) {
                 Icon(
-                    if (notificationsOpen) Icons.Default.Notifications else com.example.btcwidget.ui.social.Glyphs.Bell,
+                    com.example.btcwidget.ui.social.NavIcons.Bell.of(notificationsOpen),
                     contentDescription = null,
                     tint = EInk.Value,
                     modifier = Modifier.size(26.dp)
@@ -507,7 +535,7 @@ private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen
                     .clickable(onClickLabel = tr("Open {0}", tr(tab.title))) { onOpen(tab) }
                     .padding(horizontal = 14.dp, vertical = 13.dp)
             ) {
-                Icon(tab.icon, contentDescription = null, tint = if (selected) Color(0xFFF7931A) else EInk.Value, modifier = Modifier.size(26.dp))
+                Icon(tab.icon.of(selected), contentDescription = null, tint = if (selected) Accent else EInk.Value, modifier = Modifier.size(26.dp))
                 Text(
                     text = tr(tab.title),
                     color = EInk.Value,
@@ -526,19 +554,19 @@ private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen
  * Communities, Widgets, Price alerts and Settings. [label] names the bar
  * icon for TalkBack, [title] is shown in the top bar and side bar.
  */
-enum class MainTab(val label: String, val icon: ImageVector, val title: String = label) {
-    HOME("Home", Icons.Default.Home),
-    SEARCH("Search", Icons.Default.Search),
-    DASHBOARD("Bitcoin", TabIcons.Bitcoin),
-    NOTIFICATIONS("Notifications", Icons.Default.Notifications),
-    MESSAGES("Messages", Icons.Default.Email),
-    PROFILE("Profile", Icons.Default.Person),
-    BOOKMARKS("Bookmarks", Icons.Default.Star),
-    COMMUNITIES("Communities", Icons.Default.Face),
-    LISTS("Lists", Icons.AutoMirrored.Filled.List),
-    WIDGETS("Widgets", TabIcons.Widgets),
-    ALERTS("Price alerts", Icons.Default.Warning),
-    SETTINGS("Settings", Icons.Default.Settings)
+enum class MainTab(val label: String, val icon: com.example.btcwidget.ui.social.NavIcon, val title: String = label) {
+    HOME("Home", com.example.btcwidget.ui.social.NavIcons.Home),
+    SEARCH("Search", com.example.btcwidget.ui.social.NavIcons.Search),
+    DASHBOARD("Bitcoin", com.example.btcwidget.ui.social.NavIcons.Bitcoin),
+    NOTIFICATIONS("Notifications", com.example.btcwidget.ui.social.NavIcons.Bell),
+    MESSAGES("Messages", com.example.btcwidget.ui.social.NavIcons.Messages),
+    PROFILE("Profile", com.example.btcwidget.ui.social.NavIcons.Profile),
+    BOOKMARKS("Bookmarks", com.example.btcwidget.ui.social.NavIcons.Bookmarks),
+    COMMUNITIES("Communities", com.example.btcwidget.ui.social.NavIcons.Communities),
+    LISTS("Lists", com.example.btcwidget.ui.social.NavIcons.Lists),
+    WIDGETS("Widgets", com.example.btcwidget.ui.social.NavIcons.Widgets),
+    ALERTS("Price alerts", com.example.btcwidget.ui.social.NavIcons.PriceAlerts),
+    SETTINGS("Settings", com.example.btcwidget.ui.social.NavIcons.Settings)
 }
 
 // Getters, not stored values: a top-level val that touches MainTab would initialize the
@@ -549,37 +577,3 @@ private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.LISTS, MainTab.
 /** Pages with sideways drags of their own, where a swipe must not open the side bar. */
 private val DRAG_PAGES get() = setOf(MainTab.DASHBOARD, MainTab.WIDGETS)
 
-/**
- * Custom tab glyphs. In their own object so they initialize on first use, independent of
- * this file's top-level values (MainTab reads them while being created).
- */
-private object TabIcons {
-/** "₿"-like glyph for the Bitcoin tab: a B with two strokes. */
-val Bitcoin: ImageVector = ImageVector.Builder(
-    name = "Bitcoin",
-    defaultWidth = 24.dp,
-    defaultHeight = 24.dp,
-    viewportWidth = 24f,
-    viewportHeight = 24f
-).addPath(
-    pathData = addPathNodes(
-        "M9,3h2v2h1V3h2v2.1c2.3,0.4 3.5,1.8 3.5,3.6c0,1.2 -0.6,2.2 -1.6,2.7c1.4,0.5 2.3,1.6 2.3,3.1" +
-            "c0,2.3 -1.8,3.9 -4.2,4.3V21h-2v-2h-1v2H9v-2H6v-2h1.5V7H6V5h3V3z" +
-            "M9.5,7v4h4c1.1,0 1.9,-0.9 1.9,-2s-0.8,-2 -1.9,-2H9.5z" +
-            "M9.5,13v4h4.6c1.2,0 2.1,-0.9 2.1,-2s-0.9,-2 -2.1,-2H9.5z"
-    ),
-    fill = SolidColor(Color.Black)
-).build()
-
-/** Material "widgets" glyph (not in the core icon set). */
-val Widgets: ImageVector = ImageVector.Builder(
-    name = "Widgets",
-    defaultWidth = 24.dp,
-    defaultHeight = 24.dp,
-    viewportWidth = 24f,
-    viewportHeight = 24f
-).addPath(
-    pathData = addPathNodes("M13,13v8h8v-8h-8zM3,21h8v-8L3,13v8zM3,3v8h8L11,3L3,3zM16.66,1.69L11,7.34 16.66,13l5.66,-5.66 -5.66,-5.65z"),
-    fill = SolidColor(Color.Black)
-).build()
-}
