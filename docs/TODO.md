@@ -39,6 +39,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Settings for media servers (Blossom list) and DM inbox relays
 - [x] Notification settings by type (e.g. turn off likes)
 - [x] Thai translation of the UI (follows the phone, or Settings › Display › Language)
+- [x] Settings like X: categories with search, each its own page (switches, radio choices)
 
 ### Direct messages
 - [x] Photos in DMs

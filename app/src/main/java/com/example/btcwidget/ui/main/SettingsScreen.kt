@@ -1,342 +1,144 @@
 package com.example.btcwidget.ui.main
 
 import com.example.btcwidget.ui.social.tr
-import androidx.compose.foundation.clickable
+import com.example.btcwidget.ui.social.SettingsButton
+import com.example.btcwidget.ui.social.SettingsDivider
+import com.example.btcwidget.ui.social.SettingsHeader
+import com.example.btcwidget.ui.social.SettingsNote
+import com.example.btcwidget.ui.social.SettingsRadioRow
+import com.example.btcwidget.ui.social.SettingsTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.btcwidget.AppTheme
-import com.example.btcwidget.nostr.NostrAccount
-import com.example.btcwidget.nostr.SignerType
-import com.example.btcwidget.nostr.core.Nip19
 import com.example.btcwidget.DataSources
 import com.example.btcwidget.PriceSource
 import com.example.btcwidget.Stack
 import com.example.btcwidget.StackUnit
 import com.example.btcwidget.ThbSource
 
-/** General app settings: your stack, display currency, refresh cadence, data sources and about. */
+/**
+ * Settings › Bitcoin and widgets: your stack, display currency, widget theme, refresh cadence and
+ * price sources. Its state lives in [MainScreenViewModel] with the price data.
+ */
 @Composable
-fun SettingsScreen(
-    currencySetting: String,
-    onCurrencySelected: (String) -> Unit,
-    theme: AppTheme = AppTheme.CLASSIC,
-    onThemeSelected: (AppTheme) -> Unit = {},
-    refreshInterval: Int,
-    onRefreshIntervalSelected: (Int) -> Unit,
-    appVersion: String? = null,
-    stackSats: Long = 0,
-    stackUnit: StackUnit = StackUnit.BTC,
-    onStackChange: (Long, StackUnit) -> Unit = { _, _ -> },
-    stackValue: String? = null,
-    dataSources: DataSources = DataSources(PriceSource.COINBASE, ThbSource.CONVERTED),
-    onDataSourcesChange: (DataSources) -> Unit = {},
-    nostrSettings: @Composable () -> Unit = {}
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp)
-    ) {
-        HeaderSection(title = tr("SETTINGS"), subtitle = tr("App preferences"))
-
-        nostrSettings()
-
-        EInkPanel(title = tr("Your stack")) {
-            StackInput(stackSats = stackSats, stackUnit = stackUnit, onStackChange = onStackChange)
-            Text(
-                text = if (stackSats > 0 && stackValue != null) {
-                    tr("Worth {0} · stored only on this device", stackValue)
-                } else {
-                    tr("How much bitcoin you hold. Stored only on this device.")
-                },
-                color = EInk.Caption,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(top = 6.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        EInkPanel(title = tr("Display")) {
-            val context = androidx.compose.ui.platform.LocalContext.current
-            SettingRow(tr("Language"), note = tr("Text in menus, buttons and messages. Posts stay in the language they were written in.")) {
-                com.example.btcwidget.ui.social.Lang.Choice.entries.forEach { option ->
-                    EInkChip(
-                        text = if (option == com.example.btcwidget.ui.social.Lang.Choice.SYSTEM) tr("Auto").uppercase() else option.label.uppercase(),
-                        selected = com.example.btcwidget.ui.social.Lang.choice == option,
-                        onClick = { com.example.btcwidget.ui.social.Lang.choose(context, option) }
-                    )
-                }
-            }
-            SettingRow(tr("Widget theme"), note = tr("Home-screen widgets and their previews; the app keeps its own look")) {
-                AppTheme.entries.forEach { option ->
-                    EInkChip(
-                        // First word only, so three chips fit beside the label.
-                        text = tr(option.label.substringBefore(' ')).uppercase(),
-                        selected = theme == option,
-                        onClick = { onThemeSelected(option) }
-                    )
-                }
-            }
-            SettingRow(tr("Currency"), note = tr("Prices, sats and alerts")) {
-                listOf("USD", "THB").forEach { currency ->
-                    EInkChip(
-                        text = currency,
-                        selected = currencySetting == currency,
-                        onClick = { onCurrencySelected(currency) }
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        EInkPanel(title = tr("Updates")) {
-            SettingRow(tr("Refresh every"), note = tr("Widgets and alerts in the background")) {
-                listOf(15, 30, 60).forEach { minutes ->
-                    EInkChip(
-                        text = "${minutes}m",
-                        selected = refreshInterval == minutes,
-                        onClick = { onRefreshIntervalSelected(minutes) }
-                    )
-                }
-            }
-            Text(
-                text = tr("Pull down on the dashboard to refresh now."),
-                color = EInk.Caption,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        EInkPanel(title = tr("Data sources")) {
-            SettingRow(tr("BTC price"), note = tr("Spot price in USD")) {
-                PriceSource.entries.forEach { source ->
-                    EInkChip(
-                        text = source.label.uppercase(),
-                        selected = dataSources.price == source,
-                        onClick = { onDataSourcesChange(dataSources.copy(price = source)) }
-                    )
-                }
-            }
-            SettingRow(
-                tr("THB price"),
-                note = if (dataSources.thb == ThbSource.BITKUB) tr("Bitkub's BTC/THB market") else tr("USD price × exchange rate")
-            ) {
-                ThbSource.entries.forEach { source ->
-                    EInkChip(
-                        text = source.label.uppercase(),
-                        selected = dataSources.thb == source,
-                        onClick = { onDataSourcesChange(dataSources.copy(thb = source)) }
-                    )
-                }
-            }
-            Text(
-                text = tr("If a source is unreachable, Block falls back to Coinbase or the last known price."),
-                color = EInk.Caption,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        EInkPanel(title = tr("About")) {
-            AboutLine(tr("Block") + (appVersion?.let { " $it" } ?: ""))
-            AboutLine(tr("Prices: {0}", dataSources.price.label) + (if (dataSources.thb == ThbSource.BITKUB) ", Bitkub (THB)" else "") + tr(" · Network: mempool.space"))
-            AboutLine(tr("Supply: blockchain.info · MSTR: Yahoo Finance, CoinGecko"))
-            AboutLine(tr("Type: Inter, Noto Sans Thai, Oswald, VT323 (SIL Open Font License)"))
-            val uriHandler = LocalUriHandler.current
-            Text(
-                text = tr("Privacy policy ›"),
-                color = EInk.Value,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .clickable(onClickLabel = tr("Open privacy policy")) { uriHandler.openUri(PRIVACY_POLICY_URL) }
-                    .padding(vertical = 6.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
+fun BitcoinSettingsRoute(viewModel: MainScreenViewModel = androidx.lifecycle.viewmodel.compose.viewModel()) {
+    val settings by viewModel.settings.collectAsState()
+    val state by viewModel.uiState.collectAsState()
+    val data = (state as? MainScreenUiState.Success)?.data
+    val stackValue = data?.takeIf { settings.stackSats > 0 }?.let {
+        val btc = settings.stackSats / Stack.SATS_PER_BTC.toDouble()
+        com.example.btcwidget.alerts.PriceAlerts.formatPrice(btc * com.example.btcwidget.alerts.PriceAlerts.price(it, settings.currency), settings.currency)
     }
-}
-
-@Composable
-private fun AboutLine(text: String) {
-    Text(
-        text = text,
-        color = EInk.Label,
-        fontSize = 11.sp,
-        fontFamily = FontFamily.Monospace,
-        modifier = Modifier.padding(vertical = 3.dp)
+    BitcoinSettings(
+        stackSats = settings.stackSats, stackUnit = settings.stackUnit, stackValue = stackValue, onStackChange = viewModel::setStack,
+        currency = settings.currency, onCurrency = viewModel::setCurrency,
+        theme = settings.theme, onTheme = viewModel::setTheme,
+        refreshInterval = settings.refreshInterval, onRefreshInterval = viewModel::setRefreshInterval,
+        dataSources = settings.dataSources, onDataSources = viewModel::setDataSources
     )
 }
 
-/** Nostr account and relays. */
 @Composable
-fun NostrSettingsPanel(
-    account: NostrAccount?,
-    relays: List<String>,
-    onLogin: () -> Unit,
-    onLogout: () -> Unit,
-    onRelaysChange: (List<String>?) -> Unit,
-    onOpenRules: () -> Unit = {},
-    onOpenNostrSettings: () -> Unit = {},
-    onOpenRelays: () -> Unit = {},
-    relaySummary: String? = null,
-    pushEnabled: Boolean = true,
-    onPushChange: (Boolean) -> Unit = {},
-    walletConnected: Boolean = false,
-    /** Returns an error message, or null when connected. */
-    onConnectWallet: (String) -> String? = { null },
-    onDisconnectWallet: () -> Unit = {}
+fun BitcoinSettings(
+    stackSats: Long, stackUnit: StackUnit, stackValue: String?, onStackChange: (Long, StackUnit) -> Unit,
+    currency: String, onCurrency: (String) -> Unit,
+    theme: AppTheme, onTheme: (AppTheme) -> Unit,
+    refreshInterval: Int, onRefreshInterval: (Int) -> Unit,
+    dataSources: DataSources, onDataSources: (DataSources) -> Unit,
 ) {
-    var walletDialog by remember { mutableStateOf(false) }
-    var confirmLogout by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf(false) }
-    var relayText by remember(relays) { mutableStateOf(relays.joinToString("\n")) }
-    EInkPanel(title = tr("Nostr")) {
-        if (account == null) {
-            SettingRow(tr("Account"), note = tr("Log in with a signer app or nsec")) {
-                EInkChip(text = tr("LOG IN"), selected = true, onClick = onLogin)
-            }
-        } else {
-            val npub = Nip19.npub(account.pubkey)
-            SettingRow(
-                npub.take(12) + "…" + npub.takeLast(6),
-                note = when (account.type) { SignerType.AMBER -> tr("Signed by your signer app"); SignerType.BUNKER -> tr("Signed by your remote signer (bunker)"); else -> tr("Key encrypted on this device") }
-            ) {
-                EInkChip(text = if (confirmLogout) tr("SURE?") else tr("LOG OUT"), selected = confirmLogout, onClick = {
-                    if (confirmLogout) onLogout() else confirmLogout = true
-                })
-            }
-            if (confirmLogout && account.type == SignerType.LOCAL) {
-                Text(
-                    text = tr("Logging out deletes the key from this phone. Make sure you saved your nsec."),
-                    color = EInk.Alert, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(bottom = 6.dp)
-                )
-            }
-        }
-        if (account != null) {
-            SettingRow(tr("Phone notifications"), note = tr("Replies, zaps and messages, checked every refresh interval")) {
-                EInkSwitch(checked = pushEnabled, onCheckedChange = onPushChange)
-            }
-        }
-        if (account != null) {
-            SettingRow(tr("More Nostr settings"), note = tr("Accounts, notification types, media servers, inbox, your key")) {
-                EInkChip(text = "OPEN", selected = false, onClick = onOpenNostrSettings)
-            }
-        }
-        if (account != null) {
-            SettingRow(tr("Wallet (NWC)"), note = if (walletConnected) tr("Zaps pay in one tap") else tr("Zap without leaving the app")) {
-                EInkChip(
-                    text = if (walletConnected) tr("DISCONNECT") else tr("CONNECT"),
-                    selected = !walletConnected,
-                    onClick = { if (walletConnected) onDisconnectWallet() else walletDialog = true }
-                )
-            }
-        }
-        SettingRow(tr("Community rules"), note = tr("What isn't allowed; mute and report")) {
-            EInkChip(text = "OPEN", selected = false, onClick = onOpenRules)
-        }
-        SettingRow(tr("Relays"), note = relaySummary ?: tr("{0} relays", relays.size)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                EInkChip(text = tr("STATUS"), selected = false, onClick = onOpenRelays)
-                EInkChip(text = if (editing) "CLOSE" else "EDIT", selected = editing, onClick = { editing = !editing })
-            }
-        }
-        if (editing) {
-            OutlinedTextField(
-                value = relayText,
-                onValueChange = { relayText = it },
-                textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = EInk.Value),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = EInk.Value, unfocusedBorderColor = EInk.BodyStroke, cursorColor = EInk.Value
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                EInkChip(text = "SAVE", selected = true, onClick = {
-                    onRelaysChange(relayText.split('\n', ' ', ',').map { it.trim() }.filter { it.isNotEmpty() })
-                    editing = false
-                })
-                EInkChip(text = tr("DEFAULTS"), selected = false, onClick = { onRelaysChange(null); editing = false })
-            }
-            Text(
-                text = tr("One wss:// address per line."),
-                color = EInk.Caption, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
+    SettingsHeader(tr("Your stack"))
+    SettingsNote(
+        if (stackSats > 0 && stackValue != null) tr("Worth {0} · stored only on this device", stackValue)
+        else tr("How much bitcoin you hold. Stored only on this device.")
+    )
+    StackInput(stackSats, stackUnit, onStackChange)
+
+    SettingsDivider()
+    SettingsHeader(tr("Currency"))
+    SettingsNote(tr("Prices, sats and alerts"))
+    listOf("USD" to "US dollar (USD)", "THB" to "Thai baht (THB)").forEach { (code, name) ->
+        SettingsRadioRow(tr(name), selected = currency == code) { onCurrency(code) }
     }
-    if (walletDialog) {
-        var uri by remember { mutableStateOf("") }
-        var error by remember { mutableStateOf<String?>(null) }
-        com.example.btcwidget.ui.social.BlockDialog(
-            onDismiss = { walletDialog = false },
-            title = tr("Connect a wallet"),
-            text = tr("In your wallet (Alby Hub, Primal, Coinos, Mutiny…) create a Nostr Wallet Connect link and paste it here. ") +
-                "Set a spending budget there: anyone with this link can spend up to it. It's stored encrypted on this phone.",
-            confirmLabel = tr("Connect"),
-            confirmEnabled = uri.isNotBlank(),
-            onConfirm = {
-                val e = onConnectWallet(uri)
-                if (e == null) walletDialog = false else error = e
-            }
-        ) {
-            OutlinedTextField(
-                value = uri,
-                onValueChange = { uri = it.trim(); error = null },
-                label = { Text(tr("nostr+walletconnect://…")) },
-                singleLine = true,
-                isError = error != null,
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            error?.let { Text(it, color = EInk.Alert, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
-        }
-    }
-    Spacer(modifier = Modifier.height(12.dp))
+
+    SettingsDivider()
+    SettingsHeader(tr("Refresh every"))
+    SettingsNote(tr("Widgets, price alerts and phone notifications check in the background this often."))
+    listOf(15, 30, 60).forEach { m -> SettingsRadioRow(tr("{0} minutes", m), selected = refreshInterval == m) { onRefreshInterval(m) } }
+
+    SettingsDivider()
+    SettingsHeader(tr("Widget theme"))
+    SettingsNote(tr("Home-screen widgets and their previews; the app keeps its own look"))
+    AppTheme.entries.forEach { t -> SettingsRadioRow(tr(t.label), selected = theme == t) { onTheme(t) } }
+
+    SettingsDivider()
+    SettingsHeader(tr("BTC price"))
+    SettingsNote(tr("Spot price in USD"))
+    PriceSource.entries.forEach { src -> SettingsRadioRow(src.label, selected = dataSources.price == src) { onDataSources(dataSources.copy(price = src)) } }
+    SettingsHeader(tr("THB price"))
+    SettingsRadioRow(tr("USD price × exchange rate"), selected = dataSources.thb == ThbSource.CONVERTED) { onDataSources(dataSources.copy(thb = ThbSource.CONVERTED)) }
+    SettingsRadioRow(tr("Bitkub's BTC/THB market"), selected = dataSources.thb == ThbSource.BITKUB) { onDataSources(dataSources.copy(thb = ThbSource.BITKUB)) }
+    SettingsNote(tr("If a source is unreachable, Block falls back to Coinbase or the last known price."))
 }
 
-/** Published copy of docs/privacy-policy.md (also the URL for the Play listing). */
-const val PRIVACY_POLICY_URL = "https://github.com/phirapath21/btcwidget/blob/main/docs/privacy-policy.md"
+/** Amount field with a BTC / sats switch; saves every valid edit. */
+@Composable
+private fun StackInput(stackSats: Long, stackUnit: StackUnit, onStackChange: (Long, StackUnit) -> Unit) {
+    var unit by remember { mutableStateOf(stackUnit) }
+    var text by remember { mutableStateOf(Stack.toInput(stackSats, stackUnit)) }
+    val invalid = text.isNotBlank() && Stack.parse(text, unit) == null
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SettingsTextField(
+                value = text,
+                onValueChange = { input ->
+                    text = input.filter { it.isDigit() || it == '.' || it == ',' }.take(20)
+                    if (text.isBlank()) onStackChange(0, unit)
+                    else Stack.parse(text, unit)?.let { onStackChange(it, unit) }
+                },
+                placeholder = if (unit == StackUnit.BTC) "0.05" else "5000000",
+                isError = invalid,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f)
+            )
+            StackUnit.entries.forEach { option ->
+                Spacer(Modifier.width(8.dp))
+                SettingsButton(if (option == StackUnit.BTC) "BTC" else "sats", primary = unit == option) {
+                    if (unit != option) {
+                        // Keep the amount, show it in the new unit.
+                        val sats = Stack.parse(text, unit) ?: stackSats
+                        unit = option
+                        text = Stack.toInput(sats, option)
+                        onStackChange(sats, option)
+                    }
+                }
+            }
+        }
+        if (invalid) Text(
+            text = if (unit == StackUnit.BTC) tr("Up to 8 decimals, max 21,000,000") else tr("Whole sats only"),
+            color = EInk.Alert, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
 
 /** A labelled settings row with controls on the right and an optional note under the label. */
 @Composable
@@ -377,66 +179,5 @@ internal fun SettingRow(
     }
 }
 
-/** Amount field with a BTC / SATS unit switch; saves every valid edit. */
-@Composable
-private fun StackInput(stackSats: Long, stackUnit: StackUnit, onStackChange: (Long, StackUnit) -> Unit) {
-    var unit by remember { mutableStateOf(stackUnit) }
-    var text by remember { mutableStateOf(Stack.toInput(stackSats, stackUnit)) }
-    val invalid = text.isNotBlank() && Stack.parse(text, unit) == null
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(
-            value = text,
-            onValueChange = { input ->
-                text = input.filter { it.isDigit() || it == '.' || it == ',' }.take(20)
-                if (text.isBlank()) onStackChange(0, unit)
-                else Stack.parse(text, unit)?.let { onStackChange(it, unit) }
-            },
-            singleLine = true,
-            isError = invalid,
-            placeholder = { Text(if (unit == StackUnit.BTC) "0.05" else "5000000", fontFamily = FontFamily.Monospace) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = EInk.Value),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = EInk.Value,
-                unfocusedBorderColor = EInk.BodyStroke,
-                errorBorderColor = EInk.Alert,
-                focusedTextColor = EInk.Value,
-                unfocusedTextColor = EInk.Value,
-                errorTextColor = EInk.Value,
-                cursorColor = EInk.Value,
-                focusedPlaceholderColor = EInk.Caption,
-                unfocusedPlaceholderColor = EInk.Caption
-            ),
-            modifier = Modifier
-                .weight(1f)
-                .padding(end = 10.dp)
-        )
-        StackUnit.entries.forEach { option ->
-            EInkChip(
-                text = option.name,
-                selected = unit == option,
-                onClick = {
-                    if (unit != option) {
-                        // Keep the amount, show it in the new unit.
-                        val sats = Stack.parse(text, unit) ?: stackSats
-                        unit = option
-                        text = Stack.toInput(sats, option)
-                        onStackChange(sats, option)
-                    }
-                },
-                modifier = Modifier.padding(start = 6.dp)
-            )
-        }
-    }
-    if (invalid) {
-        Text(
-            text = if (unit == StackUnit.BTC) tr("Up to 8 decimals, max 21,000,000") else tr("Whole sats only"),
-            color = EInk.Alert,
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-    }
-}
-
+/** Published copy of docs/privacy-policy.md (also the URL for the Play listing). */
+const val PRIVACY_POLICY_URL = "https://github.com/phirapath21/btcwidget/blob/main/docs/privacy-policy.md"

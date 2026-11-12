@@ -192,25 +192,10 @@ fun MainScreen(
                 com.example.btcwidget.ui.social.HomeScreen(social, onItemClick)
             }
         },
-        nostrSettings = {
-            NostrSettingsPanel(
-                account = account,
-                relays = social.repo.pool.urls.toList(),
-                onOpenRelays = { onItemClick(com.example.btcwidget.RelaysKey) },
-                relaySummary = social.relayStatus().filter { it.primary }.let { s -> "${s.count { it.state == com.example.btcwidget.nostr.RelayStatus.State.CONNECTED }} of ${s.size} connected" },
-                onLogin = { onItemClick(com.example.btcwidget.LoginKey) },
-                onLogout = { social.logout() },
-                onOpenNostrSettings = { onItemClick(com.example.btcwidget.NostrSettingsKey) },
-                onRelaysChange = social::setRelays,
-                onOpenRules = { onItemClick(com.example.btcwidget.RulesKey) },
-                pushEnabled = pushEnabled,
-                walletConnected = nwcWallet != null,
-                onConnectWallet = social::connectNwc,
-                onDisconnectWallet = social::disconnectNwc,
-                onPushChange = { on ->
-                    social.setPushEnabled(on)
-                    if (on && !settings.notificationsAllowed) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
+        settingsContent = {
+            com.example.btcwidget.ui.social.SettingsHome(
+                accountName = account?.let { a -> social.profiles.value[a.pubkey]?.bestName ?: com.example.btcwidget.nostr.core.Profile.shortNpub(a.pubkey) },
+                onOpen = { page -> onItemClick(com.example.btcwidget.SettingsKey(page.name)) }
             )
         }
     )
@@ -254,7 +239,8 @@ fun MainScreenContent(
     homeContent: @Composable () -> Unit = {},
     notificationsContent: @Composable () -> Unit = {},
     profileContent: @Composable () -> Unit = {},
-    nostrSettings: @Composable () -> Unit = {},
+    /** The Settings page (its categories; each opens its own screen). */
+    settingsContent: @Composable () -> Unit = {},
     searchContent: @Composable () -> Unit = {},
     messagesContent: @Composable () -> Unit = {},
     bookmarksContent: @Composable () -> Unit = {},
@@ -268,10 +254,6 @@ fun MainScreenContent(
     menuButtonIcon: @Composable () -> Unit = { Text("≡", color = EInk.Value, fontSize = 22.sp) }
 ) {
     val data = (state as? MainScreenUiState.Success)?.data
-    val stackValue = data?.takeIf { stackSats > 0 }?.let {
-        val btc = stackSats / Stack.SATS_PER_BTC.toDouble()
-        PriceAlerts.formatPrice(btc * PriceAlerts.price(it, currencySetting), currencySetting)
-    }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val openPage: (MainTab) -> Unit = { tab ->
@@ -349,7 +331,7 @@ fun MainScreenContent(
                                 onHeroMetricSelected = onHeroMetricSelected,
                                 currencySetting = currencySetting,
                                 stackSats = stackSats,
-                                onSetUpStack = { onTabSelected(MainTab.SETTINGS) },
+                                onSetUpStack = { onItemClick(com.example.btcwidget.SettingsKey("BITCOIN")) },
                                 history = history,
                                 onShare = { key -> onShare(key, currentState.data) }
                             )
@@ -389,22 +371,7 @@ fun MainScreenContent(
                     stackSats = stackSats,
                     onSetUpStack = { onTabSelected(MainTab.SETTINGS) }
                 )
-                MainTab.SETTINGS -> SettingsScreen(
-                    currencySetting = currencySetting,
-                    onCurrencySelected = onCurrencySelected,
-                    theme = theme,
-                    onThemeSelected = onThemeSelected,
-                    refreshInterval = refreshInterval,
-                    onRefreshIntervalSelected = onRefreshIntervalSelected,
-                    appVersion = appVersion,
-                    stackSats = stackSats,
-                    stackUnit = stackUnit,
-                    onStackChange = onStackChange,
-                    stackValue = stackValue,
-                    dataSources = dataSources,
-                    onDataSourcesChange = onDataSourcesChange,
-                    nostrSettings = nostrSettings
-                )
+                MainTab.SETTINGS -> settingsContent()
             }
         }
 

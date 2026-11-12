@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
 import com.example.btcwidget.BlockclockMetrics
 import com.example.btcwidget.PriceData
@@ -48,10 +49,13 @@ class MainScreenTest {
                 onTabSelected = { tab = it },
                 onModeToggle = { _, _ -> },
                 onRefresh = {},
-                onItemClick = {}
+                onItemClick = {},
+                settingsContent = { com.example.btcwidget.ui.social.SettingsHome(accountName = null, onOpen = { openedSettings = it }) }
             )
         }
     }
+
+    private var openedSettings: com.example.btcwidget.ui.social.SettingsPage? = null
 
     /** The hero chip; the dashboard's title is also "BLOCK", but isn't clickable. */
     private val blockChip = hasText("BLOCK") and hasClickAction()
@@ -96,9 +100,19 @@ class MainScreenTest {
     fun settings_openFromSideBar() {
         setContent()
         openFromSideBar("Settings")
-        // Header subtitle; "SETTINGS" alone also matches the navigation label.
-        composeTestRule.onNodeWithText("APP PREFERENCES").assertExists()
-        composeTestRule.onNodeWithText("Currency").assertExists()
+        // The categories, each opening its own page.
+        composeTestRule.onNodeWithText("Your account").assertExists()
+        composeTestRule.onNodeWithText("Bitcoin and widgets").performClick()
+        org.junit.Assert.assertEquals(com.example.btcwidget.ui.social.SettingsPage.BITCOIN, openedSettings)
+    }
+
+    @Test
+    fun settings_searchFindsASettingAndItsPage() {
+        setContent()
+        openFromSideBar("Settings")
+        composeTestRule.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("currency")
+        composeTestRule.onNodeWithText("Currency").performClick()
+        org.junit.Assert.assertEquals(com.example.btcwidget.ui.social.SettingsPage.BITCOIN, openedSettings)
     }
 
     @Test
