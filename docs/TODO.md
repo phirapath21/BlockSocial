@@ -51,6 +51,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Drag a video or live stream down into the in-app mini player (YouTube-style); tap it to go back full screen
 - [x] Live stream polish: kept up to date (ends, viewers), loading/Try again, full screen with chat over it, YouTube Live-style chat with zaps (Super Chat cards, Top zaps), Follow and Zap the streamer, expandable summary
 - [x] Wide screens: posts in a 560dp column with a side panel (Trending, Live now); photos and videos in posts never taller than about half the screen; drag to the mini player in landscape too
+- [x] New logo and icon: the Block cube in three shades of orange (adaptive, themed, legacy, Play Store icon and feature graphic, landing page)
 - [ ] Profile: followers count (NIP-45 COUNT) and tabs that load their own notes from relays
 
 ### Direct messages

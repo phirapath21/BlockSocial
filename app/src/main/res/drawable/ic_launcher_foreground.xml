@@ -1,34 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Condensed bitcoin sign over a progress bar, echoing the widgets. Safe zone: r=33 around (54,54). -->
+<!-- Block: a cube in three shades of bitcoin orange (light top, mid left, deep right).
+     Inside the adaptive-icon safe zone (r=33 around 54,54); round joins soften the corners. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#3A3D43"
-        android:pathData="M38,77 h32 a1.25,1.25 0 0 1 0,2.5 h-32 a1.25,1.25 0 0 1 0,-2.5 z" />
+        android:fillColor="#FFB347"
+        android:strokeColor="#FFB347"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round"
+        android:pathData="M54,27 L78,40.5 L54,54 L30,40.5Z" />
     <path
-        android:fillColor="#D7DCDF"
-        android:pathData="M38,77 h19.5 v2.5 h-19.5 a1.25,1.25 0 0 1 0,-2.5 z" />
+        android:fillColor="#F7931A"
+        android:strokeColor="#F7931A"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round"
+        android:pathData="M30,40.5 L54,54 L54,81 L30,67.5Z" />
     <path
-        android:pathData="M46.25,31.5 L46.25,67.5"
-        android:strokeColor="#D7DCDF"
-        android:strokeWidth="3.6" />
-    <path
-        android:pathData="M46.25,31.5 L52.75,31.5 C57.75,31.5 59.75,34.5 59.75,39.75 C59.75,45.0 57.75,48.0 52.75,48.0 L46.25,48.0"
-        android:strokeColor="#D7DCDF"
-        android:strokeWidth="3.6" />
-    <path
-        android:pathData="M46.25,48.0 L53.75,48.0 C59.25,48.0 61.75,51.0 61.75,57.75 C61.75,64.5 59.25,67.5 53.75,67.5 L46.25,67.5"
-        android:strokeColor="#D7DCDF"
-        android:strokeWidth="3.6" />
-    <path
-        android:pathData="M49.75,26.0 L49.75,31.5 M55.25,26.0 L55.25,31.5"
-        android:strokeColor="#D7DCDF"
-        android:strokeWidth="3.6" />
-    <path
-        android:pathData="M49.75,67.5 L49.75,73.0 M55.25,67.5 L55.25,73.0"
-        android:strokeColor="#D7DCDF"
-        android:strokeWidth="3.6" />
+        android:fillColor="#C2680A"
+        android:strokeColor="#C2680A"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round"
+        android:pathData="M54,54 L78,40.5 L78,67.5 L54,81Z" />
 </vector>
