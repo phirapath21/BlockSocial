@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -264,22 +265,30 @@ fun MainScreenContent(
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
     BackHandler(enabled = !drawerState.isOpen && selectedTab !in BAR_TABS) { onTabSelected(MainTab.HOME) }
 
+    // The side panel slides in from the right, next to its button at the right of the bottom
+    // bar: the drawer is laid out right-to-left, and everything inside it back left-to-right.
+    val ltr = androidx.compose.ui.platform.LocalLayoutDirection.current
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
     ModalNavigationDrawer(
         drawerState = drawerState,
-        // Swipe right to open, left to close. Pages with sideways drags of their own (the
-        // price chart scrub, widget reordering) open it with the top-left button instead.
+        // Swipe in from the right edge to open, back to the right to close. Pages with sideways
+        // drags of their own (the price chart scrub, widget reordering) use the button instead.
         gesturesEnabled = drawerState.isOpen || selectedTab !in DRAG_PAGES,
         drawerContent = {
-            ModalDrawerSheet(
-                drawerContainerColor = EInk.Background,
-                drawerContentColor = EInk.Value,
-                modifier = Modifier.width(300.dp)
-            ) {
-                SideBar(selectedTab = selectedTab, header = drawerHeader, onOpen = openPage)
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides ltr) {
+                ModalDrawerSheet(
+                    drawerContainerColor = EInk.Background,
+                    drawerContentColor = EInk.Value,
+                    drawerShape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp),
+                    modifier = Modifier.width(310.dp)
+                ) {
+                    SideBar(selectedTab = selectedTab, header = drawerHeader, onOpen = openPage, onClose = { scope.launch { drawerState.close() } })
+                }
             }
         },
         modifier = modifier
     ) {
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides ltr) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -288,8 +297,9 @@ fun MainScreenContent(
     ) {
         TopBar(
             title = tr(selectedTab.title),
-            menuIcon = menuButtonIcon,
-            onMenu = { scope.launch { drawerState.open() } }
+            notifications = badges[MainTab.NOTIFICATIONS] ?: 0,
+            notificationsOpen = selectedTab == MainTab.NOTIFICATIONS,
+            onNotifications = { onTabSelected(MainTab.NOTIFICATIONS) }
         )
         Box(
             modifier = Modifier
@@ -404,68 +414,106 @@ fun MainScreenContent(
                     colors = itemColors
                 )
             }
+            // Last: the side panel (Profile, Lists, Bookmarks… Settings), your avatar as its icon.
+            // Shown selected while one of its pages is open.
+            NavigationBarItem(
+                icon = {
+                    Box(
+                        Modifier.size(28.dp).semantics { contentDescription = tr("Open menu") },
+                        contentAlignment = Alignment.Center
+                    ) { menuButtonIcon() }
+                },
+                alwaysShowLabel = false,
+                selected = drawerState.isOpen || selectedTab in DRAWER_PAGES,
+                onClick = { scope.launch { if (drawerState.isOpen) drawerState.close() else drawerState.open() } },
+                colors = itemColors
+            )
         }
+    }
+    }
     }
     }
 }
 
-/** Title row above every page; the left button opens the side bar. */
+/** Title row above every page, with Notifications (and their unread count) at the right, as on X. */
 @Composable
-private fun TopBar(title: String, menuIcon: @Composable () -> Unit, onMenu: () -> Unit) {
+private fun TopBar(title: String, notifications: Int, notificationsOpen: Boolean, onNotifications: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .height(52.dp)
-            .padding(horizontal = 8.dp)
+            .padding(start = 16.dp, end = 6.dp)
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .clickable(onClickLabel = tr("Open menu"), onClick = onMenu)
-                .semantics { contentDescription = tr("Open menu") }
-        ) { menuIcon() }
         Text(
             text = title,
             color = EInk.Value,
-            fontSize = 19.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 12.dp)
+            modifier = Modifier.weight(1f)
         )
+        val label = if (notifications > 0) tr("{0}, {1} unread", tr("Notifications"), notifications) else tr("Notifications")
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .clickable(onClickLabel = tr("Notifications"), onClick = onNotifications)
+                .semantics { contentDescription = label }
+        ) {
+            BadgedBox(badge = {
+                if (notifications > 0) Badge(containerColor = Color(0xFFF7931A), contentColor = Color.Black) {
+                    Text(if (notifications > 99) "99+" else "$notifications", fontWeight = FontWeight.Bold)
+                }
+            }) {
+                Icon(
+                    if (notificationsOpen) Icons.Default.Notifications else com.example.btcwidget.ui.social.Glyphs.Bell,
+                    contentDescription = null,
+                    tint = EInk.Value,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
 
-/** Side bar: the account, then Profile, Bookmarks, Widgets, Price alerts and Settings. */
+/**
+ * The side panel, as on X: your account at the top, then your pages in large type, Settings
+ * last under a line. Opens from the right, by the button at the right of the bottom bar.
+ */
 @Composable
-private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen: (MainTab) -> Unit) {
+private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen: (MainTab) -> Unit, onClose: () -> Unit) {
     Column(
         Modifier
             .fillMaxHeight()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 12.dp)
+            .padding(vertical = 8.dp)
     ) {
-        Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { header() }
-        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(vertical = 8.dp))
+        Box(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 8.dp, bottom = 12.dp)) { header() }
+        HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(bottom = 6.dp))
         DRAWER_PAGES.forEach { tab ->
+            if (tab == MainTab.SETTINGS) HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(vertical = 6.dp))
             val selected = selectedTab == tab
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClickLabel = tr("Open {0}", tr(tab.title))) { onOpen(tab) }
+                    .padding(horizontal = 10.dp, vertical = 2.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
                     .background(if (selected) EInk.Body else Color.Transparent)
-                    .padding(horizontal = 20.dp, vertical = 14.dp)
+                    .clickable(onClickLabel = tr("Open {0}", tr(tab.title))) { onOpen(tab) }
+                    .padding(horizontal = 14.dp, vertical = 13.dp)
             ) {
-                Icon(tab.icon, contentDescription = null, tint = if (selected) EInk.Value else EInk.Label, modifier = Modifier.size(24.dp))
+                Icon(tab.icon, contentDescription = null, tint = if (selected) Color(0xFFF7931A) else EInk.Value, modifier = Modifier.size(26.dp))
                 Text(
                     text = tr(tab.title),
                     color = EInk.Value,
-                    fontSize = 18.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.padding(start = 18.dp)
+                    fontSize = 20.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    modifier = Modifier.padding(start = 20.dp)
                 )
             }
         }
@@ -473,8 +521,9 @@ private fun SideBar(selectedTab: MainTab, header: @Composable () -> Unit, onOpen
 }
 
 /**
- * Pages. The bottom bar holds Home, Search, Bitcoin, Notifications and Messages; the side
- * bar holds Profile, Widgets, Price alerts and Settings. [label] names the bar
+ * Pages. The bottom bar holds Home, Search, Bitcoin and Messages, then the side panel's button;
+ * Notifications opens from the top bar; the side panel holds Profile, Lists, Bookmarks,
+ * Communities, Widgets, Price alerts and Settings. [label] names the bar
  * icon for TalkBack, [title] is shown in the top bar and side bar.
  */
 enum class MainTab(val label: String, val icon: ImageVector, val title: String = label) {
@@ -494,7 +543,7 @@ enum class MainTab(val label: String, val icon: ImageVector, val title: String =
 
 // Getters, not stored values: a top-level val that touches MainTab would initialize the
 // enum while this file's other top-level vals are still null (that crashed the app once).
-private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SEARCH, MainTab.DASHBOARD, MainTab.NOTIFICATIONS, MainTab.MESSAGES)
+private val BAR_TABS get() = listOf(MainTab.HOME, MainTab.SEARCH, MainTab.DASHBOARD, MainTab.MESSAGES)
 private val DRAWER_PAGES get() = listOf(MainTab.PROFILE, MainTab.LISTS, MainTab.BOOKMARKS, MainTab.COMMUNITIES, MainTab.WIDGETS, MainTab.ALERTS, MainTab.SETTINGS)
 
 /** Pages with sideways drags of their own, where a swipe must not open the side bar. */

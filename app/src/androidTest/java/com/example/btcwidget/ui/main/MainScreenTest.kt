@@ -71,13 +71,21 @@ class MainScreenTest {
     }
 
     @Test
-    fun bottomBar_hasFiveTabsInOrder() {
+    fun bottomBar_hasFourTabsThenTheMenu() {
         setContent()
-        listOf("Home", "Search", "Bitcoin", "Notifications", "Messages").forEach {
+        listOf("Home", "Search", "Bitcoin", "Messages", "Open menu").forEach {
             composeTestRule.onNodeWithContentDescription(it).assertExists()
         }
-        // Profile and Settings moved to the side bar.
+        // Profile and Settings are in the side panel.
         composeTestRule.onNodeWithContentDescription("Settings").assertDoesNotExist()
+    }
+
+    @Test
+    fun notifications_openFromTheTopBar() {
+        setContent()
+        composeTestRule.onNodeWithContentDescription("Notifications").performClick()
+        // The page's title in the top bar.
+        composeTestRule.onNode(hasText("Notifications") and androidx.compose.ui.test.hasClickAction().not()).assertExists()
     }
 
     private val sats = "SATS 1USD 1343. Sats per 1 dollar"
@@ -90,7 +98,7 @@ class MainScreenTest {
         composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(target)
     }
 
-    /** Opens the side bar with the top-left button and picks [page]. */
+    /** Opens the side panel with its button (right of the bottom bar) and picks [page]. */
     private fun openFromSideBar(page: String) {
         composeTestRule.onNodeWithContentDescription("Open menu").performClick()
         composeTestRule.onNodeWithText(page).performClick()
@@ -102,7 +110,8 @@ class MainScreenTest {
         openFromSideBar("Settings")
         // The categories, each opening its own page.
         composeTestRule.onNodeWithText("Your account").assertExists()
-        composeTestRule.onNodeWithText("Bitcoin and widgets").performClick()
+        // The last categories are below the fold on a small screen.
+        composeTestRule.onNodeWithText("Bitcoin and widgets").performScrollTo().performClick()
         org.junit.Assert.assertEquals(com.example.btcwidget.ui.social.SettingsPage.BITCOIN, openedSettings)
     }
 
