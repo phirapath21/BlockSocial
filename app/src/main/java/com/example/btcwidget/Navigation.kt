@@ -88,7 +88,8 @@ fun MainNavigation() {
         entry<EngagementKey> { key -> com.example.btcwidget.ui.social.EngagementScreen(social, key.noteId, key.tab, navigate, back) }
         entry<RulesKey> { com.example.btcwidget.ui.social.CommunityRulesScreen(back) }
         entry<ArticleKey> { key -> com.example.btcwidget.ui.social.ArticleScreen(social, key.naddr, navigate, back) }
-        entry<NostrSettingsKey> { com.example.btcwidget.ui.social.NostrSettingsScreen(social, navigate, back) }
+        entry<NostrSettingsKey> { SettingsEntry(social, "ACCOUNT", navigate, back) }
+        entry<SettingsKey> { key -> SettingsEntry(social, key.page, navigate, back) }
         entry<CommunityKey> { key -> com.example.btcwidget.ui.social.CommunityScreen(social, key.coordinate, navigate, back) }
         entry<ChannelKey> { key -> com.example.btcwidget.ui.social.ChannelScreen(social, key.id, navigate, back) }
         entry<GroupKey> { key -> com.example.btcwidget.ui.social.GroupScreen(social, key.address, navigate, back) }
@@ -114,3 +115,14 @@ fun MainNavigation() {
 
 /** How long a screen takes to slide in or out. */
 private const val SLIDE_MS = 280
+
+/** A Settings page; the Bitcoin one reads the price settings from the main screen's ViewModel. */
+@Composable
+private fun SettingsEntry(social: SocialViewModel, page: String, navigate: (androidx.navigation3.runtime.NavKey) -> Unit, back: () -> Unit) {
+  val main: com.example.btcwidget.ui.main.MainScreenViewModel = viewModel()
+  com.example.btcwidget.ui.social.SettingsPageScreen(
+    social, com.example.btcwidget.ui.social.SettingsPage.of(page), navigate, back,
+    appVersion = main.appVersion,
+    bitcoin = { com.example.btcwidget.ui.main.BitcoinSettingsRoute(main) }
+  )
+}

@@ -52,6 +52,8 @@ import kotlinx.serialization.Serializable
 
 /** Account, notification, media server and inbox settings for Nostr. */
 @Serializable data object NostrSettingsKey : NavKey
+/** One Settings page ([com.example.btcwidget.ui.social.SettingsPage] name). */
+@Serializable data class SettingsKey(val page: String) : NavKey
 
 /** A NIP-72 community, by its coordinate "34550:<owner>:<id>". */
 @Serializable data class CommunityKey(val coordinate: String) : NavKey
