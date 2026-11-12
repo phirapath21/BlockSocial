@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +83,11 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
     var articlesLoading by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
     val focus = remember { FocusRequester() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // Recent searches, shown while the box is empty and you're about to type (as on X).
+    var focused by remember { mutableStateOf(false) }
+    var recents by remember { mutableStateOf(com.example.btcwidget.AppPrefs.recentSearches(context)) }
+    fun keepSearch(q: String) { com.example.btcwidget.AppPrefs.addRecentSearch(context, q); recents = com.example.btcwidget.AppPrefs.recentSearches(context) }
     val scanQr = rememberQrScan(vm, navigate)
     // Opened as its own screen: start typing. As a tab, don't pop the keyboard on every visit.
     // Coming Back to results, leave the keyboard down.
@@ -95,7 +103,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
     fun run(typing: Boolean = false) {
         val q = query.trim()
         if (q.isEmpty()) return
-        if (!typing) keyboard?.hide()
+        if (!typing) { keyboard?.hide(); keepSearch(q) }
         job?.cancel()
         searched = q
         // People already seen show at once; relay results replace them when they arrive.
@@ -169,7 +177,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                     focusedPlaceholderColor = EInk.Caption, unfocusedPlaceholderColor = EInk.Caption,
                     focusedContainerColor = EInk.Body, unfocusedContainerColor = EInk.Body
                 ),
-                modifier = Modifier.weight(1f).focusRequester(focus)
+                modifier = Modifier.weight(1f).focusRequester(focus).onFocusChanged { focused = it.isFocused }
             )
             // Scan someone's QR code (a profile, post or article) instead of typing.
             Text(
@@ -211,7 +219,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                             }
                             if (people.isNotEmpty()) {
                                 SectionTitle("People", if (people.size > 3) "See all ${people.size} ›" else null) { tab = "people" }
-                                people.take(3).forEach { p -> PersonRow(p, isFollowing = p.pubkey in following, onClick = { navigate(ProfileKey(p.pubkey)) }) }
+                                people.take(3).forEach { p -> PersonRow(p, isFollowing = p.pubkey in following, onClick = { searched?.let { keepSearch(it) }; navigate(ProfileKey(p.pubkey)) }) }
                             }
                             if (articles.isNotEmpty()) {
                                 SectionTitle("Articles", if (articles.size > 2) "See all ${articles.size} ›" else null) { tab = "articles" }
@@ -227,6 +235,13 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                         }
                     )
                 }
+                // About to type, with nothing typed yet: what you searched for lately.
+                searched == null && focused && query.isBlank() && recents.isNotEmpty() -> RecentSearches(
+                    recents,
+                    onPick = { query = it; run() },
+                    onRemove = { com.example.btcwidget.AppPrefs.removeRecentSearch(context, it); recents = com.example.btcwidget.AppPrefs.recentSearches(context) },
+                    onClear = { com.example.btcwidget.AppPrefs.clearRecentSearches(context); recents = emptyList() }
+                )
                 // Before searching: Explore, recent notes from everyone or from one relay.
                 searched == null -> ExploreFeed(vm, actions, navigate)
                 tab == "people" -> if (people.isEmpty() && searched?.startsWith("#") != true) EmptyNote(tr("No people found for \"{0}\".", searched)) else {
@@ -241,7 +256,7 @@ fun SearchScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit, onBack: (() ->
                             }
                         }
                         items(people, key = { it.pubkey }) { p ->
-                            PersonRow(p, isFollowing = p.pubkey in following, onClick = { navigate(ProfileKey(p.pubkey)) })
+                            PersonRow(p, isFollowing = p.pubkey in following, onClick = { searched?.let { keepSearch(it) }; navigate(ProfileKey(p.pubkey)) })
                         }
                     }
                 }
@@ -478,4 +493,34 @@ internal fun PersonRow(profile: Profile, isFollowing: Boolean, onClick: () -> Un
         }
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+}
+
+
+/** Recent searches: tap one to search it again, ✕ to forget it, or clear them all. */
+@Composable
+private fun RecentSearches(items: List<String>, onPick: (String) -> Unit, onRemove: (String) -> Unit, onClear: () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        item(key = "head") {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(tr("Recent"), color = EInk.Value, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(
+                    tr("Clear all"), color = androidx.compose.ui.graphics.Color(0xFFF7931A), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClear).padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+        }
+        items(items, key = { "r:$it" }) { q ->
+            Row(
+                Modifier.fillMaxWidth().clickable(onClickLabel = tr("Search")) { onPick(q) }.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.Icon(Glyphs.Clock, contentDescription = null, tint = EInk.Caption, modifier = Modifier.size(20.dp))
+                Text(q, color = EInk.Value, fontSize = 16.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 14.dp))
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).clickable(onClickLabel = tr("Remove")) { onRemove(q) },
+                    contentAlignment = Alignment.Center
+                ) { androidx.compose.material3.Icon(Glyphs.Close, contentDescription = tr("Remove"), tint = EInk.Caption, modifier = Modifier.size(18.dp)) }
+            }
+        }
+    }
 }

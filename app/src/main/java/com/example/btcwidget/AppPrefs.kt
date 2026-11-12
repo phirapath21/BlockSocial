@@ -35,6 +35,8 @@ object AppPrefs {
     private const val LINKS_IN_APP = "links_in_app"
     private const val PRIVATE_LISTS = "private_lists"
     private const val LANGUAGE = "language"
+    private const val RECENT_SEARCHES = "recent_searches"
+    private const val TIPS_SEEN = "tips_seen"
     private fun modeEnabled(mode: Int) = "mode_enabled_$mode"
     private fun widgetMode(id: Int) = "mode_$id"
     private fun halvingMode(id: Int) = "halving_mode_$id"
@@ -80,6 +82,24 @@ object AppPrefs {
         com.example.btcwidget.ui.social.Lang.Choice.entries.firstOrNull { it.name == prefs(context).getString(LANGUAGE, null) }
             ?: com.example.btcwidget.ui.social.Lang.Choice.SYSTEM
     fun setLanguage(context: Context, value: com.example.btcwidget.ui.social.Lang.Choice) = edit(context) { putString(LANGUAGE, value.name) }
+
+    /** What you searched for lately, newest first (kept only on this phone). */
+    fun recentSearches(context: Context): List<String> =
+        prefs(context).getString(RECENT_SEARCHES, null).orEmpty().split('\n').filter { it.isNotBlank() }
+    fun addRecentSearch(context: Context, query: String) {
+        val q = query.trim().take(100)
+        if (q.isEmpty()) return
+        val list = (listOf(q) + recentSearches(context).filterNot { it.equals(q, ignoreCase = true) }).take(10)
+        edit(context) { putString(RECENT_SEARCHES, list.joinToString("\n")) }
+    }
+    fun removeRecentSearch(context: Context, query: String) =
+        edit(context) { putString(RECENT_SEARCHES, recentSearches(context).filterNot { it == query }.joinToString("\n")) }
+    fun clearRecentSearches(context: Context) = edit(context) { remove(RECENT_SEARCHES) }
+
+    /** First-run tips already shown (each shows once). */
+    fun tipSeen(context: Context, id: String): Boolean = id in prefs(context).getStringSet(TIPS_SEEN, emptySet()).orEmpty()
+    fun setTipSeen(context: Context, id: String) =
+        edit(context) { putStringSet(TIPS_SEEN, prefs(context).getStringSet(TIPS_SEEN, emptySet()).orEmpty() + id) }
 
     fun currency(context: Context): String = prefs(context).getString(CURRENCY, "USD") ?: "USD"
     fun setCurrency(context: Context, value: String) = edit(context) { putString(CURRENCY, value) }

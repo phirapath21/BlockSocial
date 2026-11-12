@@ -1,5 +1,11 @@
 package com.example.btcwidget.ui.social
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.composed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.asImageBitmap
@@ -90,8 +96,11 @@ fun MessagesScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     }
     val shown = if (showRequests) requests else chats
 
+    // Tap Messages again: back to the top; at the top, check for new messages.
+    val listState = vm.listState("messages")
+    ScrollToTopOnTabTap("MESSAGES", listState) { vm.startDms() }
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState) {
             if (requests.isNotEmpty() || showRequests) item(key = "tabs") {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     com.example.btcwidget.ui.main.EInkChip(text = "CHATS", selected = !showRequests, onClick = { showRequests = false })
@@ -287,6 +296,7 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
     val byId = remember(messages) { messages.associateBy { it.id } }
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    val sendHaptics = rememberHaptics()
     var replyTo by remember { mutableStateOf<com.example.btcwidget.nostr.core.Nip17.Message?>(null) }
     var menuFor by remember { mutableStateOf<String?>(null) }
     var photoSending by remember { mutableStateOf(false) }
@@ -330,10 +340,14 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                             )
                         }
                     }
+                    if (messages.isNotEmpty()) item(key = "tip") {
+                        FirstTimeTip("swipe-reply", tr("Swipe a message to the right to reply to it."), Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                    }
                     items(messages, key = { it.id }) { m ->
                         val mine = m.sender == me
                         val fg = if (mine) EInk.Background else EInk.Value
-                        Column(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                        // Swipe right to reply, as on X and in other chat apps.
+                        Column(Modifier.fillMaxWidth().swipeToReply { replyTo = m }.padding(vertical = 3.dp), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                             Box {
                                 Column(
                                     Modifier
@@ -429,6 +443,7 @@ fun ChatScreen(vm: SocialViewModel, peers: List<String>, navigate: (NavKey) -> U
                     PillButton(if (sending) "…" else tr("Send"), filled = text.isNotBlank() && !sending) {
                         if (text.isBlank() || sending || me == null) return@PillButton
                         sending = true
+                        sendHaptics.confirm()
                         val outgoing = text
                         text = ""
                         val parent = replyTo
@@ -463,4 +478,51 @@ private fun EncryptedPhoto(vm: SocialViewModel, info: com.example.btcwidget.nost
         if (b != null) androidx.compose.foundation.Image(b, contentDescription = tr("Photo"), contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
         else Text(tr("🔒 Photo"), color = EInk.Caption, fontSize = 13.sp)
     }
+}
+
+
+/**
+ * Drag a message to the right to reply to it: it follows your finger (with some resistance), a
+ * reply arrow fades in behind it, the phone ticks once it's far enough, and letting go there
+ * replies. Vertical scrolling is untouched.
+ */
+private fun Modifier.swipeToReply(onReply: () -> Unit): Modifier = composed {
+    val haptics = rememberHaptics()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val trigger = with(density) { 64.dp.toPx() }
+    val max = with(density) { 96.dp.toPx() }
+    val offset = remember { androidx.compose.animation.core.Animatable(0f) }
+    var armed by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val reply by androidx.compose.runtime.rememberUpdatedState(onReply)
+    val arrow = androidx.compose.ui.graphics.vector.rememberVectorPainter(Glyphs.Reply)
+    this
+        .pointerInput(Unit) {
+            detectHorizontalDragGestures(
+                onDragEnd = {
+                    if (armed) reply()
+                    armed = false
+                    scope.launch { offset.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.7f)) }
+                },
+                onDragCancel = { armed = false; scope.launch { offset.animateTo(0f) } }
+            ) { change, drag ->
+                val next = (offset.value + drag * 0.6f).coerceIn(0f, max)
+                if (next > 0f) change.consume()
+                scope.launch { offset.snapTo(next) }
+                val now = next >= trigger
+                if (now && !armed) haptics.tick()
+                armed = now
+            }
+        }
+        // The arrow stays put at the left while the message slides over it.
+        .drawBehind {
+            val progress = (offset.value / trigger).coerceIn(0f, 1f)
+            if (progress > 0f) {
+                val size = 22.dp.toPx() * (0.7f + 0.3f * progress)
+                translate(left = 16.dp.toPx(), top = (this.size.height - size) / 2) {
+                    with(arrow) { draw(androidx.compose.ui.geometry.Size(size, size), alpha = progress, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(androidx.compose.ui.graphics.Color(0xFFF7931A))) }
+                }
+            }
+        }
+        .graphicsLayer { translationX = offset.value }
 }

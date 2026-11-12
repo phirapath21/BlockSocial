@@ -153,7 +153,10 @@ fun NoteCard(
                 }
             }
             ReplyingTo(note, actions, Modifier.padding(top = 10.dp))
-            NoteBody(note, actions, fontSize = 17, collapse = false)
+            // The opened post's text can be selected: long-press, drag the handles, Copy.
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Column { NoteBody(note, actions, fontSize = 17, collapse = false) }
+            }
             Text(fullTimestamp(note.createdAt), color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
             ActionRow(note, stats, actions)
             return@Column

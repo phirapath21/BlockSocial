@@ -51,6 +51,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
@@ -170,6 +171,9 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val listState = vm.listState("home:" + feed.id)
     val scope = rememberCoroutineScope()
     LaunchedEffect(account) { vm.start() }
+    // Tap Home again: back to the top; again at the top: new posts (or a refresh).
+    val pullHaptics = rememberHaptics()
+    ScrollToTopOnTabTap("HOME", listState) { if (vm.newPosts.value.isNotEmpty()) vm.showNewPosts() else vm.refreshHome() }
 
     SocialScaffold(vm, navigate) { actions ->
         Box(Modifier.fillMaxSize()) {
@@ -183,7 +187,7 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                         feed, open = feedMenu,
                         onShorts = { navigate(com.example.btcwidget.ShortsKey(everyone = (feed as? com.example.btcwidget.nostr.core.HomeFeed.Media)?.everyone == true)) }
                     ) { feedMenu = true }
-                    PullToRefreshBox(isRefreshing = home.refreshing, onRefresh = vm::refreshHome, modifier = Modifier.fillMaxSize()) {
+                    PullToRefreshBox(isRefreshing = home.refreshing, onRefresh = { pullHaptics.tick(); vm.refreshHome() }, modifier = Modifier.fillMaxSize()) {
                         when {
                             home.loading && home.items.isEmpty() -> Spinner(Modifier.padding(top = 40.dp))
                             shown.isEmpty() && !home.loading -> LazyColumn(Modifier.fillMaxSize()) {
@@ -221,12 +225,18 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                     }
                 }
                 if (feedMenu) FeedMenu(vm, onClose = { feedMenu = false })
-                FloatingActionButton(
+                FirstTimeTip(
+                    "home-tabs", tr("Tap Home again to jump back to the top. Long-press your picture at the bottom right to switch accounts."),
+                    Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 84.dp, bottom = 16.dp)
+                )
+                // Fades away with the bars while you scroll down.
+                val fab by androidx.compose.animation.core.animateFloatAsState(if (LocalBarsVisible.current) 1f else 0f, label = "fab")
+                if (fab > 0.01f) FloatingActionButton(
                     onClick = { navigate(ComposeKey()) },
                     containerColor = androidx.compose.ui.graphics.Color(0xFFF7931A),
                     contentColor = androidx.compose.ui.graphics.Color.Black,
                     shape = CircleShape,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).graphicsLayer { alpha = fab; scaleX = 0.6f + 0.4f * fab; scaleY = 0.6f + 0.4f * fab }
                 ) { Text("+", fontSize = 26.sp, fontWeight = FontWeight.Bold) }
             }
         }
@@ -292,6 +302,7 @@ private fun WelcomeScreen(vm: SocialViewModel, actions: NoteActions, onLogin: ()
 fun NotificationsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
     val account by vm.account.collectAsState()
     val state by vm.notifications.collectAsState()
+    val pullHaptics = rememberHaptics()
     val profiles by vm.profiles.collectAsState()
     LaunchedEffect(account) { if (account != null && state.items.isEmpty()) vm.refreshNotifications() }
 
@@ -302,13 +313,25 @@ fun NotificationsScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { PillButton(tr("Log in"), onClick = { navigate(LoginKey) }) }
                 return@Column
             }
-            PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refreshNotifications, modifier = Modifier.fillMaxSize()) {
+            // All, or only Mentions (replies and mentions of you), as on X.
+            var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(0) }
+            FeedTabs(listOf(tr("All"), tr("Mentions")), tab) { tab = it }
+            HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+            val listState = vm.listState(if (tab == 0) "notifications" else "notifications:mentions")
+            ScrollToTopOnTabTap("NOTIFICATIONS", listState) { vm.refreshNotifications() }
+            PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = { pullHaptics.tick(); vm.refreshNotifications() }, modifier = Modifier.fillMaxSize()) {
+                val shown = remember(state.items, tab) {
+                    if (tab == 0) state.items
+                    else state.items.filter { it.type == NostrNotification.Type.REPLY || it.type == NostrNotification.Type.MENTION }
+                }
                 when {
                     state.loading -> Spinner(Modifier.padding(top = 40.dp))
-                    state.items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) { item { EmptyNote(state.error ?: tr("No notifications yet.")) } }
+                    shown.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
+                        item { EmptyNote(state.error ?: if (tab == 0) tr("No notifications yet.") else tr("When someone replies to or mentions you, it shows here.")) }
+                    }
                     else -> {
-                        val groups = remember(state.items) { NotificationGroup.of(state.items) }
-                        LazyColumn(state = vm.listState("notifications"), modifier = Modifier.fillMaxSize()) {
+                        val groups = remember(shown) { NotificationGroup.of(shown) }
+                        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                             items(groups, key = { it.key }) { g -> NotificationRow(g, profiles, actions) }
                         }
                     }

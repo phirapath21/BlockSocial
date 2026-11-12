@@ -178,6 +178,7 @@ fun CommunityScreen(vm: SocialViewModel, coordinate: String, navigate: (NavKey) 
     }
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    val sendHaptics = rememberHaptics()
     Column(Modifier.fillMaxSize().background(EInk.Background)) {
         SocialTopBar(community?.name ?: tr("Community"), onBack)
         SocialScaffold(vm, navigate) { actions ->
@@ -208,6 +209,7 @@ fun CommunityScreen(vm: SocialViewModel, coordinate: String, navigate: (NavKey) 
                             PillButton(if (sending) "…" else tr("Post"), filled = text.isNotBlank() && !sending) {
                                 if (text.isBlank() || sending) return@PillButton
                                 sending = true
+                                sendHaptics.confirm()
                                 vm.postToCommunity(c, text) { ok -> sending = false; if (ok) { text = ""; reload++ } }
                             }
                         }
@@ -282,6 +284,7 @@ internal fun SpaceChat(
     val profiles by vm.profiles.collectAsState()
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    val sendHaptics = rememberHaptics()
     var error by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
     LaunchedEffect(messages?.size) { messages?.let { if (it.isNotEmpty()) listState.animateScrollToItem(it.size) } }
@@ -330,6 +333,7 @@ internal fun SpaceChat(
                     PillButton(if (sending) "…" else tr("Send"), filled = text.isNotBlank() && !sending) {
                         if (text.isBlank() || sending) return@PillButton
                         sending = true
+                        sendHaptics.confirm()
                         val outgoing = text
                         text = ""
                         onSend(outgoing) { e -> sending = false; if (e != null) { error = e; text = outgoing } }

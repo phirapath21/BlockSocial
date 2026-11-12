@@ -78,20 +78,22 @@ fun SocialScaffold(
     // Actions that change something need an account: send logged-out users to log in.
     fun signedIn(block: () -> Unit) = if (account == null) navigate(LoginKey) else block()
 
+    // A light tap of vibration for likes, reposts and bookmarks, as on X.
+    val haptics = rememberHaptics()
     val actions = NoteActions(
         openNote = { navigate(NoteKey(it.id)) },
         openProfile = { navigate(ProfileKey(it)) },
         openHashtag = { navigate(HashtagKey(it)) },
         reply = { n -> signedIn { navigate(ComposeKey(replyTo = n.id)) } },
-        repost = { n -> signedIn { vm.repost(n) } },
+        repost = { n -> signedIn { haptics.tick(); vm.repost(n) } },
         quote = { n -> signedIn { navigate(ComposeKey(quote = n.id)) } },
-        like = { n -> signedIn { vm.like(n) } },
+        like = { n -> signedIn { haptics.tick(); vm.like(n) } },
         zap = { n -> signedIn { zapTarget = n } },
         mute = { p -> signedIn { vm.mute(p, true) } },
         report = { n -> signedIn { reportTarget = n } },
         delete = { n -> deleteTarget = n },
         share = { n -> shareNote(context, n) },
-        bookmark = { n -> signedIn { vm.toggleBookmark(n) } },
+        bookmark = { n -> signedIn { haptics.tick(); vm.toggleBookmark(n) } },
         isBookmarked = { it in bookmarks },
         pin = { n -> signedIn { vm.togglePin(n) } },
         isPinned = { it in pins },
@@ -207,6 +209,7 @@ private fun ZapDialog(recipientName: String, inApp: Boolean, onDismiss: () -> Un
         confirmEnabled = sats != null,
         onConfirm = { sats?.let { onZap(it, comment) } }
     ) {
+        FirstTimeTip("zap", tr("A zap sends sats (small amounts of bitcoin) to the author over Lightning, as a thank-you."), Modifier.padding(bottom = 10.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(21L, 100L, 500L, 1000L, 5000L, 21000L).forEach { preset ->
                 val on = sats == preset
