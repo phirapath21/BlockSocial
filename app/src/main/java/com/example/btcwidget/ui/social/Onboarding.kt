@@ -76,9 +76,7 @@ fun LandingScreen(
             .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
         Spacer(Modifier.height(48.dp))
-        Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(Orange), contentAlignment = Alignment.Center) {
-            Text("₿", color = Color.Black, fontSize = 36.sp, fontWeight = FontWeight.Bold)
-        }
+        BlockLogo(Modifier.size(72.dp))
         Text(tr("Block"), color = EInk.Value, fontSize = 40.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
         Text(tr("Bitcoin people, on Nostr."), color = EInk.Value, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
         Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -345,3 +343,27 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = EInk.Value, unfocusedTextColor = EInk.Value, cursorColor = EInk.Value,
     focusedLabelColor = EInk.Label, unfocusedLabelColor = EInk.Caption
 )
+
+/**
+ * Block's logo, as on its app icon: a cube in three shades of bitcoin orange on a dark tile.
+ */
+@Composable
+fun BlockLogo(modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier.clip(RoundedCornerShape(22)).background(Color(0xFF1F2024))) {
+        // The icon's 108-unit grid, its visible part (10..98) scaled to this size.
+        val k = size.minDimension / 88f
+        fun p(x: Float, y: Float) = androidx.compose.ui.geometry.Offset((x - 10f) * k, (y - 10f) * k)
+        fun face(color: Color, vararg pts: Pair<Float, Float>) {
+            val path = androidx.compose.ui.graphics.Path().apply {
+                pts.forEachIndexed { i, (x, y) -> val o = p(x, y); if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) }
+                close()
+            }
+            drawPath(path, color)
+            drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f * k, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        }
+        face(Color(0xFFFFB347), 54f to 27f, 78f to 40.5f, 54f to 54f, 30f to 40.5f)
+        face(Color(0xFFF7931A), 30f to 40.5f, 54f to 54f, 54f to 81f, 30f to 67.5f)
+        face(Color(0xFFC2680A), 54f to 54f, 78f to 40.5f, 78f to 67.5f, 54f to 81f)
+    }
+}
+
