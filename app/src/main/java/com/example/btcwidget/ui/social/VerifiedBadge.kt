@@ -23,21 +23,19 @@ import androidx.compose.ui.unit.dp
 import com.example.btcwidget.nostr.core.Profile
 
 /**
- * The verified mark (NIP-05 address confirmed by its domain), shaped like X's: a scalloped
- * badge in the app's orange with a white tick.
+ * The verified mark (NIP-05 address confirmed by its domain): a rounded square in the app's
+ * orange with a white tick.
  */
 private val VerifiedMark: ImageVector by lazy {
     ImageVector.Builder(name = "Verified", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
         .addPath(
-            pathData = addPathNodes(
-                "M23,12l-2.44,-2.79l0.34,-3.69l-3.61,-0.82L15.4,1.5L12,2.96L8.6,1.5L6.71,4.69L3.1,5.5L3.44,9.2L1,12" +
-                    "l2.44,2.79l-0.34,3.7l3.61,0.82L8.6,22.5l3.4,-1.47l3.4,1.46l1.89,-3.19l3.61,-0.82l-0.34,-3.69L23,12z"
-            ),
+            // A rounded square (5.5 of 24 corners), the app's orange.
+            pathData = addPathNodes("M8,2.5h8a5.5,5.5 0 0,1 5.5,5.5v8a5.5,5.5 0 0,1 -5.5,5.5h-8a5.5,5.5 0 0,1 -5.5,-5.5v-8a5.5,5.5 0 0,1 5.5,-5.5z"),
             fill = SolidColor(Color(0xFFF7931A))
         )
         .addPath(
             pathData = addPathNodes("M7.6,12.3l3,3l5.8,-6"),
-            fill = null, stroke = SolidColor(Color.White), strokeLineWidth = 2.2f,
+            fill = null, stroke = SolidColor(Color.White), strokeLineWidth = 2.4f,
             strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round
         )
         .build()
