@@ -76,7 +76,7 @@ internal fun LiveList(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
 }
 
 @Composable
-private fun LiveRow(live: LiveStreams.Live, host: Profile?, onClick: () -> Unit) {
+internal fun LiveRow(live: LiveStreams.Live, host: Profile?, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(120.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(EInk.Body)) {
             live.image?.let { AsyncImage(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }

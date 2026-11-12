@@ -69,7 +69,9 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Polls:** your vote is a public event signed by your key, sent to your relays and to the relays the poll names (where its votes are collected). Anyone can see how you voted.
 
-**Recent searches:** what you search for (and which tips you've already seen) is remembered only on your phone, in the app's private storage, to show your last ten searches when you tap the search box. It is never sent anywhere; you can remove each one or clear them all from the search screen, and uninstalling the app deletes them.
+**Recent searches:** what you search for, the last twelve profiles you opened from Search (and which tips you've already seen) are remembered only on your phone, in the app's private storage, to show them when you tap the search box. They are never sent anywhere; you can remove each search or clear them all (searches and profiles) from the search screen, and uninstalling the app deletes them.
+
+**Trending:** the Trending list on the Search screen is worked out on your phone from the last day's public notes on the relays you already use. No other service is asked.
 
 **Who to follow and badges:** suggestions are worked out on your phone from the public follow lists of people you follow (fetched from your relays and indexers). Profile badges (NIP-58) are loaded from the same relays.
 

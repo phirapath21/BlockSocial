@@ -45,6 +45,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Home feeds as tabs (X-style) with a Feeds sheet: icon per feed, Edit with drawn arrows, Add-a-feed card; new Home (rounded roof) and Messages (speech bubble) icons
 - [x] Shorts as a bottom-bar tab (bar over the video, see-through) and a Search pill at the top after your avatar
 - [x] Composer rework (X-style: Post top right, thread line to the post you answer, toolbar of drawn icons above the keyboard, status chips) and a viewer panel you drag taller to read the post, with video controls at the bottom
+- [x] Search like X: Explore (Trending worked out from your relays, Latest, Live, Articles, Feeds, Follow packs, Who to follow), suggestions while typing, results in tabs (Top, Latest, People, Media, Articles) with filters
 - [ ] Profile: followers count (NIP-45 COUNT) and tabs that load their own notes from relays
 
 ### Direct messages

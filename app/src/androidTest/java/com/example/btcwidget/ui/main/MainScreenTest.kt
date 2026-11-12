@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
@@ -113,8 +114,8 @@ class MainScreenTest {
     fun notifications_openFromTheBottomBar() {
         setContent()
         composeTestRule.onNodeWithContentDescription("Notifications").performClick()
-        // The page's title in the top bar.
-        composeTestRule.onNode(hasText("Notifications") and androidx.compose.ui.test.hasClickAction().not()).assertExists()
+        // The top bar shows Search now, not the page's name: the tab itself says it's open.
+        composeTestRule.onNodeWithContentDescription("Notifications").assertIsSelected()
     }
 
     private val sats = "SATS 1USD 1343. Sats per 1 dollar"
