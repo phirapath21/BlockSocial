@@ -766,4 +766,9 @@ internal val THAI: Map<String, String> = hashMapOf(
     "Swipe up for the next video, left or right to switch feeds. Double-tap to like." to "ปัดขึ้นเพื่อดูคลิปถัดไป ปัดซ้ายหรือขวาเพื่อสลับฟีด แตะสองครั้งเพื่อไลก์",
     "Tap Home again to jump back to the top. Long-press your picture at the bottom right to switch accounts." to "แตะหน้าหลักอีกครั้งเพื่อกลับขึ้นบนสุด กดค้างที่รูปโปรไฟล์ขวาล่างเพื่อสลับบัญชี",
     "Tap Home again to jump back to the top. Long-press your picture at the top left to switch accounts." to "แตะหน้าหลักอีกครั้งเพื่อกลับขึ้นบนสุด กดค้างที่รูปโปรไฟล์ซ้ายบนเพื่อสลับบัญชี",
+    "More" to "เพิ่มเติม",
+    "Zap" to "ส่ง Zap",
+    "Lightning address copied" to "คัดลอก Lightning address แล้ว",
+    "Pinned" to "ปักหมุด",
+    "{0} posts" to "{0} โพสต์",
 )
