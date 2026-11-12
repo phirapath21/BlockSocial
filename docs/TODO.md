@@ -48,6 +48,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Search like X: Explore (Trending worked out from your relays, Latest, Live, Articles, Feeds, Follow packs, Who to follow), suggestions while typing, results in tabs (Top, Latest, People, Media, Articles) with filters
 - [x] Shorts: drag (or tap) the time bar to jump in the video, with the time shown large while dragging
 - [x] Live streams: YouTube-style controls (tap: ±10 s, play/pause, LIVE to catch up, time bar to drag back as far as the server keeps) and replays of ended streams that have a recording
+- [x] Drag a video or live stream down into the in-app mini player (YouTube-style); tap it to go back full screen
 - [ ] Profile: followers count (NIP-45 COUNT) and tabs that load their own notes from relays
 
 ### Direct messages

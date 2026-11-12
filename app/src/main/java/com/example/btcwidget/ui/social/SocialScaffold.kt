@@ -104,7 +104,7 @@ fun SocialScaffold(
             else openExternally(context, url)
         },
         autoplayVideos = autoplay.allowedNow(context),
-        openVideoUrl = viewVideo?.first,
+        openVideoUrl = viewVideo?.first ?: PipVideo.miniVideo?.url,
         follow = { pk, on -> signedIn { vm.follow(pk, on) } },
         isFollowing = { it in following },
         openEngagement = { n, tab -> navigate(com.example.btcwidget.EngagementKey(n.id, tab)) },
@@ -275,4 +275,30 @@ fun shareNote(context: Context, note: Event) {
     val link = "https://njump.me/" + Nip19.nevent(note.id, author = note.pubkey)
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, link)
     context.startActivity(Intent.createChooser(send, "Share note").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+/**
+ * A video brought back to full screen from the mini player (it was dragged down out of the
+ * viewer earlier): the same viewer, carrying on with the same player.
+ */
+@Composable
+fun ReopenedVideo(vm: SocialViewModel, video: PipVideo.MiniVideo, navigate: (NavKey) -> Unit, onDismiss: () -> Unit) {
+    SocialScaffold(vm, navigate) { actions ->
+        val stats by vm.stats.collectAsState()
+        LaunchedEffect(PipVideo.closedInPip) { if (PipVideo.closedInPip) { PipVideo.closedInPip = false; onDismiss() } }
+        if (!PipVideo.inPip) ImageViewer(
+            video.url, video.note, stats[video.note.id] ?: com.example.btcwidget.nostr.NoteStats(), actions,
+            onDismiss = onDismiss,
+            video = true,
+            statusBar = { PublishStatusBar(vm) },
+            replyBar = { onActive ->
+                ReplyBar(
+                    vm, video.note, dark = true,
+                    onLogin = { onDismiss(); navigate(com.example.btcwidget.LoginKey) },
+                    onExpand = { onDismiss(); navigate(com.example.btcwidget.ComposeKey(replyTo = video.note.id)) },
+                    onActiveChange = onActive
+                )
+            }
+        )
+    }
 }

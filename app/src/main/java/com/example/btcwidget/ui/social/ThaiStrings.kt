@@ -826,4 +826,6 @@ internal val THAI: Map<String, String> = hashMapOf(
     "Go to live" to "ไปที่ไลฟ์สด",
     "LIVE" to "สด",
     "REPLAY" to "ย้อนหลัง",
+    "Back to the video" to "กลับไปที่วิดีโอ",
+    "Play or pause" to "เล่นหรือหยุด",
 )

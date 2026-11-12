@@ -58,8 +58,16 @@ object PipVideo {
     /** Shrinks the app into a PiP window now (set by MainActivity; null where PiP isn't available). */
     var requestPip: (() -> Unit)? = null
 
-    /** The in-app mini player shows: a live stream still playing after its screen was left. */
-    val showMini: Boolean get() = player != null && live != null && liveScreenOpen != live?.address && !inPip
+    /** A video dragged down out of the full-screen viewer, playing on in the mini player. */
+    data class MiniVideo(val url: String, val note: com.example.btcwidget.nostr.core.Event, val title: String, val author: String)
+    var miniVideo: MiniVideo? by mutableStateOf(null)
+
+    /**
+     * The in-app mini player shows: a live stream still playing after its screen was left, or a
+     * video dragged down out of the full-screen viewer (as on YouTube).
+     */
+    val showMini: Boolean get() = player != null && !inPip &&
+        (live != null && liveScreenOpen != live?.address || live == null && miniVideo != null)
 
     /** The player for live stream [info] (the one already playing it, else a new one). */
     fun acquireLive(context: Context, url: String, info: Live, create: (Context, String) -> ExoPlayer): ExoPlayer =
@@ -87,5 +95,6 @@ object PipVideo {
         player = null
         url = null
         live = null
+        miniVideo = null
     }
 }
