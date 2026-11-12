@@ -52,13 +52,14 @@ fun MainNavigation() {
       slideInHorizontally(tween(SLIDE_MS)) { -it / 4 } togetherWith slideOutHorizontally(tween(SLIDE_MS)) { it }
     },
     entryProvider =
+      // Wide screens: each screen in a readable column in the middle (Shorts and live use the width).
       entryProvider {
         entry<Main> { MainScreen(onItemClick = navigate) }
-        entry<NoteKey> { key -> ThreadScreen(social, key.id, navigate, back) }
-        entry<ProfileKey> { key -> ProfileScreen(social, key.pubkey, navigate, back) }
-        entry<HashtagKey> { key -> HashtagScreen(social, key.tag, navigate, back) }
-        entry<ComposeKey> { key -> ComposeScreen(social, key.replyTo, key.quote, back) }
-        entry<LoginKey> { LoginScreen(social, onBack = back, onDone = back, onOpenRules = { navigate(RulesKey) }, onCreated = { back(); navigate(OnboardingKey) }) }
+        entry<NoteKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { ThreadScreen(social, key.id, navigate, back) } }
+        entry<ProfileKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { ProfileScreen(social, key.pubkey, navigate, back) } }
+        entry<HashtagKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { HashtagScreen(social, key.tag, navigate, back) } }
+        entry<ComposeKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { ComposeScreen(social, key.replyTo, key.quote, back) } }
+        entry<LoginKey> { com.example.btcwidget.ui.social.ReadableColumn { LoginScreen(social, onBack = back, onDone = back, onOpenRules = { navigate(RulesKey) }, onCreated = { back(); navigate(OnboardingKey) }) } }
         // Leaving the welcome flow: drop the welcome page and the login screen under it.
         val leaveLanding: () -> Unit = {
           AppPrefs.setLandingDone(context)
@@ -81,25 +82,25 @@ fun MainNavigation() {
             onCreated = { leaveLanding(); navigate(OnboardingKey) }
           )
         }
-        entry<OnboardingKey> { com.example.btcwidget.ui.social.OnboardingScreen(social, onFinish = back) }
-        entry<EditProfileKey> { EditProfileScreen(social, back) }
-        entry<ChatKey> { key -> com.example.btcwidget.ui.social.ChatScreen(social, key.peers.split(','), navigate, back) }
-        entry<FollowsKey> { key -> com.example.btcwidget.ui.social.FollowListScreen(social, key.pubkey, key.followers, navigate, back) }
-        entry<EngagementKey> { key -> com.example.btcwidget.ui.social.EngagementScreen(social, key.noteId, key.tab, navigate, back) }
-        entry<RulesKey> { com.example.btcwidget.ui.social.CommunityRulesScreen(back) }
-        entry<ArticleKey> { key -> com.example.btcwidget.ui.social.ArticleScreen(social, key.naddr, navigate, back) }
-        entry<NostrSettingsKey> { SettingsEntry(social, "ACCOUNT", navigate, back) }
-        entry<SettingsKey> { key -> SettingsEntry(social, key.page, navigate, back) }
-        entry<CommunityKey> { key -> com.example.btcwidget.ui.social.CommunityScreen(social, key.coordinate, navigate, back) }
-        entry<ChannelKey> { key -> com.example.btcwidget.ui.social.ChannelScreen(social, key.id, navigate, back) }
-        entry<GroupKey> { key -> com.example.btcwidget.ui.social.GroupScreen(social, key.address, navigate, back) }
-        entry<ListsKey> { key -> com.example.btcwidget.ui.social.ListsScreen(social, navigate, key.owner, back) }
-        entry<ListKey> { key -> com.example.btcwidget.ui.social.ListScreen(social, key.owner, key.d, navigate, back) }
-        entry<PackKey> { key -> com.example.btcwidget.ui.social.FollowPackScreen(social, key.address, navigate, back) }
+        entry<OnboardingKey> { com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.OnboardingScreen(social, onFinish = back) } }
+        entry<EditProfileKey> { com.example.btcwidget.ui.social.ReadableColumn { EditProfileScreen(social, back) } }
+        entry<ChatKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.ChatScreen(social, key.peers.split(','), navigate, back) } }
+        entry<FollowsKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.FollowListScreen(social, key.pubkey, key.followers, navigate, back) } }
+        entry<EngagementKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.EngagementScreen(social, key.noteId, key.tab, navigate, back) } }
+        entry<RulesKey> { com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.CommunityRulesScreen(back) } }
+        entry<ArticleKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.ArticleScreen(social, key.naddr, navigate, back) } }
+        entry<NostrSettingsKey> { com.example.btcwidget.ui.social.ReadableColumn { SettingsEntry(social, "ACCOUNT", navigate, back) } }
+        entry<SettingsKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { SettingsEntry(social, key.page, navigate, back) } }
+        entry<CommunityKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.CommunityScreen(social, key.coordinate, navigate, back) } }
+        entry<ChannelKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.ChannelScreen(social, key.id, navigate, back) } }
+        entry<GroupKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.GroupScreen(social, key.address, navigate, back) } }
+        entry<ListsKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.ListsScreen(social, navigate, key.owner, back) } }
+        entry<ListKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.ListScreen(social, key.owner, key.d, navigate, back) } }
+        entry<PackKey> { key -> com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.FollowPackScreen(social, key.address, navigate, back) } }
         entry<ShortsKey> { key -> com.example.btcwidget.ui.social.ShortsScreen(social, key.everyone, navigate, back) }
         entry<LiveKey> { key -> com.example.btcwidget.ui.social.LiveScreen(social, key.address, navigate, back) }
-        entry<RelaysKey> { com.example.btcwidget.ui.social.RelaysScreen(social, back) }
-        entry<SearchKey> { com.example.btcwidget.ui.social.SearchScreen(social, navigate, back) }
+        entry<RelaysKey> { com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.RelaysScreen(social, back) } }
+        entry<SearchKey> { com.example.btcwidget.ui.social.ReadableColumn { com.example.btcwidget.ui.social.SearchScreen(social, navigate, back) } }
       },
   )
   // A live stream left playing: a small window over every screen (tap to go back to it).

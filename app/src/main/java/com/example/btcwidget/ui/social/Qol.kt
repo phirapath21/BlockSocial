@@ -1,6 +1,9 @@
 package com.example.btcwidget.ui.social
 
 import android.os.Build
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
@@ -107,5 +110,33 @@ fun FirstTimeTip(id: String, text: String, modifier: androidx.compose.ui.Modifie
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             )
         }
+    }
+}
+
+/** The widest a column of posts gets on a wide screen, as on X (more makes lines hard to read). */
+val READABLE_WIDTH = 640.dp
+
+/**
+ * On a wide screen (landscape, tablet, unfolded), [content] in a column of [READABLE_WIDTH] in
+ * the middle with hairlines either side, as X lays out its timeline; otherwise the full width.
+ */
+@Composable
+fun ReadableColumn(enabled: Boolean = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600, content: @Composable () -> Unit) {
+    if (!enabled) { content(); return }
+    androidx.compose.foundation.layout.Box(
+        androidx.compose.ui.Modifier.fillMaxSize().background(com.example.btcwidget.ui.main.EInk.Background),
+        contentAlignment = androidx.compose.ui.Alignment.TopCenter
+    ) {
+        androidx.compose.foundation.layout.Box(
+            androidx.compose.ui.Modifier
+                .widthIn(max = READABLE_WIDTH)
+                .fillMaxSize()
+                .drawBehind {
+                    val c = com.example.btcwidget.ui.main.EInk.BodyStroke
+                    val w = 0.5.dp.toPx()
+                    drawLine(c, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(0f, size.height), w)
+                    drawLine(c, androidx.compose.ui.geometry.Offset(size.width, 0f), androidx.compose.ui.geometry.Offset(size.width, size.height), w)
+                }
+        ) { content() }
     }
 }

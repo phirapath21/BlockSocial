@@ -85,7 +85,8 @@ fun WidgetsScreen(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
+        // Two columns on a phone; more as the screen gets wider (on its side, a tablet).
+        columns = GridCells.Adaptive(minSize = 170.dp),
         state = gridState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 20.dp),
