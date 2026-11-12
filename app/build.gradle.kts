@@ -51,13 +51,6 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
         }
-        // The release build (R8, no debugging) signed with the debug key, so CI can install it on
-        // the emulator and time how fast the app opens as people get it.
-        create("benchmark") {
-            initWith(getByName("release"))
-            signingConfig = signingConfigs.getByName("debug")
-            matchingFallbacks += listOf("release")
-        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -1,7 +1,7 @@
 # Block CI — move this file to .github/workflows/android.yml to enable it.
 #
 #   unit:   JVM unit tests, Android lint (report only), debug + release (R8) builds
-#   ui:     Compose UI tests on an Android emulator, then startup timing of the release build
+#   ui:     Compose UI tests on an Android emulator
 #
 # Release builds are unsigned here (no keystore in CI); they still exercise R8.
 name: Android CI
@@ -92,19 +92,12 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          # Then time how fast the release build opens (see scripts/startup-benchmark.sh;
-          # the numbers go to the job summary).
-          script: |
-            ./gradlew connectedDebugAndroidTest
-            ./gradlew installBenchmark
-            bash scripts/startup-benchmark.sh
+          script: ./gradlew connectedDebugAndroidTest
 
       - name: Upload UI test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ui-test-reports
-          path: |
-            app/build/reports/androidTests/
-            app/build/reports/startup/
+          path: app/build/reports/androidTests/
           if-no-files-found: ignore
