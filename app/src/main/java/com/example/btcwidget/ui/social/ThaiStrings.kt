@@ -758,4 +758,11 @@ internal val THAI: Map<String, String> = hashMapOf(
     "When someone replies to or mentions you, it shows here." to "เมื่อมีคนตอบกลับหรือกล่าวถึงคุณ จะแสดงที่นี่",
     "Switch accounts" to "สลับบัญชี",
     "Active" to "ใช้อยู่",
+    "Recent" to "ล่าสุด",
+    "Clear all" to "ล้างทั้งหมด",
+    "Got it" to "เข้าใจแล้ว",
+    "A zap sends sats (small amounts of bitcoin) to the author over Lightning, as a thank-you." to "Zap คือการส่ง sats (bitcoin จำนวนเล็ก ๆ) ให้คนโพสต์ผ่าน Lightning เพื่อขอบคุณ",
+    "Swipe a message to the right to reply to it." to "ปัดข้อความไปทางขวาเพื่อตอบกลับข้อความนั้น",
+    "Swipe up for the next video, left or right to switch feeds. Double-tap to like." to "ปัดขึ้นเพื่อดูคลิปถัดไป ปัดซ้ายหรือขวาเพื่อสลับฟีด แตะสองครั้งเพื่อไลก์",
+    "Tap Home again to jump back to the top. Long-press your picture at the bottom right to switch accounts." to "แตะหน้าหลักอีกครั้งเพื่อกลับขึ้นบนสุด กดค้างที่รูปโปรไฟล์ขวาล่างเพื่อสลับบัญชี",
 )

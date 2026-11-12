@@ -87,6 +87,10 @@ fun ShortsScreen(vm: SocialViewModel, startEveryone: Boolean, navigate: (NavKey)
                 // Only the feed on screen plays; the other waits where it was.
                 ShortsPager(vm, everyone = page == 1, actions, active = feeds.currentPage == page)
             }
+            FirstTimeTip(
+                "shorts-swipe", tr("Swipe up for the next video, left or right to switch feeds. Double-tap to like."),
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 96.dp)
+            )
             ShortsTopBar(
                 position = feeds.currentPage + feeds.currentPageOffsetFraction,
                 onBack = onBack,

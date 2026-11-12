@@ -69,6 +69,8 @@ To show your timeline, profiles, threads and notifications, the app requests pub
 
 **Polls:** your vote is a public event signed by your key, sent to your relays and to the relays the poll names (where its votes are collected). Anyone can see how you voted.
 
+**Recent searches:** what you search for (and which tips you've already seen) is remembered only on your phone, in the app's private storage, to show your last ten searches when you tap the search box. It is never sent anywhere; you can remove each one or clear them all from the search screen, and uninstalling the app deletes them.
+
 **Who to follow and badges:** suggestions are worked out on your phone from the public follow lists of people you follow (fetched from your relays and indexers). Profile badges (NIP-58) are loaded from the same relays.
 
 **Communities, public chats and groups:** communities (NIP-72) and public chat channels (NIP-28) are read from your relays and the community's own relays; posts and chat messages you send there are public, and joining a community publishes your public list of joined communities (kind 10004). Groups (NIP-29) live on one relay chosen by the group: when you open a group, the app connects to that relay, and if the relay asks (NIP-42), it proves who you are by signing a login challenge, so that relay learns your public key. This happens only for groups you open. The groups you open are remembered on your phone only.

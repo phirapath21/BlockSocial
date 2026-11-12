@@ -209,6 +209,7 @@ private fun ZapDialog(recipientName: String, inApp: Boolean, onDismiss: () -> Un
         confirmEnabled = sats != null,
         onConfirm = { sats?.let { onZap(it, comment) } }
     ) {
+        FirstTimeTip("zap", tr("A zap sends sats (small amounts of bitcoin) to the author over Lightning, as a thank-you."), Modifier.padding(bottom = 10.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(21L, 100L, 500L, 1000L, 5000L, 21000L).forEach { preset ->
                 val on = sats == preset

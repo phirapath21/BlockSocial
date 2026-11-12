@@ -225,6 +225,10 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                     }
                 }
                 if (feedMenu) FeedMenu(vm, onClose = { feedMenu = false })
+                FirstTimeTip(
+                    "home-tabs", tr("Tap Home again to jump back to the top. Long-press your picture at the bottom right to switch accounts."),
+                    Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 84.dp, bottom = 16.dp)
+                )
                 // Fades away with the bars while you scroll down.
                 val fab by androidx.compose.animation.core.animateFloatAsState(if (LocalBarsVisible.current) 1f else 0f, label = "fab")
                 if (fab > 0.01f) FloatingActionButton(

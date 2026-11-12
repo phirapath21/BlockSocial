@@ -1,6 +1,15 @@
 package com.example.btcwidget.ui.social
 
 import android.os.Build
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.compose.foundation.lazy.LazyListState
@@ -61,4 +70,42 @@ class Haptics(private val view: View) {
 fun rememberHaptics(): Haptics {
     val view = LocalView.current
     return remember(view) { Haptics(view) }
+}
+
+/**
+ * A one-time tip, the first time someone meets a feature (as X shows them): a small card with
+ * an orange edge and "Got it". Once dismissed it never shows again on this phone.
+ */
+@Composable
+fun FirstTimeTip(id: String, text: String, modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var shown by androidx.compose.runtime.remember(id) { androidx.compose.runtime.mutableStateOf(!com.example.btcwidget.AppPrefs.tipSeen(context, id)) }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = shown, modifier = modifier,
+        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
+    ) {
+        val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+        androidx.compose.foundation.layout.Row(
+            androidx.compose.ui.Modifier
+                .shadow(8.dp, shape)
+                .clip(shape)
+                .background(SheetColor)
+                .border(1.dp, SettingsAccent.copy(alpha = 0.6f), shape)
+                .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            androidx.compose.material3.Text("💡", fontSize = 18.sp)
+            androidx.compose.material3.Text(
+                text, color = com.example.btcwidget.ui.main.EInk.Value, fontSize = 14.sp, lineHeight = 19.sp,
+                modifier = androidx.compose.ui.Modifier.weight(1f).padding(horizontal = 10.dp)
+            )
+            androidx.compose.material3.Text(
+                tr("Got it"), color = SettingsAccent, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                modifier = androidx.compose.ui.Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                    .clickable { shown = false; com.example.btcwidget.AppPrefs.setTipSeen(context, id) }
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            )
+        }
+    }
 }
