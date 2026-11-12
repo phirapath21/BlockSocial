@@ -10,10 +10,16 @@
 # a real device. It never fails the build over a number.
 set -u
 PKG=io.github.phirapath21.btcwidget
-ACT="$PKG/com.example.btcwidget.MainActivity"
+# The launcher activity as the phone resolves it (falls back to the known name).
+ACT=$(adb shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$PKG" 2>/dev/null | tr -d '\r' | tail -1)
+case "$ACT" in */*) ;; *) ACT="$PKG/com.example.btcwidget.MainActivity" ;; esac
 RUNS=${RUNS:-10}
 OUT=${OUT:-app/build/reports/startup}
 mkdir -p "$OUT"
+LOG="$OUT/raw.log"
+: > "$LOG"
+echo "activity: $ACT" >> "$LOG"
+adb shell pm list packages "$PKG" >> "$LOG" 2>&1
 
 cold_starts() {
   local label=$1 times=()
@@ -22,11 +28,18 @@ cold_starts() {
     adb shell 'echo 3 > /proc/sys/vm/drop_caches' >/dev/null 2>&1 || true
     sleep 1
     local t
-    t=$(adb shell am start -W -n "$ACT" | tr -d '\r' | awk -F': ' '/TotalTime/ {print $2}')
+    local raw
+    raw=$(adb shell am start -W -n "$ACT" 2>&1 | tr -d '\r')
+    echo "[$label #$i] $raw" >> "$LOG"
+    t=$(echo "$raw" | awk -F': *' '/TotalTime/ {print $2}' | tr -dc '0-9')
     [ -n "$t" ] && times+=("$t")
     sleep 2
   done
   adb shell am force-stop "$PKG"
+  if [ ${#times[@]} -eq 0 ]; then
+    echo "| $label | no measurement (see raw.log) | | 0 |"
+    return
+  fi
   printf '%s\n' "${times[@]}" > "$OUT/$label.txt"
   local sorted median min max
   sorted=$(printf '%s\n' "${times[@]}" | sort -n)
@@ -67,6 +80,12 @@ first_frames() {
   echo
   echo '```'
   cat "$OUT/frames.txt"
+  echo '```'
+  echo
+  echo "First launch, raw (for debugging):"
+  echo
+  echo '```'
+  head -8 "$LOG"
   echo '```'
 } | tee "$OUT/summary.md"
 
