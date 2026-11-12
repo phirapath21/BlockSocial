@@ -127,16 +127,24 @@ private val SIDE_PANEL_MIN = 250.dp
 val LocalSidePanel = androidx.compose.runtime.compositionLocalOf<(@Composable () -> Unit)?> { null }
 
 /**
- * The narrowest (widest-over-tall) a photo or video in a post may be: so it's never taller than
- * about half the screen, and more posts fit, above all on a phone on its side. Taller ones are
- * trimmed to fit, as X does.
+ * The shape (width over height) a photo or video in a post is shown at: its own [ratio] kept
+ * between [min] and [max], and never taller than about half the screen, so more posts fit,
+ * above all on a phone on its side. Taller ones are trimmed to fit, as X does.
  */
 @Composable
-fun mediaMinRatio(base: Float): Float {
+fun mediaRatio(ratio: Float, min: Float, max: Float): Float {
     val c = androidx.compose.ui.platform.LocalConfiguration.current
-    val width = minOf(c.screenWidthDp.toFloat(), READABLE_WIDTH.value) - 70f
-    val maxHeight = c.screenHeightDp * 0.55f
-    return maxOf(base, width / maxHeight)
+    return mediaRatioFor(ratio, min, max, c.screenWidthDp, c.screenHeightDp)
+}
+
+/** [mediaRatio] for a screen of [screenWidthDp] × [screenHeightDp]. */
+internal fun mediaRatioFor(ratio: Float, min: Float, max: Float, screenWidthDp: Int, screenHeightDp: Int): Float {
+    val width = minOf(screenWidthDp.toFloat(), READABLE_WIDTH.value) - 70f
+    val maxHeight = (screenHeightDp * 0.55f).coerceAtLeast(1f)
+    // On a short screen the height cap can ask for a wider shape than [max] allows: [max] wins
+    // (an empty range here crashed the app with a video on a phone on its side).
+    val low = maxOf(min, width / maxHeight).coerceAtMost(max)
+    return ratio.coerceIn(low, max)
 }
 
 /**

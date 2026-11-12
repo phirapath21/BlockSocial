@@ -121,7 +121,7 @@ Requests run when you open or refresh the app and in the background at the inter
 
 - No accounts on any developer server: your Nostr key is yours, and the developer cannot see, recover or reset it.
 - No advertising or advertising identifiers.
-- No analytics, crash-reporting or tracking SDKs. (Google's code scanner, used only when you scan a QR code, reports its own usage information to Google as described above.)
+- No analytics, crash-reporting or tracking SDKs. If the app crashes, the next launch shows the saved report (phone model, Android version, app version and the error's stack trace), kept only on your phone. **Report on GitHub** opens a new issue on Block's public GitHub repository in your browser with that report filled in; nothing is sent unless you submit it there yourself, with your GitHub account, and the issue is public. Copy and Share hand the report to the app you choose; Continue deletes it. (Google's code scanner, used only when you scan a QR code, reports its own usage information to Google as described above.)
 - No selling or sharing of personal data — the developer does not collect any.
 - No access to your contacts, location, camera, microphone, files or other apps.
 
