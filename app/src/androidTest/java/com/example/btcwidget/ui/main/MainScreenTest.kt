@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
@@ -78,6 +79,34 @@ class MainScreenTest {
         }
         // Profile and Settings are in the side panel.
         composeTestRule.onNodeWithContentDescription("Settings").assertDoesNotExist()
+    }
+
+    @Test
+    fun landscape_tabsMoveToARailOnTheLeft() {
+        composeTestRule.setContent {
+            // A phone on its side: wider than tall.
+            val wide = android.content.res.Configuration(androidx.compose.ui.platform.LocalConfiguration.current).apply {
+                screenWidthDp = 840; screenHeightDp = 380; orientation = android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            }
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalConfiguration provides wide) {
+                MainScreenContent(
+                    state = MainScreenUiState.Success(sample), selectedTab = MainTab.HOME, heroMetric = "PRICE",
+                    modeStates = List(BlockclockMetrics.MODE_COUNT) { true }, currencySetting = "USD", onCurrencySelected = {},
+                    refreshInterval = 30, onRefreshIntervalSelected = {}, onHeroMetricSelected = {}, onTabSelected = {},
+                    onModeToggle = { _, _ -> }, onRefresh = {}, onItemClick = {}
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag("side_rail").assertExists()
+        listOf("Home", "Search", "Bitcoin", "Notifications", "Messages", "Open menu").forEach {
+            composeTestRule.onNodeWithContentDescription(it).assertExists()
+        }
+    }
+
+    @Test
+    fun portrait_hasNoRail() {
+        setContent()
+        composeTestRule.onNodeWithTag("side_rail").assertDoesNotExist()
     }
 
     @Test

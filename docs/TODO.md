@@ -40,6 +40,7 @@ Tick an item when its PR is merged. Size: S = small, M = medium, L = large.
 - [x] Notification settings by type (e.g. turn off likes)
 - [x] Thai translation of the UI (follows the phone, or Settings › Display › Language)
 - [x] Settings like X: categories with search, each its own page (switches, radio choices)
+- [x] Landscape and wide screens: tabs on a rail, posts in a readable column, live video beside its chat
 
 ### Direct messages
 - [x] Photos in DMs

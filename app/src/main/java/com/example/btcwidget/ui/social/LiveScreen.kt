@@ -1,6 +1,12 @@
 package com.example.btcwidget.ui.social
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -110,14 +116,27 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
         val stop = vm.spaces.watchLiveChat(live) { messages = it }
         onDispose { stop() }
     }
-    SpaceChat(
-        vm, navigate, onBack,
-        title = live?.title ?: tr("Live"),
-        note = if (loaded == null) tr("This stream couldn't be found on your relays.") else tr("Live chat: messages are public."),
-        messages = if (loaded == null) emptyList() else messages,
-        pinned = live?.let { l -> { LivePlayer(l, profiles[l.host]) { navigate(ProfileKey(l.host)) } } },
-        onSend = { text, done -> live?.let { vm.sendLiveChat(it, text) { ok -> done(if (ok) null else tr("Couldn't send")) } } ?: done(tr("Still loading")) }
-    )
+    val player: (@Composable () -> Unit)? = live?.let { l -> { LivePlayer(l, profiles[l.host]) { navigate(ProfileKey(l.host)) } } }
+    val chat: @Composable (pinned: (@Composable () -> Unit)?) -> Unit = { pinned ->
+        SpaceChat(
+            vm, navigate, onBack,
+            title = live?.title ?: tr("Live"),
+            note = if (loaded == null) tr("This stream couldn't be found on your relays.") else tr("Live chat: messages are public."),
+            messages = if (loaded == null) emptyList() else messages,
+            pinned = pinned,
+            onSend = { text, done -> live?.let { vm.sendLiveChat(it, text) { ok -> done(if (ok) null else tr("Couldn't send")) } } ?: done(tr("Still loading")) }
+        )
+    }
+    // On its side (or a wide screen), as on Twitch or YouTube: the stream on the left, the chat
+    // beside it, instead of the chat squeezed under the video.
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+    if (wide && player != null) {
+        Row(Modifier.fillMaxSize().background(EInk.Background).displayCutoutPadding()) {
+            Column(Modifier.weight(1.6f).fillMaxHeight().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState())) { player() }
+            androidx.compose.material3.VerticalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+            Box(Modifier.weight(1f).fillMaxHeight()) { chat(null) }
+        }
+    } else chat(player)
 }
 
 /**

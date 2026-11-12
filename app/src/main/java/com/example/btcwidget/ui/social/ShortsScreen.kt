@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -366,10 +367,13 @@ private fun ShortSideBar(
     note: Event, author: Profile?, stats: NoteStats, muted: Boolean, actions: NoteActions,
     onToggleMute: () -> Unit, modifier: Modifier
 ) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    // On its side the screen is short: smaller buttons, closer together, so all of them fit.
+    val compact = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 520
+    CompositionLocalProvider(LocalCompactSide provides compact) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 14.dp)) {
         Box(contentAlignment = Alignment.BottomCenter) {
             Box(Modifier.padding(bottom = 8.dp).clip(CircleShape).background(Color.White).padding(1.5.dp)) {
-                Avatar(author, note.pubkey, size = 44, onClick = { actions.openProfile(note.pubkey) })
+                Avatar(author, note.pubkey, size = if (compact) 36 else 44, onClick = { actions.openProfile(note.pubkey) })
             }
             if (note.pubkey != actions.me && !actions.isFollowing(note.pubkey)) Box(
                 Modifier.size(20.dp).clip(CircleShape).background(Accent)
@@ -388,7 +392,11 @@ private fun ShortSideBar(
         SideButton(Glyphs.Share, null, "Share") { actions.share(note) }
         SideButton(if (muted) Glyphs.SoundOff else Glyphs.SoundOn, null, if (muted) "Turn sound on" else "Mute", onClick = onToggleMute)
     }
+    }
 }
+
+/** Whether the side buttons are drawn small (a short, sideways screen). */
+private val LocalCompactSide = androidx.compose.runtime.compositionLocalOf { false }
 
 @Composable
 private fun SideButton(icon: ImageVector, count: Int?, label: String, tint: Color = Color.White, onClick: () -> Unit) {
@@ -396,8 +404,9 @@ private fun SideButton(icon: ImageVector, count: Int?, label: String, tint: Colo
         Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = label, onClick = onClick).padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(30.dp))
-        if (count != null) Text(if (count > 0) compactCount(count) else "", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        val compact = LocalCompactSide.current
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(if (compact) 24.dp else 30.dp))
+        if (count != null && !(compact && count == 0)) Text(if (count > 0) compactCount(count) else "", color = Color.White, fontSize = if (compact) 11.sp else 12.sp, fontWeight = FontWeight.Bold)
     }
 }
 

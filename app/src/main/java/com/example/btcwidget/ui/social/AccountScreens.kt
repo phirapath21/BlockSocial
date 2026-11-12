@@ -327,7 +327,10 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
             },
             onBack
         )
-        Column(Modifier.fillMaxSize().imePadding().padding(14.dp)) {
+        // Scrolls when the keyboard leaves little room (a phone on its side); the text box is
+        // shorter there so the buttons stay close.
+        val shortScreen = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 520
+        Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(14.dp)) {
             if (replyTo != null) {
                 target?.let { t ->
                     Text(
@@ -349,7 +352,7 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                         focusedPlaceholderColor = EInk.Caption, unfocusedPlaceholderColor = EInk.Caption
                     ),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp),
-                    modifier = Modifier.weight(1f).height(180.dp).focusRequester(focus)
+                    modifier = Modifier.weight(1f).height(if (shortScreen) 104.dp else 180.dp).focusRequester(focus)
                 )
             }
             suggestions.forEach { p ->

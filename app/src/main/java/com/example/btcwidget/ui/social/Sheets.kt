@@ -75,7 +75,8 @@ fun ActionSheet(onDismiss: () -> Unit, actions: List<SheetAction>, header: (@Com
             Box(Modifier.padding(top = 10.dp, bottom = 8.dp).size(width = 40.dp, height = 4.dp).clip(PillShape).background(EInk.Track))
         }
     ) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        // Scrolls when the screen is short (a phone on its side) and the menu is long.
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
             header?.invoke(this)
             actions.forEach { a ->
                 val color = if (a.destructive) EInk.Alert else EInk.Value
@@ -148,7 +149,21 @@ fun BlockDialog(
                 text?.let { Text(it, color = EInk.Caption, fontSize = 15.sp, lineHeight = 21.sp, modifier = Modifier.padding(top = 8.dp)) }
                 if (content != null) Column(Modifier.padding(top = 14.dp)) { content() }
             }
-            Column(Modifier.padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Stacked, the main one on top; side by side on a short screen so the content keeps room.
+            if (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 520) {
+                Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Cancel first, as on Android's own dialogs, the main action at the right.
+                    if (dismissLabel != null) Box(Modifier.weight(1f)) { PillButtonFull(dismissLabel, outlined = true, onClick = onDismiss) }
+                    if (confirmLabel != null) Box(Modifier.weight(1f)) {
+                        PillButtonFull(
+                            confirmLabel, enabled = confirmEnabled,
+                            background = if (destructive) EInk.Alert else EInk.Value,
+                            foreground = if (destructive) Color.White else Color.Black,
+                            onClick = onConfirm
+                        )
+                    }
+                }
+            } else Column(Modifier.padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (confirmLabel != null) PillButtonFull(
                     confirmLabel, enabled = confirmEnabled,
                     background = if (destructive) EInk.Alert else EInk.Value,

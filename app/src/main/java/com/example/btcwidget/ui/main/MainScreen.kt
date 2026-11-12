@@ -25,6 +25,9 @@ import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.combinedClickable
@@ -285,10 +288,27 @@ fun MainScreenContent(
         },
         modifier = modifier
     ) {
+    // Wide (a phone on its side, a tablet, an unfolded foldable): the tabs move to a rail on the
+    // left, as X does on tablets, so the screen's height goes to what you're reading.
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= WIDE_DP
+    var switcher by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxSize().background(EInk.Background)
+            .then(if (wide) Modifier.displayCutoutPadding().navigationBarsPadding() else Modifier)
+    ) {
+    if (wide) SideRail(
+        selectedTab = selectedTab,
+        badges = badges,
+        menuIcon = menuButtonIcon,
+        menuOpen = drawerState.isOpen || selectedTab in DRAWER_PAGES,
+        onMenu = { scope.launch { drawerState.open() } },
+        onMenuLongPress = if (accountSwitcher != null) ({ switcher = true }) else null,
+        onTab = { tab -> if (tab == selectedTab) com.example.btcwidget.ui.social.TabTaps.tap(tab.name) else onTabSelected(tab) }
+    )
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .background(EInk.Background)
+            .weight(1f)
+            .fillMaxHeight()
             .statusBarsPadding()
     ) {
         // On feeds the bars slide away while you scroll down and come back when you scroll up,
@@ -310,7 +330,6 @@ fun MainScreenContent(
         androidx.compose.runtime.LaunchedEffect(Unit) {
             com.example.btcwidget.ui.social.TabTaps.flow.collect { if (it == MainTab.DASHBOARD.name) refreshNow() }
         }
-        var switcher by remember { mutableStateOf(false) }
         androidx.compose.animation.AnimatedVisibility(
             visible = showBars,
             enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
@@ -318,7 +337,8 @@ fun MainScreenContent(
         ) {
             TopBar(
                 title = tr(selectedTab.title),
-                menuIcon = menuButtonIcon,
+                // On the rail when wide.
+                menuIcon = if (wide) null else menuButtonIcon,
                 menuOpen = drawerState.isOpen || selectedTab in DRAWER_PAGES,
                 onMenu = { scope.launch { drawerState.open() } },
                 onMenuLongPress = if (accountSwitcher != null) ({ switcher = true }) else null
@@ -331,6 +351,9 @@ fun MainScreenContent(
                 .fillMaxWidth()
                 .then(if (hides) Modifier.nestedScroll(scrollWatch) else Modifier)
         ) {
+            // Wide: social pages in a readable column in the middle (as X); the dashboard and
+            // widgets use the whole width.
+            com.example.btcwidget.ui.social.ReadableColumn(enabled = wide && selectedTab !in FULL_WIDTH_PAGES) {
             when (selectedTab) {
                 MainTab.HOME -> homeContent()
                 MainTab.SEARCH -> searchContent()
@@ -408,10 +431,11 @@ fun MainScreenContent(
                 )
                 MainTab.SETTINGS -> settingsContent()
             }
+            }
         }
 
         }
-        androidx.compose.animation.AnimatedVisibility(
+        if (!wide) androidx.compose.animation.AnimatedVisibility(
             visible = showBars,
             enter = androidx.compose.animation.expandVertically(expandFrom = Alignment.Top) + androidx.compose.animation.fadeIn(),
             exit = androidx.compose.animation.shrinkVertically(shrinkTowards = Alignment.Top) + androidx.compose.animation.fadeOut()
@@ -423,12 +447,80 @@ fun MainScreenContent(
                 onTab = { tab -> if (tab == selectedTab) com.example.btcwidget.ui.social.TabTaps.tap(tab.name) else onTabSelected(tab) }
             )
         }
-        if (switcher) accountSwitcher?.invoke { switcher = false }
     }
+    }
+    if (switcher) accountSwitcher?.invoke { switcher = false }
     }
 }
 
 private val Accent = Color(0xFFF7931A)
+
+/** From this width (dp) the tabs move to a rail on the left and pages get a readable column. */
+private const val WIDE_DP = 600
+
+/** Pages that use the whole width even when wide. */
+private val FULL_WIDTH_PAGES get() = setOf(MainTab.WIDGETS)
+
+/**
+ * The tabs on a rail at the left, for wide screens: your avatar on top (opens the side bar,
+ * long-press to switch accounts), then Home, Search, Bitcoin, Notifications, Messages with the
+ * same icons and unread bubbles as the bottom bar.
+ */
+@Composable
+private fun SideRail(
+    selectedTab: MainTab,
+    badges: Map<MainTab, Int>,
+    menuIcon: @Composable () -> Unit,
+    menuOpen: Boolean,
+    onMenu: () -> Unit,
+    onMenuLongPress: (() -> Unit)?,
+    onTab: (MainTab) -> Unit
+) {
+    val haptics = com.example.btcwidget.ui.social.rememberHaptics()
+    Row(Modifier.fillMaxHeight().testTag("side_rail")) {
+        Column(
+            Modifier.width(72.dp).fillMaxHeight().statusBarsPadding().verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                Modifier.size(48.dp).clip(CircleShape)
+                    .combinedClickable(
+                        onClickLabel = tr("Open menu"),
+                        onLongClickLabel = if (onMenuLongPress != null) tr("Switch accounts") else null,
+                        onLongClick = onMenuLongPress?.let { lc -> { haptics.heavy(); lc() } },
+                        onClick = onMenu
+                    )
+                    .semantics { contentDescription = tr("Open menu") },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape)
+                        .then(if (menuOpen) Modifier.border(2.dp, Accent, CircleShape) else Modifier)
+                        .padding(if (menuOpen) 3.dp else 1.dp),
+                    contentAlignment = Alignment.Center
+                ) { menuIcon() }
+            }
+            Spacer(Modifier.height(12.dp))
+            BAR_TABS.forEach { tab ->
+                val count = badges[tab] ?: 0
+                val selected = selectedTab == tab
+                Box(
+                    Modifier.size(56.dp)
+                        .clip(CircleShape)
+                        .combinedClickable(role = Role.Tab, onClick = { haptics.tick(); onTab(tab) })
+                        .semantics { contentDescription = if (count > 0) tr("{0}, {1} unread", tr(tab.label), count) else tr(tab.label); this.selected = selected },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box {
+                        Icon(tab.icon.of(selected), contentDescription = null, tint = if (selected) Accent else EInk.Value, modifier = Modifier.size(27.dp))
+                        if (count > 0) CountBadge(count, Modifier.align(Alignment.TopEnd).offset(x = 9.dp, y = (-6).dp))
+                    }
+                }
+            }
+        }
+        androidx.compose.material3.VerticalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+    }
+}
 
 /**
  * The bottom bar, as on X: Home, Search, Bitcoin, Notifications, Messages as icons only,
@@ -498,7 +590,7 @@ private fun CountBadge(count: Int, modifier: Modifier = Modifier) {
  * switch accounts), as on X; ringed in orange while one of the side bar's pages is open.
  */
 @Composable
-private fun TopBar(title: String, menuIcon: @Composable () -> Unit, menuOpen: Boolean, onMenu: () -> Unit, onMenuLongPress: (() -> Unit)?) {
+private fun TopBar(title: String, menuIcon: (@Composable () -> Unit)?, menuOpen: Boolean, onMenu: () -> Unit, onMenuLongPress: (() -> Unit)?) {
     val haptics = com.example.btcwidget.ui.social.rememberHaptics()
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -507,7 +599,7 @@ private fun TopBar(title: String, menuIcon: @Composable () -> Unit, menuOpen: Bo
             .height(52.dp)
             .padding(horizontal = 8.dp)
     ) {
-        Box(
+        if (menuIcon != null) Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(44.dp)
@@ -532,7 +624,7 @@ private fun TopBar(title: String, menuIcon: @Composable () -> Unit, menuOpen: Bo
             color = EInk.Value,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 10.dp)
+            modifier = Modifier.padding(start = if (menuIcon != null) 10.dp else 8.dp)
         )
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
