@@ -95,6 +95,7 @@ fun MainNavigation() {
         entry<ListsKey> { key -> com.example.btcwidget.ui.social.ListsScreen(social, navigate, key.owner, back) }
         entry<ListKey> { key -> com.example.btcwidget.ui.social.ListScreen(social, key.owner, key.d, navigate, back) }
         entry<PackKey> { key -> com.example.btcwidget.ui.social.FollowPackScreen(social, key.address, navigate, back) }
+        entry<ShortsKey> { key -> com.example.btcwidget.ui.social.ShortsScreen(social, key.everyone, navigate, back) }
         entry<LiveKey> { key -> com.example.btcwidget.ui.social.LiveScreen(social, key.address, navigate, back) }
         entry<RelaysKey> { com.example.btcwidget.ui.social.RelaysScreen(social, back) }
         entry<SearchKey> { com.example.btcwidget.ui.social.SearchScreen(social, navigate, back) }

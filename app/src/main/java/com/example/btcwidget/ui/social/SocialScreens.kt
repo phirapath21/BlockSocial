@@ -179,7 +179,10 @@ fun HomeScreen(vm: SocialViewModel, navigate: (NavKey) -> Unit) {
                 val shown = home.items
                 var feedMenu by remember { mutableStateOf(false) }
                 Column(Modifier.fillMaxSize()) {
-                    FeedHeader(feed, open = feedMenu) { feedMenu = true }
+                    FeedHeader(
+                        feed, open = feedMenu,
+                        onShorts = { navigate(com.example.btcwidget.ShortsKey(everyone = (feed as? com.example.btcwidget.nostr.core.HomeFeed.Media)?.everyone == true)) }
+                    ) { feedMenu = true }
                     PullToRefreshBox(isRefreshing = home.refreshing, onRefresh = vm::refreshHome, modifier = Modifier.fillMaxSize()) {
                         when {
                             home.loading && home.items.isEmpty() -> Spinner(Modifier.padding(top = 40.dp))
@@ -389,12 +392,27 @@ private fun formatSats(sats: Long): String = "%,d".format(sats)
 
 /** "Latest ⌄ / Latest notes by your follows": tap to pick another feed. */
 @Composable
-private fun FeedHeader(feed: com.example.btcwidget.nostr.core.HomeFeed, open: Boolean, onOpen: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().clickable(onClickLabel = "Choose feed", onClick = onOpen).padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Text(feed.title + if (open) "  ⌃" else "  ⌄", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(feed.subtitle, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun FeedHeader(feed: com.example.btcwidget.nostr.core.HomeFeed, open: Boolean, onShorts: () -> Unit, onOpen: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            Modifier.weight(1f).clickable(onClickLabel = "Choose feed", onClick = onOpen).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
+        ) {
+            Text(feed.title + if (open) "  ⌃" else "  ⌄", color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(feed.subtitle, color = EInk.Caption, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        // Videos one at a time, full screen (Shorts). Stands out on a Videos feed.
+        val videos = (feed as? com.example.btcwidget.nostr.core.HomeFeed.Media)?.videos == true
+        Row(
+            Modifier.padding(end = 12.dp).clip(RoundedCornerShape(50))
+                .background(if (videos) androidx.compose.ui.graphics.Color(0xFFF7931A) else EInk.Body)
+                .clickable(onClickLabel = "Watch videos full screen", onClick = onShorts)
+                .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val ink = if (videos) androidx.compose.ui.graphics.Color.Black else EInk.Value
+            androidx.compose.material3.Icon(Glyphs.Play, contentDescription = null, tint = ink, modifier = Modifier.size(18.dp))
+            Text("Shorts", color = ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
     }
     HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
 }
