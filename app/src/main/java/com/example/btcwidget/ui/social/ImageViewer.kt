@@ -165,13 +165,25 @@ fun ImageViewer(
         val player = if (video) {
             // Owned by PipVideo so it can keep playing in Picture-in-Picture after this hides.
             val p = remember(url) { PipVideo.acquire(context, url) { ctx, u -> newPlayer(ctx, u, fullScreen = true) {}.apply { volume = 1f; playWhenReady = true } } }
-            DisposableEffect(p) { onDispose { if (!PipVideo.inPip) PipVideo.release { u, pos -> VideoPositions[u] = pos } } }
+            // Back from the mini player: it's full screen again.
+            remember(url) { if (PipVideo.miniVideo?.url == url) PipVideo.miniVideo = null }
+            // Closing ends the video, unless it went to PiP or was dragged down into the mini player.
+            DisposableEffect(p) { onDispose { if (!PipVideo.inPip && PipVideo.miniVideo?.url != url) PipVideo.release { u, pos -> VideoPositions[u] = pos } } }
             p
         } else null
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        // Drag the video down: it shrinks into the mini player and the viewer closes (as on YouTube).
+        val drag = dragToMinimize(enabled = player != null && !landscape) {
+            PipVideo.miniVideo = PipVideo.MiniVideo(
+                url, note,
+                title = caption.lineSequence().firstOrNull { it.isNotBlank() }?.take(80) ?: tr("Video"),
+                author = author?.bestName ?: Profile.shortNpub(note.pubkey)
+            )
+            onDismiss()
+        }
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 1f - drag.progress * 0.8f))) {
             if (player != null) VideoSurface(
                 player,
-                Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { chrome = !chrome }) }
+                Modifier.fillMaxSize().then(drag.modifier).pointerInput(Unit) { detectTapGestures(onTap = { chrome = !chrome }) }
             ) else androidx.compose.foundation.pager.HorizontalPager(
                 state = pager,
                 // Swipe between pictures; a zoomed picture pans instead.
@@ -190,7 +202,7 @@ fun ImageViewer(
 
             // Top: back and more.
             if (chrome && !landscape) Row(
-                Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().graphicsLayer { alpha = 1f - drag.progress * 2f }.safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RoundIcon(Glyphs.Back, "Back", onDismiss)
@@ -218,6 +230,7 @@ fun ImageViewer(
             if (chrome && !landscape) Column(
                 Modifier
                     .align(Alignment.BottomCenter)
+                    .graphicsLayer { alpha = 1f - drag.progress * 2f }
                     .fillMaxWidth()
                     // See-through: the picture shows behind, with a shade that deepens toward the
                     // bottom so the white text stays readable on any picture.

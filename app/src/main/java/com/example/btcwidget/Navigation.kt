@@ -104,11 +104,17 @@ fun MainNavigation() {
       },
   )
   // A live stream left playing: a small window over every screen (tap to go back to it).
-  com.example.btcwidget.ui.social.LiveMiniPlayer(onOpen = { address ->
-    // Back to the stream's screen if it's in the back stack, else open it.
-    val i = backStack.indexOfLast { it is LiveKey && it.address == address }
-    if (i >= 0) { while (backStack.size > i + 1) backStack.removeLastOrNull() } else navigate(LiveKey(address))
-  })
+  // A video dragged down into the mini player, back full screen when it's tapped.
+  val reopened = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.example.btcwidget.ui.social.PipVideo.MiniVideo?>(null) }
+  com.example.btcwidget.ui.social.LiveMiniPlayer(
+    onOpen = { address ->
+      // Back to the stream's screen if it's in the back stack, else open it.
+      val i = backStack.indexOfLast { it is LiveKey && it.address == address }
+      if (i >= 0) { while (backStack.size > i + 1) backStack.removeLastOrNull() } else navigate(LiveKey(address))
+    },
+    onOpenVideo = { reopened.value = it }
+  )
+  reopened.value?.let { v -> com.example.btcwidget.ui.social.ReopenedVideo(social, v, navigate, onDismiss = { reopened.value = null }) }
   // While a repost, reply or post is being sent: what it's waiting for, over every screen.
   com.example.btcwidget.ui.social.PublishStatusBar(social, androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter))
   }

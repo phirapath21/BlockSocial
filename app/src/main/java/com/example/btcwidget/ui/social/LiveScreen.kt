@@ -116,7 +116,7 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
         val stop = vm.spaces.watchLiveChat(live) { messages = it }
         onDispose { stop() }
     }
-    val player: (@Composable () -> Unit)? = live?.let { l -> { LivePlayer(l, profiles[l.host]) { navigate(ProfileKey(l.host)) } } }
+    val player: (@Composable () -> Unit)? = live?.let { l -> { LivePlayer(l, profiles[l.host], onMinimize = onBack) { navigate(ProfileKey(l.host)) } } }
     val chat: @Composable (pinned: (@Composable () -> Unit)?) -> Unit = { pinned ->
         SpaceChat(
             vm, navigate, onBack,
@@ -145,15 +145,21 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
  * leaving the app keeps it going in Picture-in-Picture, without rebuffering.
  */
 @Composable
-private fun LivePlayer(live: LiveStreams.Live, host: Profile?, onHost: () -> Unit) {
+private fun LivePlayer(live: LiveStreams.Live, host: Profile?, onMinimize: () -> Unit, onHost: () -> Unit) {
     val context = LocalContext.current
+    // Marked before the player is made: otherwise the mini player shows it for a frame, takes its
+    // picture, and gives it back to nobody when it hides (the stream stayed black the first time).
+    remember(live.address) { PipVideo.liveScreenOpen = live.address }
     // This stream's screen is open: no mini player for it meanwhile.
     DisposableEffect(live.address) {
         PipVideo.liveScreenOpen = live.address
         onDispose { if (PipVideo.liveScreenOpen == live.address) PipVideo.liveScreenOpen = null }
     }
     Column(Modifier.fillMaxWidth().background(EInk.Background)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black), contentAlignment = Alignment.Center) {
+        // Drag the stream down to shrink it into the mini player and leave its screen (as on
+        // YouTube); a short drag springs back.
+        val drag = rememberDragToMinimize(enabled = live.isLive && live.streaming != null, onMinimize = onMinimize)
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black).then(drag), contentAlignment = Alignment.Center) {
             val url = live.streaming
             if (live.isLive && url != null) {
                 val info = PipVideo.Live(live.address, live.title, host?.bestName ?: Profile.shortNpub(live.host))

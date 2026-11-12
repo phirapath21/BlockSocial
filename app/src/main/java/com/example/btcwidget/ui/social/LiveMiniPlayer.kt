@@ -29,6 +29,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,23 +50,35 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * The live stream keeps playing in a small window after you leave its screen, like YouTube's:
- * drag it anywhere (it settles at the nearest side), tap it to go back to the stream and its
- * chat, mute it, or ✕ to stop. Sits above the bottom bar; hidden in Picture-in-Picture.
+ * A live stream you left, or a video you dragged down out of full screen, keeps playing in a
+ * small window, like YouTube's: drag it anywhere (it settles at the nearest side), tap it to go
+ * back to it full size, mute it, pause a video, or ✕ to stop. Sits above the bottom bar; hidden
+ * in Picture-in-Picture.
  */
 @Composable
-fun LiveMiniPlayer(onOpen: (address: String) -> Unit, modifier: Modifier = Modifier) {
+fun LiveMiniPlayer(onOpen: (address: String) -> Unit, modifier: Modifier = Modifier, onOpenVideo: (PipVideo.MiniVideo) -> Unit = {}) {
     val show = PipVideo.showMini
     val player = PipVideo.player
     val live = PipVideo.live
+    val video = PipVideo.miniVideo
     AnimatedVisibility(
-        visible = show && player != null && live != null,
+        visible = show && player != null && (live != null || video != null),
         enter = scaleIn(initialScale = 0.85f) + fadeIn(),
         exit = scaleOut(targetScale = 0.85f) + fadeOut(),
         modifier = modifier.fillMaxSize()
     ) {
         val p = player ?: return@AnimatedVisibility
-        val l = live ?: return@AnimatedVisibility
+        val l = live
+        val v = video
+        if (l == null && v == null) return@AnimatedVisibility
+        var playing by remember(p) { androidx.compose.runtime.mutableStateOf(p.isPlaying || p.playWhenReady) }
+        androidx.compose.runtime.DisposableEffect(p) {
+            val listener = object : androidx.media3.common.Player.Listener {
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { playing = playWhenReady }
+            }
+            p.addListener(listener)
+            onDispose { p.removeListener(listener) }
+        }
         BoxWithConstraints(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 80.dp)) {
             val density = LocalDensity.current
             val margin = with(density) { 12.dp.toPx() }
@@ -98,22 +112,25 @@ fun LiveMiniPlayer(onOpen: (address: String) -> Unit, modifier: Modifier = Modif
                             scope.launch { y.snapTo((y.value + drag.y).coerceIn(0f, constraints.maxHeight - heightPx)) }
                         }
                     }
-                    .clickable(onClickLabel = tr("Back to the stream")) { onOpen(l.address) }
+                    .clickable(onClickLabel = if (l != null) tr("Back to the stream") else tr("Back to the video")) {
+                        if (l != null) onOpen(l.address) else v?.let(onOpenVideo)
+                    }
             ) {
                 Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)) {
                     // A TextureView: it moves and clips with the window, unlike a SurfaceView.
                     VideoSurface(p, Modifier.fillMaxSize(), inFeed = true)
                     Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0x99000000), Color.Transparent))).padding(6.dp)) {
-                        LiveBadge(Modifier.align(Alignment.TopStart))
+                        if (l != null) LiveBadge(Modifier.align(Alignment.TopStart))
+                        else MiniButton(if (playing) Glyphs.Pause else Glyphs.Play, tr("Play or pause"), Modifier.align(Alignment.TopStart)) { PipVideo.togglePlay() }
                         Row(Modifier.align(Alignment.TopEnd)) {
                             MiniButton(if (PipVideo.muted) Glyphs.SoundOff else Glyphs.SoundOn, if (PipVideo.muted) "Sound on" else "Mute") { PipVideo.mute(!PipVideo.muted) }
-                            MiniButton(Glyphs.Close, "Stop the stream") { PipVideo.release() }
+                            MiniButton(Glyphs.Close, if (l != null) "Stop the stream" else "Close the video") { PipVideo.release() }
                         }
                     }
                 }
                 Column(Modifier.padding(horizontal = 10.dp, vertical = 5.dp)) {
-                    Text(l.title, color = EInk.Value, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(l.host, color = EInk.Caption, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(l?.title ?: v?.title.orEmpty(), color = EInk.Value, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(l?.host ?: v?.author.orEmpty(), color = EInk.Caption, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -121,9 +138,9 @@ fun LiveMiniPlayer(onOpen: (address: String) -> Unit, modifier: Modifier = Modif
 }
 
 @Composable
-private fun MiniButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+private fun MiniButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        Modifier.padding(start = 4.dp).size(28.dp).clip(CircleShape).background(Color(0x66000000)).clickable(onClickLabel = label, onClick = onClick),
+        modifier.padding(start = 4.dp).size(28.dp).clip(CircleShape).background(Color(0x66000000)).clickable(onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(16.dp)) }
 }
