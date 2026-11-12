@@ -178,7 +178,7 @@ fun SettingsScreen(
             AboutLine(tr("Block") + (appVersion?.let { " $it" } ?: ""))
             AboutLine(tr("Prices: {0}", dataSources.price.label) + (if (dataSources.thb == ThbSource.BITKUB) ", Bitkub (THB)" else "") + tr(" · Network: mempool.space"))
             AboutLine(tr("Supply: blockchain.info · MSTR: Yahoo Finance, CoinGecko"))
-            AboutLine(tr("Type: Oswald, VT323 (SIL Open Font License)"))
+            AboutLine(tr("Type: Inter, Noto Sans Thai, Oswald, VT323 (SIL Open Font License)"))
             val uriHandler = LocalUriHandler.current
             Text(
                 text = tr("Privacy policy ›"),
