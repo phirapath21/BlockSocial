@@ -172,7 +172,7 @@ fun ImageViewer(
             p
         } else null
         // Drag the video down: it shrinks into the mini player and the viewer closes (as on YouTube).
-        val drag = dragToMinimize(enabled = player != null && !landscape) {
+        val drag = dragToMinimize(enabled = player != null) {
             PipVideo.miniVideo = PipVideo.MiniVideo(
                 url, note,
                 title = caption.lineSequence().firstOrNull { it.isNotBlank() }?.take(80) ?: tr("Video"),
@@ -225,7 +225,7 @@ fun ImageViewer(
             // Bottom: author, text, actions (and the video controls).
             if (chrome && landscape && player != null) VideoControls(
                 player, url, landscape = true, onRotate = rotate,
-                Modifier.align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Scrim))).safeDrawingPadding().padding(horizontal = 16.dp, vertical = 4.dp)
+                Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = 1f - drag.progress * 2f }.background(Brush.verticalGradient(listOf(Color.Transparent, Scrim))).safeDrawingPadding().padding(horizontal = 16.dp, vertical = 4.dp)
             )
             if (chrome && !landscape) Column(
                 Modifier

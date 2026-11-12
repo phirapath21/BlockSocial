@@ -34,6 +34,10 @@ fun MainNavigation() {
   // "go back"s landed together (e.g. a screen's done and back callbacks both firing).
   val back: () -> Unit = { if (backStack.size > 1) backStack.removeLastOrNull() }
 
+  // Wide screens: trending and live now beside the posts on every page, as X's right column.
+  androidx.compose.runtime.CompositionLocalProvider(
+    com.example.btcwidget.ui.social.LocalSidePanel provides { com.example.btcwidget.ui.social.SidePanel(social, navigate) }
+  ) {
   androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
   NavDisplay(
     backStack = backStack,
@@ -120,6 +124,7 @@ fun MainNavigation() {
   reopened.value?.let { v -> com.example.btcwidget.ui.social.ReopenedVideo(social, v, navigate, onDismiss = { reopened.value = null }) }
   // While a repost, reply or post is being sent: what it's waiting for, over every screen.
   com.example.btcwidget.ui.social.PublishStatusBar(social, androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter))
+  }
   }
 }
 
