@@ -1,5 +1,9 @@
 package com.example.btcwidget.ui.social
 
+import com.example.btcwidget.ui.main.EInk
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.border
 import android.Manifest
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -61,14 +65,15 @@ import com.example.btcwidget.nostr.core.Profile
 import kotlinx.coroutines.launch
 
 private val Scrim = Color(0xCC000000)
-private val ButtonFill = Color(0xFF2A2F36)
-private val OnDark = Color(0xFFEDEFF1)
-private val OnDarkDim = Color(0xFF9AA0A6)
+private val Accent = Color(0xFFF7931A)
+/** The panel under the picture: the app's own background, nearly opaque, rounded at the top. */
+private val PanelShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
 /**
- * Full-screen image or ([video]) video, laid out like X: back and ⋮ (Save image, Open in browser) on top;
- * the author, the note's text and Reply · Repost · Like · Bookmark · Share at the bottom.
- * Pinch or double-tap to zoom, drag to pan.
+ * Full-screen image or ([video]) video in Block's style: back and ⋮ (Save image, Open in browser)
+ * on top; underneath, on a rounded panel in the app's colours, the video controls (orange seek
+ * bar), the author with Follow, the note's text (Show more opens the rest) and Reply · Repost ·
+ * Like · Zap · Bookmark · Share, then the reply box. Pinch or double-tap to zoom, drag to pan.
  */
 @Composable
 fun ImageViewer(
@@ -170,9 +175,10 @@ fun ImageViewer(
             }
             // "2 / 4" when the note has several pictures.
             if (!video && pictures.size > 1 && chrome) Text(
-                "${pager.currentPage + 1} / ${pictures.size}", color = OnDark, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                "${pager.currentPage + 1} / ${pictures.size}", color = EInk.Value, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 18.dp)
-                    .clip(RoundedCornerShape(50)).background(Scrim).padding(horizontal = 10.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(50)).background(EInk.Background.copy(alpha = 0.8f))
+                    .border(1.dp, Accent.copy(alpha = 0.7f), RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 4.dp)
             )
 
             // Top: back and more.
@@ -200,65 +206,82 @@ fun ImageViewer(
             // Bottom: author, text, actions (and the video controls).
             if (chrome && landscape && player != null) VideoControls(
                 player, url, landscape = true, onRotate = rotate,
-                Modifier.align(Alignment.BottomCenter).background(Scrim).safeDrawingPadding().padding(horizontal = 16.dp, vertical = 4.dp)
+                Modifier.align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Scrim))).safeDrawingPadding().padding(horizontal = 16.dp, vertical = 4.dp)
             )
             if (chrome && !landscape) Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(Scrim)
+                    .clip(PanelShape)
+                    .background(EInk.Background.copy(alpha = 0.94f))
+                    .border(0.5.dp, EInk.BodyStroke, PanelShape)
                     .safeDrawingPadding()
                     .imePadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp)
             ) {
+                // The video's controls first, right under the picture they control.
+                if (player != null && !replying) {
+                    VideoControls(player, url, landscape = rotated, onRotate = rotate)
+                    androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke, modifier = Modifier.padding(top = 6.dp, bottom = 10.dp))
+                } else Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Avatar(author, note.pubkey, size = 44, onClick = { onDismiss(); actions.openProfile(note.pubkey) })
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                        DisplayName(author, note.pubkey, OnDark, 16.sp)
+                        DisplayName(author, note.pubkey, EInk.Value, 16.sp)
                         val handle = handleText(author, note.pubkey)
-                        Text(handle, color = OnDarkDim, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(handle, color = EInk.Caption, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (!isMe) {
+                        // Follow in the accent colour; Following as an outline.
                         Text(
                             if (following) tr("Following") else tr("Follow"),
-                            color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            color = if (following) EInk.Value else Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
-                                .background(ButtonFill)
+                                .then(if (following) Modifier.border(1.dp, EInk.BodyStroke, RoundedCornerShape(50)) else Modifier.background(Accent))
                                 .clickable(onClickLabel = if (following) tr("Unfollow") else tr("Follow")) { actions.follow(note.pubkey, !following) }
-                                .padding(horizontal = 18.dp, vertical = 9.dp)
+                                .padding(horizontal = 18.dp, vertical = 8.dp)
                         )
                     }
                 }
                 if (caption.isNotEmpty()) {
+                    var expanded by remember(note.id) { mutableStateOf(false) }
+                    var cut by remember(note.id) { mutableStateOf(false) }
                     Text(
-                        caption, color = OnDark, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        caption, color = EInk.Value, fontSize = 15.sp, lineHeight = 20.sp,
+                        maxLines = if (expanded) 10 else 2, overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { if (!expanded) cut = it.hasVisualOverflow },
                         modifier = Modifier
                             .padding(top = 10.dp)
+                            .animateContentSize()
                             .clickable(onClickLabel = tr("Open post")) { onDismiss(); actions.openNote(note) }
                     )
+                    if (cut && !expanded) Text(
+                        tr("Show more"), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = tr("Read the whole post")) { expanded = true }.padding(vertical = 4.dp)
+                    )
                 }
-                // While replying, as on X: the photo, author and text stay; the buttons make way.
-                if (!replying) Spacer(Modifier.height(12.dp))
-                if (!replying) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PillAction(Glyphs.Comment, stats.replies, "Reply", Modifier.weight(1f)) { onDismiss(); actions.reply(note) }
+                // While replying the buttons make way for the reply box.
+                if (!replying) Spacer(Modifier.height(10.dp))
+                if (!replying) Row(verticalAlignment = Alignment.CenterVertically) {
+                    ViewerAction(Glyphs.Comment, stats.replies, "Reply", Modifier.weight(1f)) { onDismiss(); actions.reply(note) }
                     Box(Modifier.weight(1f)) {
-                        PillAction(Glyphs.Repost, stats.reposts, "Repost or quote", Modifier.fillMaxWidth(), active = stats.repostedByMe) { repostMenu = true }
+                        ViewerAction(Glyphs.Repost, stats.reposts, if (stats.repostedByMe) "Reposted" else "Repost or quote", Modifier.fillMaxWidth(), active = stats.repostedByMe) { repostMenu = true }
                         if (repostMenu) RepostSheet(note, stats, actions, onDismiss = { repostMenu = false }, beforeQuote = onDismiss)
                     }
-                    PillAction(
+                    ViewerAction(
                         if (stats.likedByMe) Glyphs.Liked else Glyphs.Like, stats.likes,
                         if (stats.likedByMe) "Liked" else "Like", Modifier.weight(1f), active = stats.likedByMe
                     ) { actions.like(note) }
+                    ViewerAction(Glyphs.Zap, (stats.zapMsat / 1000).toInt(), "Zap", Modifier.weight(1f), tint = Accent) { actions.zap(note) }
                     val marked = actions.isBookmarked(note.id)
-                    PillAction(if (marked) Glyphs.Bookmarked else Glyphs.Bookmark, null, if (marked) "Remove bookmark" else "Bookmark", active = marked) { actions.bookmark(note) }
-                    PillAction(Glyphs.Share, null, "Share") { actions.share(note) }
+                    ViewerAction(if (marked) Glyphs.Bookmarked else Glyphs.Bookmark, null, if (marked) "Remove bookmark" else "Bookmark", Modifier.weight(0.7f), active = marked) { actions.bookmark(note) }
+                    ViewerAction(Glyphs.Share, null, "Share", Modifier.weight(0.7f)) { actions.share(note) }
                 }
                 if (replyBar != null) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
                     replyBar { replying = it }
                 }
-                if (player != null && !replying) VideoControls(player, url, landscape = rotated, onRotate = rotate, modifier = Modifier.padding(top = 8.dp))
             }
         }
         statusBar()
@@ -272,28 +295,27 @@ private fun RoundIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
         modifier = Modifier
             .size(44.dp)
             .clip(CircleShape)
-            .background(ButtonFill.copy(alpha = 0.85f))
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
-    ) { Icon(icon, contentDescription = label, tint = OnDark, modifier = Modifier.size(24.dp)) }
+            .background(EInk.Background.copy(alpha = 0.75f))
+            .border(0.5.dp, EInk.BodyStroke, CircleShape)
+            .clickable(onClickLabel = tr(label), role = Role.Button, onClick = onClick)
+    ) { Icon(icon, contentDescription = tr(label), tint = EInk.Value, modifier = Modifier.size(24.dp)) }
 }
 
-/** A rounded action button with an optional count, as in X's media viewer. */
+/** An action under the media: its icon and count, orange when it's yours (liked, reposted…). */
 @Composable
-private fun PillAction(icon: ImageVector, count: Int?, label: String, modifier: Modifier = Modifier, active: Boolean = false, onClick: () -> Unit) {
+private fun ViewerAction(icon: ImageVector, count: Int?, label: String, modifier: Modifier = Modifier, active: Boolean = false, tint: Color? = null, onClick: () -> Unit) {
     Row(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .height(44.dp)
             .clip(RoundedCornerShape(50))
-            .background(ButtonFill)
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp)
+            .clickable(onClickLabel = tr(label), role = Role.Button, onClick = onClick)
     ) {
-        Icon(icon, contentDescription = label, tint = if (active && (label == "Liked" || label == "Repost or quote")) Color(0xFFF7931A) else OnDark, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = tr(label), tint = tint ?: if (active) Accent else EInk.Value, modifier = Modifier.size(22.dp))
         if (count != null && count > 0) {
-            Spacer(Modifier.width(6.dp))
-            Text(compactCount(count), color = OnDark, fontSize = 15.sp)
+            Spacer(Modifier.width(5.dp))
+            Text(compactCount(count), color = if (active) Accent else EInk.Caption, fontSize = 14.sp)
         }
     }
 }

@@ -745,4 +745,13 @@ internal val THAI: Map<String, String> = hashMapOf(
     "US dollar (USD)" to "ดอลลาร์สหรัฐ (USD)",
     "Thai baht (THB)" to "บาท (THB)",
     "Orange pill" to "ส้ม",
+    "Show more" to "แสดงเพิ่มเติม",
+    "Repost or quote" to "รีโพสต์หรืออ้างอิง",
+    "Like" to "ไลก์",
+    "Liked" to "ไลก์แล้ว",
+    "Share" to "แชร์",
+    "Everyone" to "ทุกคน",
+    "Turn sound on" to "เปิดเสียง",
+    "Landscape" to "แนวนอน",
+    "Back to portrait" to "กลับเป็นแนวตั้ง",
 )
