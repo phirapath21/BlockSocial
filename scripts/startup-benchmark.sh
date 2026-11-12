@@ -16,6 +16,14 @@ case "$ACT" in */*) ;; *) ACT="$PKG/com.example.btcwidget.MainActivity" ;; esac
 RUNS=${RUNS:-10}
 OUT=${OUT:-app/build/reports/startup}
 mkdir -p "$OUT"
+# After the UI tests the emulator's screen may be off or locked: then Android starts the app
+# but never draws it, and reports no time (LaunchState UNKNOWN). Keep the screen on and unlocked.
+adb shell svc power stayon true >/dev/null 2>&1 || true
+adb shell settings put system screen_off_timeout 1800000 >/dev/null 2>&1 || true
+adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
+adb shell input keyevent 82 >/dev/null 2>&1 || true
+sleep 2
 LOG="$OUT/raw.log"
 : > "$LOG"
 echo "activity: $ACT" >> "$LOG"
@@ -29,9 +37,23 @@ cold_starts() {
     sleep 1
     local t
     local raw
+    adb logcat -c >/dev/null 2>&1 || true
     raw=$(adb shell am start -W -n "$ACT" 2>&1 | tr -d '\r')
     echo "[$label #$i] $raw" >> "$LOG"
     t=$(echo "$raw" | awk -F': *' '/TotalTime/ {print $2}' | tr -dc '0-9')
+    # Fallback: the "Displayed ... +1s234ms" line Android logs when the first frame is drawn.
+    if [ -z "$t" ]; then
+      sleep 3
+      local shown
+      shown=$(adb logcat -d -s ActivityTaskManager:I 2>/dev/null | tr -d '\r' | grep -m1 "Displayed $PKG" | grep -o '+[0-9s]*ms' | tr -d '+')
+      echo "  displayed: $shown" >> "$LOG"
+      if [ -n "$shown" ]; then
+        local sec=0 ms
+        case "$shown" in *[0-9]s[0-9]*) sec=${shown%%s*}; ms=${shown#*s} ;; *) ms=$shown ;; esac
+        ms=${ms%ms}
+        t=$((10#$sec * 1000 + 10#$ms))
+      fi
+    fi
     [ -n "$t" ] && times+=("$t")
     sleep 2
   done
