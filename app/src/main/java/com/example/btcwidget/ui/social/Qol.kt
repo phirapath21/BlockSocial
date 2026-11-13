@@ -151,34 +151,38 @@ internal fun mediaRatioFor(ratio: Float, min: Float, max: Float, screenWidthDp: 
 
 /**
  * On a wide screen (landscape, tablet, unfolded), [content] in a column of [READABLE_WIDTH] in
- * the middle with hairlines either side, as X lays out its timeline; otherwise the full width.
+ * the middle with hairlines either side, as X lays out its timeline, and the side panel beside
+ * it when there's room; otherwise the full width.
+ *
+ * The content sits at the same place in the composition either way: turning the phone only
+ * changes sizes, so what's open inside (a full-screen video, a half-typed reply, scroll
+ * positions) stays. (It used to be composed afresh on every turn, which closed the video.)
  */
 @Composable
 fun ReadableColumn(enabled: Boolean = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600, content: @Composable () -> Unit) {
-    if (!enabled) { content(); return }
     val panel = LocalSidePanel.current
     androidx.compose.foundation.layout.BoxWithConstraints(
-        androidx.compose.ui.Modifier.fillMaxSize().background(com.example.btcwidget.ui.main.EInk.Background),
+        androidx.compose.ui.Modifier.fillMaxSize().then(if (enabled) androidx.compose.ui.Modifier.background(com.example.btcwidget.ui.main.EInk.Background) else androidx.compose.ui.Modifier),
         contentAlignment = androidx.compose.ui.Alignment.TopCenter
     ) {
         // Room beside the posts: the side panel (trending, live now), as X has on the right.
         // A phone on its side has ~750dp once the rail, the system's buttons and the camera cut-out
         // are taken: the posts give up some width (down to READABLE_MIN) so the panel still fits.
-        val side = if (panel != null && maxWidth >= READABLE_MIN + SIDE_PANEL_MIN)
+        val side = if (enabled && panel != null && maxWidth >= READABLE_MIN + SIDE_PANEL_MIN)
             (maxWidth - READABLE_WIDTH).coerceIn(SIDE_PANEL_MIN, SIDE_PANEL_WIDTH) else 0.dp
         val posts = if (side > 0.dp) minOf(READABLE_WIDTH, maxWidth - side) else READABLE_WIDTH
         androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxHeight()) {
             androidx.compose.foundation.layout.Box(
                 androidx.compose.ui.Modifier
-                    .widthIn(max = READABLE_WIDTH)
+                    .then(if (enabled) androidx.compose.ui.Modifier.widthIn(max = READABLE_WIDTH) else androidx.compose.ui.Modifier)
                     .fillMaxHeight()
                     .then(if (side > 0.dp) androidx.compose.ui.Modifier.width(posts) else androidx.compose.ui.Modifier.fillMaxWidth())
-                    .drawBehind {
+                    .then(if (!enabled) androidx.compose.ui.Modifier else androidx.compose.ui.Modifier.drawBehind {
                         val c = com.example.btcwidget.ui.main.EInk.BodyStroke
                         val w = 0.5.dp.toPx()
                         drawLine(c, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(0f, size.height), w)
                         drawLine(c, androidx.compose.ui.geometry.Offset(size.width, 0f), androidx.compose.ui.geometry.Offset(size.width, size.height), w)
-                    }
+                    })
             ) { content() }
             if (side > 0.dp && panel != null) androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.width(side).fillMaxHeight()) { panel() }
         }
