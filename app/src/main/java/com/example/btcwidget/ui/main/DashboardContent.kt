@@ -50,6 +50,8 @@ fun DashboardContent(
     onHeroMetricSelected: (String) -> Unit,
     currencySetting: String,
     stackSats: Long = 0,
+    stackUnit: com.example.btcwidget.StackUnit = com.example.btcwidget.StackUnit.BTC,
+    onStackChange: (Long, com.example.btcwidget.StackUnit) -> Unit = { _, _ -> },
     onSetUpStack: () -> Unit = {},
     history: List<PricePoint> = emptyList(),
     /** Shares the hero metric (key) through the system share sheet. */
@@ -136,10 +138,14 @@ fun DashboardContent(
             )
         }
 
-        if (!hasStack) {
-            item(key = "stack_setup") { StackSetupCard(onSetUp = onSetUpStack) }
-        } else {
-            item(key = "stack_pnl") { StackPnlCard(data = data, currencySetting = currencySetting, stackSats = stackSats, onEdit = onSetUpStack) }
+        item(key = "stack_portfolio") {
+            PortfolioStackCard(
+                data = data,
+                currencySetting = currencySetting,
+                stackSats = stackSats,
+                stackUnit = stackUnit,
+                onStackChange = onStackChange
+            )
         }
 
         item(key = "tx_tracker") {
@@ -163,38 +169,169 @@ fun DashboardContent(
     }
 }
 
-/** Shows average buy price and unrealized profit/loss when the user has entered a cost basis. */
+/**
+ * Stack & DCA / Portfolio P&L card directly on the Bitcoin page:
+ * edit total holdings (BTC or sats), set total cost basis, or log a new DCA purchase to add to both.
+ */
 @Composable
-private fun StackPnlCard(data: PriceData, currencySetting: String, stackSats: Long, onEdit: () -> Unit) {
+private fun PortfolioStackCard(
+    data: PriceData,
+    currencySetting: String,
+    stackSats: Long,
+    stackUnit: com.example.btcwidget.StackUnit,
+    onStackChange: (Long, com.example.btcwidget.StackUnit) -> Unit
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val costBasis = com.example.btcwidget.AppPrefs.stackCostBasis(context, currencySetting)
+    var unit by remember(stackUnit) { mutableStateOf(stackUnit) }
+    var stackText by remember(stackSats, unit) { mutableStateOf(com.example.btcwidget.Stack.toInput(stackSats, unit)) }
+    var costBasis by remember(currencySetting) { mutableStateOf(com.example.btcwidget.AppPrefs.stackCostBasis(context, currencySetting)) }
+    var costText by remember(currencySetting) {
+        val saved = com.example.btcwidget.AppPrefs.stackCostBasis(context, currencySetting)
+        mutableStateOf(if (saved > 0.0) saved.toBigDecimal().stripTrailingZeros().toPlainString() else "")
+    }
+    var showDcaAdd by rememberSaveable { mutableStateOf(false) }
+    var dcaAmountText by rememberSaveable { mutableStateOf("") }
+    var dcaCostText by rememberSaveable { mutableStateOf("") }
+
     val btcPrice = com.example.btcwidget.alerts.PriceAlerts.price(data, currencySetting)
-    val pnl = com.example.btcwidget.Stack.profitLoss(stackSats, btcPrice, costBasis) ?: return
-    val sign = if (pnl.profitAmount >= 0) "+" else ""
     val fmt = { v: Double -> com.example.btcwidget.alerts.PriceAlerts.formatPrice(kotlin.math.abs(v), currencySetting) }
+    val stackWorth = if (stackSats > 0 && btcPrice > 0) {
+        fmt((stackSats.toDouble() / com.example.btcwidget.Stack.SATS_PER_BTC) * btcPrice)
+    } else null
+    val pnl = com.example.btcwidget.Stack.profitLoss(stackSats, btcPrice, costBasis)
+    val invalidStack = stackText.isNotBlank() && com.example.btcwidget.Stack.parse(stackText, unit) == null
+
     androidx.compose.foundation.layout.Column(
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, EInk.BodyStroke, EInk.ChipShape)
-            .clickable(onClick = onEdit)
             .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = tr("PORTFOLIO P/L"),
+                text = tr("YOUR STACK & DCA"),
                 color = EInk.Caption, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold
             )
+            if (stackWorth != null) {
+                Text(
+                    text = tr("WORTH {0}", stackWorth),
+                    color = EInk.Value, fontSize = 12.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        if (pnl != null) {
+            val sign = if (pnl.profitAmount >= 0) "+" else "-"
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = tr("AVG BUY {0} · COST {1}", fmt(pnl.avgBuyPrice), fmt(pnl.costBasis)),
+                    color = EInk.Caption, fontSize = 11.sp, fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "$sign${"%.2f".format(kotlin.math.abs(pnl.profitPercent))}% ($sign${fmt(pnl.profitAmount)})",
+                    color = if (pnl.profitAmount >= 0) EInk.Value else EInk.Alert,
+                    fontSize = 12.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.example.btcwidget.ui.social.SettingsTextField(
+                value = stackText,
+                onValueChange = { input ->
+                    stackText = input.filter { it.isDigit() || it == '.' || it == ',' }.take(20)
+                    if (stackText.isBlank()) onStackChange(0L, unit)
+                    else com.example.btcwidget.Stack.parse(stackText, unit)?.let { onStackChange(it, unit) }
+                },
+                placeholder = if (unit == com.example.btcwidget.StackUnit.BTC) tr("Holdings (e.g. 0.05 BTC)") else tr("Holdings (e.g. 5000000 sats)"),
+                isError = invalidStack,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                modifier = Modifier.weight(1f)
+            )
+            com.example.btcwidget.StackUnit.entries.forEach { option ->
+                EInkChip(
+                    text = if (option == com.example.btcwidget.StackUnit.BTC) "BTC" else "SATS",
+                    selected = unit == option,
+                    onClick = {
+                        if (unit != option) {
+                            val sats = com.example.btcwidget.Stack.parse(stackText, unit) ?: stackSats
+                            unit = option
+                            stackText = com.example.btcwidget.Stack.toInput(sats, option)
+                            onStackChange(sats, option)
+                        }
+                    }
+                )
+            }
+        }
+        if (invalidStack) {
             Text(
-                text = "$sign${"%.2f".format(pnl.profitPercent)}% ($sign${fmt(pnl.profitAmount)})",
-                color = if (pnl.profitAmount >= 0) EInk.Value else EInk.Alert,
-                fontSize = 13.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold
+                text = if (unit == com.example.btcwidget.StackUnit.BTC) tr("Up to 8 decimals, max 21,000,000") else tr("Whole sats only"),
+                color = EInk.Alert, fontSize = 11.sp, fontFamily = FontFamily.Monospace
             )
         }
-        Text(
-            text = tr("AVG BUY {0} · COST {1}", fmt(pnl.avgBuyPrice), fmt(pnl.costBasis)),
-            color = EInk.Caption, fontSize = 11.sp, fontFamily = FontFamily.Monospace
-        )
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.example.btcwidget.ui.social.SettingsTextField(
+                value = costText,
+                onValueChange = { input ->
+                    costText = input.filter { it.isDigit() || it == '.' }.take(18)
+                    val v = costText.toDoubleOrNull() ?: 0.0
+                    costBasis = v
+                    com.example.btcwidget.AppPrefs.setStackCostBasis(context, currencySetting, v)
+                },
+                placeholder = tr("Total cost basis ({0})", currencySetting),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                modifier = Modifier.weight(1f)
+            )
+            EInkChip(
+                text = if (showDcaAdd) tr("CLOSE DCA") else tr("+ DCA LOT"),
+                selected = showDcaAdd,
+                onClick = { showDcaAdd = !showDcaAdd }
+            )
+        }
+
+        if (showDcaAdd) {
+            Text(
+                text = tr("Add a DCA purchase (adds to your stack and total cost basis):"),
+                color = EInk.Caption, fontSize = 11.sp, fontFamily = FontFamily.Monospace
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.example.btcwidget.ui.social.SettingsTextField(
+                    value = dcaAmountText,
+                    onValueChange = { dcaAmountText = it.filter { c -> c.isDigit() || c == '.' || c == ',' }.take(18) },
+                    placeholder = if (unit == com.example.btcwidget.StackUnit.BTC) "+ BTC" else "+ sats",
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f)
+                )
+                com.example.btcwidget.ui.social.SettingsTextField(
+                    value = dcaCostText,
+                    onValueChange = { dcaCostText = it.filter { c -> c.isDigit() || c == '.' }.take(18) },
+                    placeholder = "+ $currencySetting paid",
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f)
+                )
+                val addedSats = com.example.btcwidget.Stack.parse(dcaAmountText, unit) ?: 0L
+                val addedCost = dcaCostText.toDoubleOrNull() ?: 0.0
+                EInkChip(
+                    text = tr("ADD"),
+                    selected = addedSats > 0 && addedCost > 0.0,
+                    onClick = {
+                        if (addedSats <= 0 || addedCost <= 0.0) return@EInkChip
+                        val newSats = (stackSats + addedSats).coerceAtMost(21_000_000L * com.example.btcwidget.Stack.SATS_PER_BTC)
+                        val newCost = costBasis + addedCost
+                        onStackChange(newSats, unit)
+                        stackText = com.example.btcwidget.Stack.toInput(newSats, unit)
+                        costBasis = newCost
+                        costText = newCost.toBigDecimal().stripTrailingZeros().toPlainString()
+                        com.example.btcwidget.AppPrefs.setStackCostBasis(context, currencySetting, newCost)
+                        dcaAmountText = ""
+                        dcaCostText = ""
+                        showDcaAdd = false
+                    }
+                )
+            }
+        }
     }
 }
 
