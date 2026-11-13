@@ -59,9 +59,9 @@ fun SocialScaffold(
     var zapTarget by remember { mutableStateOf<Event?>(null) }
     var reportTarget by remember { mutableStateOf<Event?>(null) }
     var deleteTarget by remember { mutableStateOf<Event?>(null) }
-    var viewImage by remember { mutableStateOf<Pair<String, Event>?>(null) }
-    var viewVideo by remember { mutableStateOf<Pair<String, Event>?>(null) }
-    var viewWeb by remember { mutableStateOf<Pair<String, Event?>?>(null) }
+    var viewImage by rememberKeptState<Pair<String, Event>?> { null }
+    var viewVideo by rememberKeptState<Pair<String, Event>?> { null }
+    var viewWeb by rememberKeptState<Pair<String, Event?>?> { null }
     val linksInApp by vm.linksInApp.collectAsState()
     val autoplay by vm.videoAutoplay.collectAsState()
     val bookmarks by vm.bookmarks.collectAsState()
