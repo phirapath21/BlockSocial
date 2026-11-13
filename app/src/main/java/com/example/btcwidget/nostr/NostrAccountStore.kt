@@ -58,11 +58,9 @@ object NostrAccountStore {
         require(Schnorr.isValidSecretKey(seckey)) { "Not a valid private key" }
         val pubkey = Schnorr.publicKey(seckey)
         stashIfOther(context, pubkey)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, keystoreKey()) }
-        val sealed = cipher.iv + cipher.doFinal(Hex.decode(seckey))
         prefs(context).edit().clear()
             .putString(PUBKEY, pubkey).putString(TYPE, SignerType.LOCAL.name)
-            .putString(SECRET, Base64.encodeToString(sealed, Base64.NO_WRAP))
+            .putString(SECRET, sealBytes(Hex.decode(seckey)))
             .commit()
         return NostrAccount(pubkey, SignerType.LOCAL)
     }
@@ -76,22 +74,16 @@ object NostrAccountStore {
      */
     fun saveBunker(context: Context, pubkey: String, signerPubkey: String, relays: List<String>, clientSeckey: String) {
         stashIfOther(context, pubkey)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, keystoreKey()) }
-        val sealed = cipher.iv + cipher.doFinal(Hex.decode(clientSeckey))
         prefs(context).edit().clear()
             .putString(PUBKEY, pubkey).putString(TYPE, SignerType.BUNKER.name)
             .putString(BUNKER_SIGNER, signerPubkey).putString(BUNKER_RELAYS, relays.joinToString("\n"))
-            .putString(SECRET, Base64.encodeToString(sealed, Base64.NO_WRAP))
+            .putString(SECRET, sealBytes(Hex.decode(clientSeckey)))
             .commit()
     }
 
     /** The decrypted private key of a LOCAL account; null if missing or unreadable. */
-    fun secretKey(context: Context): String? = runCatching {
-        val sealed = Base64.decode(prefs(context).getString(SECRET, null) ?: return null, Base64.NO_WRAP)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, keystoreKey(), GCMParameterSpec(128, sealed, 0, 12))
-        Hex.encode(cipher.doFinal(sealed, 12, sealed.size - 12))
-    }.getOrNull()
+    fun secretKey(context: Context): String? =
+        unsealBytes(prefs(context).getString(SECRET, null))?.let { Hex.encode(it) }
 
     // ---- Nostr Wallet Connect: the connection string can spend money, so it's sealed like a key ----
 
@@ -99,16 +91,28 @@ object NostrAccountStore {
 
     fun setNwc(context: Context, uri: String?) {
         if (uri == null) { prefs(context).edit().remove(NWC).commit(); return }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, keystoreKey()) }
-        val sealed = cipher.iv + cipher.doFinal(uri.toByteArray(Charsets.UTF_8))
-        prefs(context).edit().putString(NWC, Base64.encodeToString(sealed, Base64.NO_WRAP)).commit()
+        prefs(context).edit().putString(NWC, sealBytes(uri.toByteArray(Charsets.UTF_8))).commit()
     }
 
-    fun nwc(context: Context): String? = runCatching {
-        val sealed = Base64.decode(prefs(context).getString(NWC, null) ?: return null, Base64.NO_WRAP)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, keystoreKey(), GCMParameterSpec(128, sealed, 0, 12))
-        String(cipher.doFinal(sealed, 12, sealed.size - 12), Charsets.UTF_8)
+    fun nwc(context: Context): String? =
+        unsealBytes(prefs(context).getString(NWC, null))?.let { String(it, Charsets.UTF_8) }
+
+    private const val GCM_IV_LENGTH = 12
+    private const val GCM_TAG_BITS = 128
+
+    private fun sealBytes(plain: ByteArray): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, keystoreKey()) }
+        val sealed = cipher.iv + cipher.doFinal(plain)
+        return Base64.encodeToString(sealed, Base64.NO_WRAP)
+    }
+
+    private fun unsealBytes(encoded: String?): ByteArray? = runCatching {
+        val sealed = Base64.decode(encoded ?: return null, Base64.NO_WRAP)
+        require(sealed.size > GCM_IV_LENGTH)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
+            init(Cipher.DECRYPT_MODE, keystoreKey(), GCMParameterSpec(GCM_TAG_BITS, sealed, 0, GCM_IV_LENGTH))
+        }
+        cipher.doFinal(sealed, GCM_IV_LENGTH, sealed.size - GCM_IV_LENGTH)
     }.getOrNull()
 
     /** The account's signer, or null when logged out (or the key can't be read). */

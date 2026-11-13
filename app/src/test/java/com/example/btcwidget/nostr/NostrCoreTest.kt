@@ -251,6 +251,19 @@ class NostrCoreTest {
         assertEquals(pubkey, r.sender)
         assertEquals("great", r.comment)
         assertEquals("cd".repeat(32), r.noteId)
+
+        // Forged description (invalid signature) must be rejected.
+        val forgedReq = req.copy(pubkey = "11".repeat(32))
+        val forgedReceipt = receipt.copy(tags = listOf(listOf("p", "ab".repeat(32)), listOf("bolt11", "lnbc210n1pqq"), listOf("description", forgedReq.toJson())))
+        assertNull(Zaps.parseReceipt(forgedReceipt))
+
+        // Mismatched amount between bolt11 (21_000 msat) and description (99_000_000 msat) must be rejected.
+        val inflatedReq = sign(Zaps.request(pubkey, "ab".repeat(32), 99_000_000, "lnurl1x", emptyList()))
+        val mismatchedReceipt = receipt.copy(tags = listOf(listOf("p", "ab".repeat(32)), listOf("bolt11", "lnbc210n1pqq"), listOf("description", inflatedReq.toJson())))
+        assertNull(Zaps.parseReceipt(mismatchedReceipt))
+
+        // Non-HTTPS LNURL callback must be rejected.
+        assertNull(Zaps.parsePayInfo("{\"callback\":\"http://x/cb\",\"minSendable\":1000,\"maxSendable\":100000000}"))
     }
 
     @Test

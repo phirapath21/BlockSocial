@@ -37,16 +37,32 @@ class EventStore(context: Context) : SQLiteOpenHelper(context.applicationContext
         val now = System.currentTimeMillis() / 1000
         db.beginTransaction()
         try {
-            for (e in events) {
-                val newer = EventSql.newerExists(e)
-                if (newer != null && exists(db, newer)) continue
-                EventSql.olderVersions(e)?.let { st -> ids(db, st).forEach { old -> exec(db, EventSql.DELETE_EVENT, listOf(old)); exec(db, EventSql.DELETE_TAGS, listOf(old)) } }
-                val inserted = db.compileStatement(EventSql.INSERT_EVENT).use { st ->
-                    bind(st, EventSql.insertArgs(e, now))
-                    st.executeInsert()
+            db.compileStatement(EventSql.INSERT_EVENT).use { insertEventSt ->
+                db.compileStatement(EventSql.INSERT_TAG).use { insertTagSt ->
+                    db.compileStatement(EventSql.DELETE_EVENT).use { delEventSt ->
+                        db.compileStatement(EventSql.DELETE_TAGS).use { delTagsSt ->
+                            for (e in events) {
+                                val newer = EventSql.newerExists(e)
+                                if (newer != null && exists(db, newer)) continue
+                                EventSql.olderVersions(e)?.let { st ->
+                                    ids(db, st).forEach { old ->
+                                        delEventSt.clearBindings(); bind(delEventSt, listOf(old)); delEventSt.execute()
+                                        delTagsSt.clearBindings(); bind(delTagsSt, listOf(old)); delTagsSt.execute()
+                                    }
+                                }
+                                insertEventSt.clearBindings()
+                                bind(insertEventSt, EventSql.insertArgs(e, now))
+                                val inserted = insertEventSt.executeInsert()
+                                if (inserted == -1L) continue // already stored
+                                EventSql.indexedTags(e).forEach { (n, v) ->
+                                    insertTagSt.clearBindings()
+                                    bind(insertTagSt, listOf(e.id, n, v))
+                                    insertTagSt.executeInsert()
+                                }
+                            }
+                        }
+                    }
                 }
-                if (inserted == -1L) continue // already stored
-                EventSql.indexedTags(e).forEach { (n, v) -> exec(db, EventSql.INSERT_TAG, listOf(e.id, n, v)) }
             }
             db.setTransactionSuccessful()
         } catch (e: Exception) {

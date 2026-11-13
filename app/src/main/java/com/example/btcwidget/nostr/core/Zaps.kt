@@ -41,8 +41,10 @@ object Zaps {
     fun parsePayInfo(json: String): PayInfo? = runCatching {
         val o = JSONObject(json)
         if (o.optString("status") == "ERROR") return null
+        val callback = o.getString("callback").trim()
+        if (!callback.startsWith("https://")) return null
         PayInfo(
-            callback = o.getString("callback"),
+            callback = callback,
             minSendableMsat = o.getLong("minSendable"),
             maxSendableMsat = o.getLong("maxSendable"),
             allowsNostr = o.optBoolean("allowsNostr", false),
@@ -118,13 +120,18 @@ object Zaps {
 
     fun parseReceipt(event: Event): Receipt? {
         if (event.kind != Kind.ZAP_RECEIPT) return null
-        val request = event.firstTag("description")?.getOrNull(1)?.let { runCatching { Event.fromJson(it) }.getOrNull() }
-        val amount = event.firstTag("bolt11")?.getOrNull(1)?.let { invoiceAmountMsat(it) }
-            ?: request?.firstTag("amount")?.getOrNull(1)?.toLongOrNull()
-            ?: return null
+        val amount = event.firstTag("bolt11")?.getOrNull(1)?.let { invoiceAmountMsat(it) } ?: return null
+        val descJson = event.firstTag("description")?.getOrNull(1)
+        val request = if (descJson != null) {
+            runCatching { Event.fromJson(descJson) }.getOrNull()
+                ?.takeIf { it.kind == Kind.ZAP_REQUEST && it.verify() }
+                ?: return null
+        } else null
+        val reqAmount = request?.firstTag("amount")?.getOrNull(1)?.toLongOrNull()
+        if (reqAmount != null && reqAmount != amount) return null
         return Receipt(
             id = event.id,
-            sender = request?.pubkey ?: event.firstTag("P")?.getOrNull(1),
+            sender = request?.pubkey ?: event.firstTag("P")?.getOrNull(1)?.takeIf { Hex.isKey(it) },
             recipient = event.firstTag("p")?.getOrNull(1),
             noteId = event.firstTag("e")?.getOrNull(1),
             amountMsat = amount,
