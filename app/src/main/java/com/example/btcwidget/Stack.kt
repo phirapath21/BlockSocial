@@ -39,4 +39,24 @@ object Stack {
             StackUnit.BTC -> formatBtc(sats)
             StackUnit.SATS -> sats.toString()
         }
+
+    /** Portfolio cost basis and unrealized profit/loss metrics. */
+    data class ProfitLoss(
+        val currentValue: Double,
+        val costBasis: Double,
+        val avgBuyPrice: Double,
+        val profitAmount: Double,
+        val profitPercent: Double
+    )
+
+    /** Computes average buy price and unrealized P/L for [stackSats] at [currentBtcPrice] vs [totalCostBasis]. */
+    fun profitLoss(stackSats: Long, currentBtcPrice: Double, totalCostBasis: Double): ProfitLoss? {
+        if (stackSats <= 0 || currentBtcPrice <= 0.0 || totalCostBasis <= 0.0) return null
+        val btc = stackSats.toDouble() / SATS_PER_BTC
+        val currentValue = btc * currentBtcPrice
+        val avgBuyPrice = totalCostBasis / btc
+        val profitAmount = currentValue - totalCostBasis
+        val profitPercent = (profitAmount / totalCostBasis) * 100.0
+        return ProfitLoss(currentValue, totalCostBasis, avgBuyPrice, profitAmount, profitPercent)
+    }
 }

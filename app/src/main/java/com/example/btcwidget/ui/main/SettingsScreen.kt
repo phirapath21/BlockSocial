@@ -66,14 +66,6 @@ fun BitcoinSettings(
     refreshInterval: Int, onRefreshInterval: (Int) -> Unit,
     dataSources: DataSources, onDataSources: (DataSources) -> Unit,
 ) {
-    SettingsHeader(tr("Your stack"))
-    SettingsNote(
-        if (stackSats > 0 && stackValue != null) tr("Worth {0} · stored only on this device", stackValue)
-        else tr("How much bitcoin you hold. Stored only on this device.")
-    )
-    StackInput(stackSats, stackUnit, onStackChange)
-
-    SettingsDivider()
     SettingsHeader(tr("Currency"))
     SettingsNote(tr("Prices, sats and alerts"))
     listOf("USD" to "US dollar (USD)", "THB" to "Thai baht (THB)").forEach { (code, name) ->
@@ -98,46 +90,6 @@ fun BitcoinSettings(
     SettingsRadioRow(tr("USD price × exchange rate"), selected = dataSources.thb == ThbSource.CONVERTED) { onDataSources(dataSources.copy(thb = ThbSource.CONVERTED)) }
     SettingsRadioRow(tr("Bitkub's BTC/THB market"), selected = dataSources.thb == ThbSource.BITKUB) { onDataSources(dataSources.copy(thb = ThbSource.BITKUB)) }
     SettingsNote(tr("If a source is unreachable, Block falls back to Coinbase or the last known price."))
-}
-
-/** Amount field with a BTC / sats switch; saves every valid edit. */
-@Composable
-private fun StackInput(stackSats: Long, stackUnit: StackUnit, onStackChange: (Long, StackUnit) -> Unit) {
-    var unit by remember { mutableStateOf(stackUnit) }
-    var text by remember { mutableStateOf(Stack.toInput(stackSats, stackUnit)) }
-    val invalid = text.isNotBlank() && Stack.parse(text, unit) == null
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SettingsTextField(
-                value = text,
-                onValueChange = { input ->
-                    text = input.filter { it.isDigit() || it == '.' || it == ',' }.take(20)
-                    if (text.isBlank()) onStackChange(0, unit)
-                    else Stack.parse(text, unit)?.let { onStackChange(it, unit) }
-                },
-                placeholder = if (unit == StackUnit.BTC) "0.05" else "5000000",
-                isError = invalid,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f)
-            )
-            StackUnit.entries.forEach { option ->
-                Spacer(Modifier.width(8.dp))
-                SettingsButton(if (option == StackUnit.BTC) "BTC" else "sats", primary = unit == option) {
-                    if (unit != option) {
-                        // Keep the amount, show it in the new unit.
-                        val sats = Stack.parse(text, unit) ?: stackSats
-                        unit = option
-                        text = Stack.toInput(sats, option)
-                        onStackChange(sats, option)
-                    }
-                }
-            }
-        }
-        if (invalid) Text(
-            text = if (unit == StackUnit.BTC) tr("Up to 8 decimals, max 21,000,000") else tr("Whole sats only"),
-            color = EInk.Alert, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)
-        )
-    }
 }
 
 /** A labelled settings row with controls on the right and an optional note under the label. */

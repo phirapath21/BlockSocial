@@ -330,6 +330,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _wot = MutableStateFlow(store.wotFilter(application))
     val wotFilter: StateFlow<Boolean> = _wot.asStateFlow()
+    val trustSize get() = repo.trustSize
 
     fun setWotFilter(on: Boolean) {
         repo.setWotFilter(on)
@@ -899,6 +900,51 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     val nwc get() = repo.nwc
 
+    private val _nwcBalanceMsat = MutableStateFlow<Long?>(null)
+    val nwcBalanceMsat: StateFlow<Long?> = _nwcBalanceMsat.asStateFlow()
+
+    private val _nwcTransactions = MutableStateFlow<List<com.example.btcwidget.nostr.core.Nwc.Transaction>>(emptyList())
+    val nwcTransactions: StateFlow<List<com.example.btcwidget.nostr.core.Nwc.Transaction>> = _nwcTransactions.asStateFlow()
+
+    private val _nwcLoading = MutableStateFlow(false)
+    val nwcLoading: StateFlow<Boolean> = _nwcLoading.asStateFlow()
+
+    /** Refreshes balance and transaction history from the connected NWC wallet. */
+    fun refreshWallet() {
+        if (repo.nwc.value == null || _nwcLoading.value) return
+        _nwcLoading.value = true
+        viewModelScope.launch {
+            try {
+                val bal = async { runCatching { repo.nwcBalance() }.getOrNull() }
+                val txs = async { runCatching { repo.nwcTransactions(20) }.getOrNull() }
+                bal.await()?.let { _nwcBalanceMsat.value = it }
+                txs.await()?.let { _nwcTransactions.value = it }
+            } finally {
+                _nwcLoading.value = false
+            }
+        }
+    }
+
+    /** Creates an invoice via NWC `make_invoice` and passes the BOLT11 string to [onResult]. */
+    fun makeNwcInvoice(amountSat: Long, description: String, onResult: (String?) -> Unit) {
+        var inv: String? = null
+        act(tr("Couldn't create invoice"), finally = { onResult(inv) }) {
+            inv = repo.nwcMakeInvoice(amountSat, description)
+        }
+    }
+
+    /** Pays a BOLT11 invoice via NWC and refreshes wallet balance/history. */
+    fun payInvoiceWithNwc(invoice: String, onDone: (Boolean) -> Unit = {}) {
+        var ok = false
+        act(tr("Payment failed"), finally = { onDone(ok) }) {
+            say(tr("⚡ Paying invoice…"))
+            repo.payWithNwc(invoice.trim().removePrefix("lightning:").removePrefix("LIGHTNING:"))
+            ok = true
+            say(tr("⚡ Payment sent"))
+            refreshWallet()
+        }
+    }
+
     /**
      * Zaps [amountSat]: with a connected wallet (NWC) it pays right here; otherwise the
      * invoice goes to [onInvoice], which opens a wallet app.
@@ -911,6 +957,7 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
                 repo.payWithNwc(invoice)
                 say(tr("⚡ Zapped {0} sats", amountSat))
                 note?.let { n -> runCatching { repo.loadStats(listOf(n.id)) } }
+                refreshWallet()
             } else {
                 onInvoice(invoice)
             }
@@ -918,12 +965,17 @@ class SocialViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Returns an error message, or null when connected. */
     fun connectNwc(uri: String): String? = try {
-        repo.connectNwc(uri); say(tr("Wallet connected")); null
+        repo.connectNwc(uri); say(tr("Wallet connected")); refreshWallet(); null
     } catch (e: Exception) {
         e.message ?: "Couldn't connect the wallet"
     }
 
-    fun disconnectNwc() { repo.disconnectNwc(); say(tr("Wallet disconnected")) }
+    fun disconnectNwc() {
+        repo.disconnectNwc()
+        _nwcBalanceMsat.value = null
+        _nwcTransactions.value = emptyList()
+        say(tr("Wallet disconnected"))
+    }
 
     private fun say(message: String) { _messages.tryEmit(message) }
 

@@ -395,7 +395,9 @@ fun MainScreenContent(
                                 onHeroMetricSelected = onHeroMetricSelected,
                                 currencySetting = currencySetting,
                                 stackSats = stackSats,
-                                onSetUpStack = { onItemClick(com.example.btcwidget.SettingsKey("BITCOIN")) },
+                                stackUnit = stackUnit,
+                                onStackChange = onStackChange,
+                                onSetUpStack = { onTabSelected(MainTab.DASHBOARD) },
                                 history = history,
                                 onShare = { key -> onShare(key, currentState.data) }
                             )
@@ -433,7 +435,7 @@ fun MainScreenContent(
                     collapsedCategories = collapsedCategories,
                     onToggleCategory = onToggleCategory,
                     stackSats = stackSats,
-                    onSetUpStack = { onTabSelected(MainTab.SETTINGS) }
+                    onSetUpStack = { onTabSelected(MainTab.DASHBOARD) }
                 )
                 MainTab.SETTINGS -> settingsContent()
             }

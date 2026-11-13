@@ -177,6 +177,15 @@ object AppPrefs {
         putString(STACK_UNIT, unit.name)
     }
 
+    /** Total cost basis of the user's stack in [currency] (0.0 if not set). */
+    fun stackCostBasis(context: Context, currency: String): Double =
+        prefs(context).getString("stack_cost_${currency.uppercase()}", null)?.toDoubleOrNull() ?: 0.0
+
+    fun setStackCostBasis(context: Context, currency: String, amount: Double) = edit(context) {
+        val key = "stack_cost_${currency.uppercase()}"
+        if (amount <= 0.0) remove(key) else putString(key, amount.toString())
+    }
+
     // ---- Price history cache (for charts, works offline) ----
 
     fun history(context: Context): List<PricePoint> = ChartMath.decode(prefs(context).getString(HISTORY, null))

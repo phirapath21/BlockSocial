@@ -12,6 +12,13 @@ object Outbox {
             .mapNotNull { normalizeRelayUrl(it[1]) }
             .distinct()
 
+    /** Relays [list] (kind 10002) says its author reads mentions/replies from: "r" tags marked read or unmarked. */
+    fun readRelays(list: Event?): List<String> =
+        list?.tags.orEmpty()
+            .filter { it.size >= 2 && it[0] == "r" && (it.getOrNull(2).isNullOrEmpty() || it[2] == "read") }
+            .mapNotNull { normalizeRelayUrl(it[1]) }
+            .distinct()
+
     /**
      * Chooses relays to read [authors] from: up to [perAuthor] of each author's write
      * relays, favouring relays already picked for others (fewer connections), at most
