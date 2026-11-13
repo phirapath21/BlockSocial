@@ -180,18 +180,34 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
     // while everything else on the screen (details, chat, the box to type in) fades away together.
     val drag = dragToMinimize(enabled = !fullscreen && live?.isLive == true && live.streaming != null, onMinimize = onBack)
     val fade = { drag.progress * 1.6f }
-    val chat: @Composable (pinned: (@Composable () -> Unit)?, overVideo: Boolean) -> Unit = { pinned, overVideo ->
-        SpaceChat(
-            vm, navigate, onBack,
-            title = live?.title ?: tr("Live"),
-            note = if (loaded == null) tr("This stream couldn't be found on your relays.") else tr("Live chat: messages and zaps are public."),
-            messages = if (loaded == null) emptyList() else messages,
-            pinned = pinned,
-            hosts = setOfNotNull(live?.host),
-            showTopBar = !overVideo,
-            fade = if (overVideo) ({ 0f }) else fade,
-            onSend = { text, done -> live?.let { vm.sendLiveChat(it, text) { ok -> done(if (ok) null else tr("Couldn't send")) } } ?: done(tr("Still loading")) }
-        )
+    val chat = remember {
+        androidx.compose.runtime.movableContentOf<(@Composable () -> Unit)?, Boolean> { pinned, overVideo ->
+            SpaceChat(
+                vm, navigate, onBack,
+                title = live?.title ?: tr("Live"),
+                note = if (loaded == null) tr("This stream couldn't be found on your relays.") else tr("Live chat: messages and zaps are public."),
+                messages = if (loaded == null) emptyList() else messages,
+                pinned = pinned,
+                hosts = setOfNotNull(live?.host),
+                showTopBar = !overVideo,
+                fade = if (overVideo) ({ 0f }) else fade,
+                onSend = { text, done -> live?.let { vm.sendLiveChat(it, text) { ok -> done(if (ok) null else tr("Couldn't send")) } } ?: done(tr("Still loading")) }
+            )
+        }
+    }
+    val playerContent = remember {
+        androidx.compose.runtime.movableContentOf<LiveStreams.Live> { l ->
+            LivePlayer(
+                l, profiles[l.host], replayPlayer,
+                isMe = account?.pubkey == l.host, isFollowing = l.host in following,
+                onFollow = { if (account == null) navigate(LoginKey) else vm.follow(l.host, l.host !in following) },
+                onZap = onZap,
+                onFullscreen = { fullscreen = true },
+                drag = drag.modifier,
+                fade = fade,
+                onHost = { navigate(ProfileKey(l.host)) }
+            )
+        }
     }
 
     if (fullscreen && canFullscreen && live != null) {
@@ -207,33 +223,19 @@ fun LiveScreen(vm: SocialViewModel, address: String, navigate: (NavKey) -> Unit,
                     .background(Color(0xCC000000)).displayCutoutPadding().navigationBarsPadding()
             ) { chat(null, true) }
         }
-        return
+    } else {
+        val player: (@Composable () -> Unit)? = live?.let { l -> { playerContent(l) } }
+        // On its side (or a wide screen), as on Twitch or YouTube: the stream on the left, the chat
+        // beside it, instead of the chat squeezed under the video.
+        val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+        if (wide && player != null) {
+            Row(Modifier.fillMaxSize().background(EInk.Background).displayCutoutPadding()) {
+                Column(Modifier.weight(1.6f).fillMaxHeight().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState())) { player() }
+                androidx.compose.material3.VerticalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+                Box(Modifier.weight(1f).fillMaxHeight()) { chat(null, false) }
+            }
+        } else chat(player, false)
     }
-
-    val player: (@Composable () -> Unit)? = live?.let { l ->
-        {
-            LivePlayer(
-                l, profiles[l.host], replayPlayer,
-                isMe = account?.pubkey == l.host, isFollowing = l.host in following,
-                onFollow = { if (account == null) navigate(LoginKey) else vm.follow(l.host, l.host !in following) },
-                onZap = onZap,
-                onFullscreen = { fullscreen = true },
-                drag = drag.modifier,
-                fade = fade,
-                onHost = { navigate(ProfileKey(l.host)) }
-            )
-        }
-    }
-    // On its side (or a wide screen), as on Twitch or YouTube: the stream on the left, the chat
-    // beside it, instead of the chat squeezed under the video.
-    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
-    if (wide && player != null) {
-        Row(Modifier.fillMaxSize().background(EInk.Background).displayCutoutPadding()) {
-            Column(Modifier.weight(1.6f).fillMaxHeight().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState())) { player() }
-            androidx.compose.material3.VerticalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
-            Box(Modifier.weight(1f).fillMaxHeight()) { chat(null, false) }
-        }
-    } else chat(player, false)
 }
 
 /** The video and what's under it: title, viewers, the streamer with Follow and Zap, the summary. */

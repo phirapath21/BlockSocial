@@ -41,7 +41,7 @@
             android:exported="true"
             android:windowSoftInputMode="adjustResize"
             android:supportsPictureInPicture="true"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density">
             <!-- Compose redraws on rotation by itself: without configChanges the whole activity
                  restarted, reloading the post and the video playing full screen. -->
             <intent-filter>

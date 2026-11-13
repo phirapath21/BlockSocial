@@ -411,12 +411,11 @@ private fun ControlIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
 @Composable
 internal fun rememberVideoOrientation(): Pair<Boolean, () -> Unit> {
     val context = LocalContext.current
-    var locked by remember { mutableStateOf(false) }
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     DisposableEffect(Unit) { onDispose { context.findActivity()?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
-    return locked to {
-        locked = !locked
+    return isLandscape to {
         context.findActivity()?.requestedOrientation =
-            if (locked) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     }
 }
 
