@@ -216,7 +216,7 @@ class NostrRepository private constructor(private val context: Context) {
                 events.insert(legacyProfiles + legacyRelayLists)
                 cache.delete(PROFILES_CACHE); cache.delete(RELAY_LIST_CACHE)
             }
-            events.query(listOf(Filter(kinds = listOf(Kind.METADATA), limit = 3_000))).forEach { remember(it, save = false) }
+            rememberProfiles(events.query(listOf(Filter(kinds = listOf(Kind.METADATA), limit = 3_000))), save = false)
             events.query(listOf(Filter(kinds = listOf(Kind.RELAY_LIST), limit = 3_000))).forEach { e ->
                 relayListEvents[e.pubkey] = e
                 writeRelays[e.pubkey] = com.example.btcwidget.nostr.core.Outbox.writeRelays(e)
@@ -585,9 +585,10 @@ class NostrRepository private constructor(private val context: Context) {
         }
         // Full-text search is loose: keep only notes that really carry the hashtag.
         val needle = "#" + tag.lowercase()
+        val pattern = Regex(Regex.escape(needle) + "(?![\\p{L}\\p{M}\\p{N}_])")
         val matching = events.filter { e ->
             e.tagValues("t").any { it.equals(tag, ignoreCase = true) } ||
-                Regex(Regex.escape(needle) + "(?![\\p{L}\\p{M}\\p{N}_])").containsMatchIn(e.content.lowercase())
+                pattern.containsMatchIn(e.content.lowercase())
         }
         return buildTimeline(matching)
     }
@@ -978,7 +979,7 @@ class NostrRepository private constructor(private val context: Context) {
         try {
             coroutineScope {
                 missing.chunked(100).map { chunk ->
-                    async { queryEverywhere(listOf(Filter(authors = chunk, kinds = listOf(Kind.METADATA)))).forEach { remember(it) } }
+                    async { rememberProfiles(queryEverywhere(listOf(Filter(authors = chunk, kinds = listOf(Kind.METADATA))))) }
                 }.awaitAll()
             }
         } finally {
@@ -1053,6 +1054,21 @@ class NostrRepository private constructor(private val context: Context) {
         repostedByMe = new.repostedByMe || old.repostedByMe,
         myReaction = new.myReaction ?: old.myReaction
     )
+
+    private fun rememberProfiles(events: Collection<Event>, save: Boolean = true) {
+        if (events.isEmpty()) return
+        val batch = HashMap<String, Profile>()
+        for (e in events) {
+            if (e.kind != Kind.METADATA) continue
+            val old = profileEvents[e.pubkey]
+            if (old == null || e.createdAt > old.createdAt) {
+                profileEvents[e.pubkey] = e
+                Profile.fromEvent(e)?.let { batch[e.pubkey] = it }
+                if (save) store(e)
+            }
+        }
+        if (batch.isNotEmpty()) _profiles.update { it + batch }
+    }
 
     private fun remember(e: Event, save: Boolean = true) {
         when (e.kind) {
@@ -1410,7 +1426,7 @@ class NostrRepository private constructor(private val context: Context) {
         val newPrivate = if (entry != null && private) keptPrivate + listOf(entry) else keptPrivate
         val newPublic = if (entry != null && !private) publicTags + listOf(entry) else publicTags
         val content = when {
-            newPrivate == priv && !list?.content.isNullOrBlank() -> list!!.content
+            newPrivate == priv && !list?.content.isNullOrBlank() -> list.content
             newPrivate.isEmpty() -> ""
             else -> requireSigner().nip44Encrypt(com.example.btcwidget.nostr.core.PrivateTags.serialize(newPrivate), me)
         }
@@ -1795,9 +1811,13 @@ class NostrRepository private constructor(private val context: Context) {
     }
 
     private fun httpGet(url: String): String {
+        require(url.startsWith("https://")) { "Refusing non-HTTPS request" }
         RelayPool.defaultClient.newCall(Request.Builder().url(url).header("Accept", "application/json").build()).execute().use { r ->
             if (!r.isSuccessful) error("HTTP ${r.code}")
-            return r.body.string()
+            val source = r.body.source()
+            source.request(256 * 1024L)
+            if (source.buffer.size > 256 * 1024L) error("Response too large")
+            return source.buffer.readUtf8()
         }
     }
 

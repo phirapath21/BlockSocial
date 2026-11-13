@@ -59,8 +59,16 @@ fun WebPage(startUrl: String, state: WebPageState, modifier: Modifier = Modifier
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                         val uri = request.url
                         if (uri.scheme == "http" || uri.scheme == "https") return false
-                        // Not a web page: let Android find an app for it (or nothing happens).
-                        runCatching { view.context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        // Not a web page: only let user-initiated main-frame navigation open an external app.
+                        if (request.isForMainFrame && request.hasGesture()) {
+                            runCatching {
+                                val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                                    addCategory(Intent.CATEGORY_BROWSABLE)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                view.context.startActivity(intent)
+                            }
+                        }
                         return true
                     }
 
