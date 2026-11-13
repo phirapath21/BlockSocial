@@ -288,6 +288,8 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
     // Publish later (new posts only): seconds since the epoch, or null to post now.
     var scheduleAt by remember { mutableStateOf<Long?>(null) }
     var schedulePicker by remember { mutableStateOf(false) }
+    var draftsSheet by remember { mutableStateOf(false) }
+    var savedDrafts by remember(account?.pubkey) { mutableStateOf(com.example.btcwidget.nostr.Drafts.savedList(context, account?.pubkey)) }
     // "@name" picked from suggestions → pubkey; turned into nostr:npub links when sending.
     var mentions by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val following by vm.following.collectAsState()
@@ -322,6 +324,28 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
         onDismiss = { schedulePicker = false },
         onClear = { scheduleAt = null; schedulePicker = false },
         onPick = { scheduleAt = it; schedulePicker = false }
+    )
+    if (draftsSheet) DraftsSheet(
+        drafts = savedDrafts,
+        canSaveCurrent = text.isNotBlank(),
+        onSaveCurrent = {
+            com.example.btcwidget.nostr.Drafts.saveCopy(context, account?.pubkey, text)
+            com.example.btcwidget.nostr.Drafts.remove(context, draftKey)
+            text = ""
+            savedDrafts = com.example.btcwidget.nostr.Drafts.savedList(context, account?.pubkey)
+            draftsSheet = false
+        },
+        onSelect = { d ->
+            text = d.text
+            com.example.btcwidget.nostr.Drafts.deleteSaved(context, account?.pubkey, d.id)
+            savedDrafts = com.example.btcwidget.nostr.Drafts.savedList(context, account?.pubkey)
+            draftsSheet = false
+        },
+        onDelete = { d ->
+            com.example.btcwidget.nostr.Drafts.deleteSaved(context, account?.pubkey, d.id)
+            savedDrafts = com.example.btcwidget.nostr.Drafts.savedList(context, account?.pubkey)
+        },
+        onDismiss = { draftsSheet = false }
     )
 
     val canSend = !sending && uploading == 0 && (text.isNotBlank() || images.isNotEmpty() || quote != null) &&
@@ -367,6 +391,15 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                 contentAlignment = Alignment.Center
             ) { androidx.compose.material3.Icon(Glyphs.CloseLine, contentDescription = tr("Close"), tint = EInk.Value, modifier = Modifier.size(22.dp)) }
             Spacer(Modifier.weight(1f))
+            if (savedDrafts.isNotEmpty() || text.isNotBlank()) {
+                Text(
+                    text = if (savedDrafts.isNotEmpty()) tr("Drafts ({0})", savedDrafts.size) else tr("Save draft"),
+                    color = SettingsAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(50))
+                        .clickable { draftsSheet = true }
+                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                )
+            }
             Row(
                 Modifier.padding(end = 6.dp).clip(RoundedCornerShape(50))
                     .background(SettingsAccent.copy(alpha = if (canSend || sending) 1f else 0.4f))
@@ -426,7 +459,25 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.padding(top = ComposeGap).then(if (single) Modifier else Modifier.horizontalScroll(rememberScrollState()))
                         ) {
-                            images.forEach { img -> AttachmentTile(img, single) { images = images - img } }
+                            images.forEachIndexed { idx, img ->
+                                AttachmentTile(
+                                    attachment = img,
+                                    single = single,
+                                    onMoveLeft = if (idx > 0) ({
+                                        images = images.toMutableList().also { list ->
+                                            val item = list.removeAt(idx)
+                                            list.add(idx - 1, item)
+                                        }
+                                    }) else null,
+                                    onMoveRight = if (idx < images.lastIndex) ({
+                                        images = images.toMutableList().also { list ->
+                                            val item = list.removeAt(idx)
+                                            list.add(idx + 1, item)
+                                        }
+                                    }) else null,
+                                    onRemove = { images = images - img }
+                                )
+                            }
                             repeat(uploading) { AttachmentTile(null, single) {} }
                         }
                     }
@@ -472,6 +523,60 @@ fun ComposeScreen(vm: SocialViewModel, replyTo: String?, quote: String?, onBack:
             ComposeToolButton(Glyphs.Warning, if (sensitive) tr("Unmark sensitive") else tr("Mark as sensitive"), on = sensitive) { sensitive = !sensitive }
             Spacer(Modifier.weight(1f))
             if (text.isNotEmpty()) Text("${text.length}", color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(end = 10.dp))
+        }
+    }
+}
+
+/** Sheet for saving the current post as a draft or loading/deleting saved drafts. */
+@Composable
+private fun DraftsSheet(
+    drafts: List<com.example.btcwidget.nostr.Drafts.SavedDraft>,
+    canSaveCurrent: Boolean,
+    onSaveCurrent: () -> Unit,
+    onSelect: (com.example.btcwidget.nostr.Drafts.SavedDraft) -> Unit,
+    onDelete: (com.example.btcwidget.nostr.Drafts.SavedDraft) -> Unit,
+    onDismiss: () -> Unit
+) {
+    BlockSheet(onDismiss = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)
+        ) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(tr("Drafts"), color = EInk.Value, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (canSaveCurrent) {
+                    ChoicePill(tr("+ Save current"), selected = true, onClick = onSaveCurrent)
+                }
+            }
+            if (drafts.isEmpty()) {
+                Text(tr("No saved drafts yet."), color = EInk.Caption, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
+            } else {
+                drafts.forEach { d ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelect(d) }
+                            .padding(vertical = 10.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                d.text.replace('\n', ' '),
+                                color = EInk.Value, fontSize = 15.sp, maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            if (d.savedAt > 0) {
+                                Text(relativeTime(d.savedAt / 1000), color = EInk.Caption, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+                            }
+                        }
+                        Box(
+                            Modifier.padding(start = 8.dp).size(34.dp).clip(CircleShape).clickable(onClickLabel = tr("Delete draft")) { onDelete(d) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.material3.Icon(Glyphs.Trash, contentDescription = tr("Delete draft"), tint = EInk.Alert, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    HorizontalDivider(thickness = 0.5.dp, color = EInk.BodyStroke)
+                }
+            }
         }
     }
 }

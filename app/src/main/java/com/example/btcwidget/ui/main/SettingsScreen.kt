@@ -72,6 +72,9 @@ fun BitcoinSettings(
         else tr("How much bitcoin you hold. Stored only on this device.")
     )
     StackInput(stackSats, stackUnit, onStackChange)
+    if (stackSats > 0) {
+        CostBasisInput(currency = currency)
+    }
 
     SettingsDivider()
     SettingsHeader(tr("Currency"))
@@ -136,6 +139,33 @@ private fun StackInput(stackSats: Long, stackUnit: StackUnit, onStackChange: (Lo
         if (invalid) Text(
             text = if (unit == StackUnit.BTC) tr("Up to 8 decimals, max 21,000,000") else tr("Whole sats only"),
             color = EInk.Alert, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+/** Optional total cost basis input (in the active currency) for DCA / P&L tracking. */
+@Composable
+private fun CostBasisInput(currency: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var text by remember(currency) {
+        val saved = com.example.btcwidget.AppPrefs.stackCostBasis(context, currency)
+        mutableStateOf(if (saved > 0.0) saved.toBigDecimal().stripTrailingZeros().toPlainString() else "")
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Text(
+            text = tr("Total cost basis ({0}, optional — for P/L & avg buy price)", currency),
+            color = EInk.Caption, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp)
+        )
+        SettingsTextField(
+            value = text,
+            onValueChange = { input ->
+                text = input.filter { it.isDigit() || it == '.' }.take(18)
+                val v = text.toDoubleOrNull() ?: 0.0
+                com.example.btcwidget.AppPrefs.setStackCostBasis(context, currency, v)
+            },
+            placeholder = if (currency == "THB") "150000" else "4500",
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

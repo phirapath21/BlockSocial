@@ -51,13 +51,20 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import android.view.SurfaceView
 import android.view.TextureView
 import com.example.btcwidget.nostr.core.Event
 import com.example.btcwidget.ui.main.EInk
 import kotlinx.coroutines.delay
+import java.io.File
 
 /** Where each video was left, so the full-screen view and the timeline carry on from there. */
 internal object VideoPositions {
@@ -67,14 +74,49 @@ internal object VideoPositions {
 }
 
 /**
+ * Bounded disk cache (150 MB LRU) for non-live videos so feed and Shorts videos don't re-download
+ * every time the user scrolls back or opens them full screen.
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+internal object VideoCache {
+    private const val MAX_BYTES = 150L * 1024 * 1024
+    @Volatile private var cache: SimpleCache? = null
+
+    private fun get(context: Context): SimpleCache =
+        cache ?: synchronized(this) {
+            cache ?: SimpleCache(
+                File(context.applicationContext.cacheDir, "video_cache"),
+                LeastRecentlyUsedCacheEvictor(MAX_BYTES),
+                StandaloneDatabaseProvider(context.applicationContext)
+            ).also { cache = it }
+        }
+
+    fun dataSourceFactory(context: Context): CacheDataSource.Factory =
+        CacheDataSource.Factory()
+            .setCache(get(context))
+            .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context.applicationContext))
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+}
+
+/**
  * Builds a player for [url], starting where it was left, and reports the video's shape.
  *
  * Its buffer is kept small: ExoPlayer's default reads ahead up to 50 seconds or about 125 MB
  * of video, held in the app's memory, which with a few videos (a paused one in the feed and the
  * same one full screen) filled the whole heap and crashed. Short social videos need far less.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal fun newPlayer(context: Context, url: String, fullScreen: Boolean = false, live: Boolean = false, onRatio: (Float) -> Unit): ExoPlayer =
-    ExoPlayer.Builder(context).setLoadControl(smallBuffer(fullScreen)).build().apply {
+    ExoPlayer.Builder(context)
+        .setLoadControl(smallBuffer(fullScreen))
+        .apply {
+            if (!live) {
+                runCatching {
+                    setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(VideoCache.dataSourceFactory(context)))
+                }
+            }
+        }
+        .build().apply {
         // Data saver: the lowest quality whenever the video offers a choice.
         if (VideoQuality.fromName(com.example.btcwidget.AppPrefs.videoQuality(context)) == VideoQuality.DATA_SAVER) {
             trackSelectionParameters = trackSelectionParameters.buildUpon().setForceLowestBitrate(true).build()

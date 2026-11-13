@@ -85,6 +85,23 @@ class EventStore(context: Context) : SQLiteOpenHelper(context.applicationContext
         }.distinctBy { it.id }.sortedByDescending { it.createdAt }
     }
 
+    /** Offline full-text search across locally cached events of [kinds], newest first. */
+    fun search(query: String, kinds: List<Int> = com.example.btcwidget.nostr.core.Kind.POSTS, limit: Int = 50): List<Event> {
+        val st = EventSql.search(query, kinds, limit * 2) ?: return emptyList()
+        val db = runCatching { readableDatabase }.getOrNull() ?: return emptyList()
+        return runCatching {
+            db.rawQuery(st.sql, st.args.map { it.toString() }.toTypedArray()).use { c ->
+                buildList {
+                    while (c.moveToNext() && size < limit) {
+                        val json = c.getString(0) ?: continue
+                        val event = runCatching { Event.fromJson(json) }.getOrNull() ?: continue
+                        if (EventSql.matchesSearch(event, query)) add(event)
+                    }
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
     fun prune(keep: Int, me: String?) {
         val db = runCatching { writableDatabase }.getOrNull() ?: return
         runCatching { EventSql.prune(keep, me).forEach { exec(db, it.sql, it.args) } }

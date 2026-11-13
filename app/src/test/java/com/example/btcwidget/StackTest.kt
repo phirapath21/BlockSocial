@@ -38,4 +38,16 @@ class StackTest {
         assertEquals("", Stack.toInput(0, StackUnit.BTC))
         assertEquals("12345", Stack.toInput(12_345, StackUnit.SATS))
     }
+
+    @Test
+    fun profitLossCalculation() {
+        // 0.5 BTC bought for $30,000 total (avg buy $60,000/BTC), current BTC price = $90,000 -> worth $45,000 (+50%, +$15,000)
+        val pnl = Stack.profitLoss(stackSats = 50_000_000L, currentBtcPrice = 90_000.0, totalCostBasis = 30_000.0)!!
+        assertEquals(45_000.0, pnl.currentValue, 0.01)
+        assertEquals(60_000.0, pnl.avgBuyPrice, 0.01)
+        assertEquals(15_000.0, pnl.profitAmount, 0.01)
+        assertEquals(50.0, pnl.profitPercent, 0.01)
+        assertNull(Stack.profitLoss(0L, 90_000.0, 30_000.0))
+        assertNull(Stack.profitLoss(50_000_000L, 90_000.0, 0.0))
+    }
 }

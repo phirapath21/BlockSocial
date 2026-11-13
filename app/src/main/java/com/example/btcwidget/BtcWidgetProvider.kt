@@ -15,6 +15,7 @@ class BtcWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_NEXT_MODE = "com.example.btcwidget.ACTION_NEXT_MODE"
         const val ACTION_REFRESH = "com.example.btcwidget.ACTION_REFRESH"
+        const val ACTION_TOGGLE_CURRENCY = "com.example.btcwidget.ACTION_TOGGLE_CURRENCY"
 
         fun updateWidgetLayout(
             context: Context,
@@ -64,6 +65,7 @@ class BtcWidgetProvider : AppWidgetProvider() {
             val requestCode = appWidgetId * 10 + when (action) {
                 ACTION_NEXT_MODE -> 2
                 ACTION_REFRESH -> 3
+                ACTION_TOGGLE_CURRENCY -> 4
                 else -> 0
             }
             val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -118,6 +120,10 @@ class BtcWidgetProvider : AppWidgetProvider() {
             }
         } else if (action == ACTION_REFRESH) {
             WidgetRefreshScheduler.refreshNow(context)
+        } else if (action == ACTION_TOGGLE_CURRENCY) {
+            val next = if (AppPrefs.currency(context) == "THB") "USD" else "THB"
+            AppPrefs.setCurrency(context, next)
+            WidgetUpdater.updateAllWidgets(context)
         }
     }
 

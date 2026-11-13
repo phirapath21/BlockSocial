@@ -91,6 +91,42 @@ object EventSql {
     }
 
     /**
+     * Full-text search over locally stored events of [kinds], newest first. Each word in
+     * [query] must appear in the event JSON; caller further checks [matchesSearch] on content.
+     */
+    fun search(query: String, kinds: List<Int> = Kind.POSTS, limit: Int = 50): Statement? {
+        val terms = query.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(5)
+        if (terms.isEmpty() || kinds.isEmpty()) return null
+        val where = ArrayList<String>()
+        val args = ArrayList<Any>()
+        where += "e.kind IN (" + kinds.joinToString(",") { "?" } + ")"
+        args.addAll(kinds)
+        for (term in terms) {
+            val escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where += "e.json LIKE ? ESCAPE '\\'"
+            args += "%$escaped%"
+        }
+        val cap = limit.coerceIn(1, 500)
+        val sql = "SELECT e.json FROM events e WHERE " + where.joinToString(" AND ") + " ORDER BY e.created_at DESC LIMIT $cap"
+        return Statement(sql, args)
+    }
+
+    /** True when every word in [query] appears in [e]'s content or title/summary/t tags. */
+    fun matchesSearch(e: Event, query: String): Boolean {
+        val terms = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (terms.isEmpty()) return false
+        val haystack = buildString {
+            append(e.content.lowercase())
+            for (tag in e.tags) {
+                if (tag.size >= 2 && tag[0] in setOf("t", "title", "summary", "subject")) {
+                    append(' ').append(tag[1].lowercase())
+                }
+            }
+        }
+        return terms.all { it in haystack }
+    }
+
+    /**
      * Keeps the database to about [keep] events: the oldest are dropped first, except the
      * user's own events and the newest of every replaceable list (profiles, follows).
      */

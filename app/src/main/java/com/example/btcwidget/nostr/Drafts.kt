@@ -10,6 +10,10 @@ import android.content.Context
 object Drafts {
     private const val FILE = "nostr_drafts"
     private const val MAX = 50
+    private const val SAVED_PREFIX = "saved:"
+
+    /** A saved draft in the user's drafts manager. */
+    data class SavedDraft(val id: String, val text: String, val savedAt: Long)
 
     /** Drafts belong to the account that wrote them ([pubkey]). */
     fun key(pubkey: String?, replyTo: String?, quote: String?): String = (pubkey ?: "") + "/" + when {
@@ -35,6 +39,38 @@ object Drafts {
     }
 
     fun remove(context: Context, key: String) = put(context, key, "")
+
+    /** Saved drafts for [pubkey], newest first. */
+    fun savedList(context: Context, pubkey: String?): List<SavedDraft> {
+        val prefix = "${pubkey ?: ""}/$SAVED_PREFIX"
+        val p = prefs(context)
+        val all = p.all
+        return all.keys
+            .filter { it.startsWith(prefix) && !it.endsWith("@") }
+            .mapNotNull { k ->
+                val text = (all[k] as? String)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val at = (all["$k@"] as? Long) ?: 0L
+                val id = k.removePrefix(prefix)
+                SavedDraft(id, text, at)
+            }
+            .sortedByDescending { it.savedAt }
+    }
+
+    /** Saves [text] as a new entry in [pubkey]'s drafts list so the composer can be cleared for another post. */
+    fun saveCopy(context: Context, pubkey: String?, text: String): SavedDraft? {
+        val clean = text.trim()
+        if (clean.isEmpty()) return null
+        val now = System.currentTimeMillis()
+        val id = now.toString(36)
+        val k = "${pubkey ?: ""}/$SAVED_PREFIX$id"
+        put(context, k, clean)
+        return SavedDraft(id, clean, now)
+    }
+
+    /** Removes a saved draft by [id]. */
+    fun deleteSaved(context: Context, pubkey: String?, id: String) {
+        remove(context, "${pubkey ?: ""}/$SAVED_PREFIX$id")
+    }
 
     /** Deletes [pubkey]'s drafts (on logout or removing the account). */
     fun clear(context: Context, pubkey: String) {

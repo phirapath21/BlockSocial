@@ -139,9 +139,15 @@ internal fun QuotePreview(note: Event, author: Profile?) {
     }
 }
 
-/** A photo or video added to the post, with a round ✕ to take it off. Null [attachment]: still uploading. */
+/** A photo or video added to the post, with a round ✕ to take it off and optional arrows to reorder. Null [attachment]: still uploading. */
 @Composable
-internal fun AttachmentTile(attachment: SocialViewModel.Attachment?, single: Boolean, onRemove: () -> Unit) {
+internal fun AttachmentTile(
+    attachment: SocialViewModel.Attachment?,
+    single: Boolean,
+    onMoveLeft: (() -> Unit)? = null,
+    onMoveRight: (() -> Unit)? = null,
+    onRemove: () -> Unit
+) {
     val shape = RoundedCornerShape(16.dp)
     val size: Modifier = if (single) Modifier.fillMaxWidth().heightIn(max = 280.dp).aspectRatio(16f / 10f) else Modifier.size(150.dp)
     Box(size.clip(shape).background(EInk.Body)) {
@@ -155,11 +161,30 @@ internal fun AttachmentTile(attachment: SocialViewModel.Attachment?, single: Boo
             }
             else -> AsyncImage(model = attachment.url, contentDescription = tr("Attached image"), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
-        if (attachment != null) Box(
-            Modifier.align(Alignment.TopEnd).padding(8.dp).size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
-                .clickable(onClickLabel = tr("Remove image"), onClick = onRemove),
-            contentAlignment = Alignment.Center
-        ) { Icon(Glyphs.CloseLine, contentDescription = tr("Remove image"), tint = Color.White, modifier = Modifier.size(15.dp)) }
+        if (attachment != null) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(8.dp).size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
+                    .clickable(onClickLabel = tr("Remove image"), onClick = onRemove),
+                contentAlignment = Alignment.Center
+            ) { Icon(Glyphs.CloseLine, contentDescription = tr("Remove image"), tint = Color.White, modifier = Modifier.size(15.dp)) }
+            if (onMoveLeft != null || onMoveRight != null) {
+                Row(
+                    Modifier.align(Alignment.BottomStart).padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (onMoveLeft != null) Box(
+                        Modifier.size(28.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
+                            .clickable(onClickLabel = tr("Move left"), onClick = onMoveLeft),
+                        contentAlignment = Alignment.Center
+                    ) { Text("←", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                    if (onMoveRight != null) Box(
+                        Modifier.size(28.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
+                            .clickable(onClickLabel = tr("Move right"), onClick = onMoveRight),
+                        contentAlignment = Alignment.Center
+                    ) { Text("→", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
     }
 }
 

@@ -94,4 +94,40 @@ class EventSqlTest {
         assertEquals(1, left.count { it.kind == Kind.METADATA })
         assertEquals(0, ids("SELECT event_id FROM tags WHERE event_id NOT IN (SELECT id FROM events)", emptyList()).size)
     }
+
+    @Test
+    fun offlineFullTextSearchAndOutboxAndNwc() {
+        val n1 = sign(Events.note(pub, "Learning about Bitcoin Lightning and Nostr outbox").copy(createdAt = 100))
+        val n2 = sign(Events.note(pub, "Just a random post").copy(createdAt = 200))
+        insert(n1); insert(n2)
+
+        val st = EventSql.search("bitcoin lightning", kinds = listOf(Kind.TEXT_NOTE), limit = 10)!!
+        val found = ids(st.sql, st.args.map { it.toString() }).map { Event.fromJson(it) }
+            .filter { EventSql.matchesSearch(it, "bitcoin lightning") }
+        assertEquals(listOf(n1.id), found.map { it.id })
+
+        // Outbox read vs write relays
+        val relayList = sign(UnsignedEvent(pub, 300, Kind.RELAY_LIST, listOf(
+            listOf("r", "wss://write.example.com", "write"),
+            listOf("r", "wss://read.example.com", "read"),
+            listOf("r", "wss://both.example.com")
+        ), ""))
+        assertEquals(listOf("wss://write.example.com", "wss://both.example.com"), com.example.btcwidget.nostr.core.Outbox.writeRelays(relayList))
+        assertEquals(listOf("wss://read.example.com", "wss://both.example.com"), com.example.btcwidget.nostr.core.Outbox.readRelays(relayList))
+
+        // NWC request/response round-trip
+        val walletSec = Schnorr.newSecretKey()
+        val walletPub = Schnorr.publicKey(walletSec)
+        val clientSec = Schnorr.newSecretKey()
+        val conn = com.example.btcwidget.nostr.core.Nwc.Connection(walletPub, listOf("wss://relay.example.com"), clientSec, null)
+        val balReq = com.example.btcwidget.nostr.core.Nwc.getBalanceRequest(conn, nip44 = true)
+        assertEquals(com.example.btcwidget.nostr.core.Nwc.REQUEST, balReq.kind)
+        val encReply = com.example.btcwidget.nostr.core.Nip44.encrypt(
+            """{"result_type":"get_balance","result":{"balance":21000000}}""",
+            walletSec, balReq.pubkey
+        )
+        val balResp = UnsignedEvent(walletPub, 400, com.example.btcwidget.nostr.core.Nwc.RESPONSE, listOf(listOf("e", balReq.id)), encReply)
+            .let { it.signed(Schnorr.sign(it.id, walletSec)) }
+        assertEquals(21_000L, com.example.btcwidget.nostr.core.Nwc.parseBalance(conn, balResp).getOrThrow())
+    }
 }
